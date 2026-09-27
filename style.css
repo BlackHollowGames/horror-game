@@ -1,790 +1,1137 @@
-* {
+/* ============================================
+   THE SEEKER — BlackHollow Games
+   style.css
+   ============================================ */
+
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
     box-sizing: border-box;
 }
 
-html,
-body {
+:root {
+    --bg: #050505;
+    --bg-panel: #0c0c0c;
+    --bg-panel-2: #111111;
+    --border: #2a2a2a;
+    --border-dim: #1a1a1a;
+    --text: #e8e8e8;
+    --text-dim: #888888;
+    --text-muted: #555555;
+    --accent: #c9a227;
+    --accent-dim: #8a7018;
+    --danger: #b33030;
+    --danger-glow: rgba(179, 48, 48, 0.45);
+    --success: #2a8a4a;
+    --font-main: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-mono: "Courier New", Courier, monospace;
+}
+
+html, body {
     width: 100%;
     height: 100%;
-    margin: 0;
     overflow: hidden;
-    background: #020304;
-    color: #fff;
-    font-family:
-        Arial,
-        Helvetica,
-        sans-serif;
-}
-
-body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-main);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
     user-select: none;
-}
-
-button,
-input {
-    font: inherit;
+    touch-action: manipulation;
 }
 
 button {
+    font-family: inherit;
     cursor: pointer;
+    border: none;
+    outline: none;
+    background: none;
+    color: inherit;
+    -webkit-appearance: none;
 }
-
-
-/* =========================
-   GENERAL
-========================= */
 
 .hidden {
     display: none !important;
 }
 
 .screen {
-    position: absolute;
+    position: fixed;
     inset: 0;
     width: 100%;
     height: 100%;
 }
 
-
-/* =========================
+/* ============================================
    MAIN MENU
-========================= */
+   ============================================ */
 
 #menuScreen {
+    background: var(--bg);
     display: flex;
     align-items: center;
     justify-content: center;
-
-    background:
-        radial-gradient(
-            circle at 50% 45%,
-            rgba(70, 70, 70, 0.13),
-            transparent 35%
-        ),
-        linear-gradient(
-            135deg,
-            #030405,
-            #08090a 50%,
-            #010202
-        );
+    overflow: hidden;
 }
 
 .menu-background {
     position: absolute;
     inset: 0;
-
-    background-image:
-        linear-gradient(
-            rgba(255,255,255,0.015) 1px,
-            transparent 1px
-        ),
-        linear-gradient(
-            90deg,
-            rgba(255,255,255,0.015) 1px,
-            transparent 1px
-        );
-
-    background-size: 50px 50px;
-
-    opacity: 0.25;
+    background:
+        radial-gradient(ellipse 80% 60% at 20% 50%, rgba(30, 20, 10, 0.4) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 80% at 80% 40%, rgba(20, 10, 10, 0.35) 0%, transparent 55%),
+        linear-gradient(180deg, #080808 0%, #050505 50%, #030303 100%);
+    z-index: 0;
 }
 
-.menu-content {
+.menu-background::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px
+        );
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.menu-layout {
     position: relative;
-    width: min(500px, 90%);
-    text-align: center;
+    z-index: 1;
+    display: flex;
+    width: min(1100px, 94vw);
+    height: min(620px, 88vh);
+    gap: 0;
+    border: 1px solid var(--border);
+    background: rgba(8, 8, 8, 0.85);
+    box-shadow:
+        0 0 0 1px rgba(201, 162, 39, 0.08),
+        0 24px 80px rgba(0, 0, 0, 0.7);
+}
+
+/* ---- LEFT: Title + Buttons ---- */
+
+.menu-left {
+    flex: 1.1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 48px 52px 40px 52px;
+    border-right: 1px solid var(--border-dim);
+    position: relative;
 }
 
 .small-title {
-    margin-bottom: 25px;
-
-    color: #5b5b5b;
-
-    font-size: 9px;
-    letter-spacing: 5px;
+    font-size: 11px;
+    letter-spacing: 0.35em;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 18px;
+    text-transform: uppercase;
 }
 
-.menu-content h1 {
-    margin: 0;
-
-    color: #d9d9d9;
-
-    font-size: clamp(55px, 10vw, 100px);
-    line-height: 0.78;
-
-    font-weight: 200;
-    letter-spacing: 12px;
+.menu-left h1 {
+    font-size: clamp(42px, 6vw, 64px);
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    line-height: 1.05;
+    color: var(--text);
+    margin-bottom: 8px;
 }
 
-.menu-content h1 strong {
+.menu-left h1 strong {
     display: block;
-
+    font-weight: 700;
+    letter-spacing: 0.12em;
     color: #fff;
-
-    font-weight: 900;
-    letter-spacing: 15px;
 }
 
 .menu-line {
-    width: 100px;
-    height: 1px;
-
-    margin: 40px auto 22px;
-
-    background: #777;
+    width: 48px;
+    height: 2px;
+    background: var(--accent);
+    margin: 18px 0 16px 0;
 }
 
 .menu-subtitle {
-    color: #666;
-
-    font-size: 11px;
-    letter-spacing: 5px;
+    font-size: 13px;
+    letter-spacing: 0.28em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 40px;
 }
 
 .menu-buttons {
     display: flex;
     flex-direction: column;
-
-    gap: 9px;
-
-    width: 260px;
-
-    margin: 45px auto 0;
+    gap: 10px;
+    max-width: 260px;
 }
 
-.menu-buttons button,
-.panel button,
-.pause-panel button,
-.death-panel button,
-.win-panel button {
-    width: 100%;
-    min-height: 48px;
+.menu-buttons button {
+    position: relative;
+    text-align: left;
+    padding: 14px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--border);
+    transition: all 0.18s ease;
+}
 
-    border: 1px solid #292929;
-
-    background: rgba(255,255,255,0.025);
-
-    color: #bdbdbd;
-
-    font-size: 10px;
-    font-weight: bold;
-
-    letter-spacing: 3px;
-
-    transition:
-        background 0.18s,
-        border-color 0.18s,
-        color 0.18s;
+.menu-buttons button::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: transparent;
+    transition: background 0.18s ease;
 }
 
 .menu-buttons button:hover,
-.panel button:hover,
-.pause-panel button:hover,
-.death-panel button:hover,
-.win-panel button:hover {
-    background: #e8e8e8;
+.menu-buttons button:focus-visible {
+    background: rgba(201, 162, 39, 0.08);
+    border-color: var(--accent-dim);
+    color: #fff;
+    padding-left: 24px;
+}
 
-    border-color: #fff;
+.menu-buttons button:hover::before,
+.menu-buttons button:focus-visible::before {
+    background: var(--accent);
+}
 
-    color: #000;
+.menu-buttons button:active {
+    background: rgba(201, 162, 39, 0.15);
+    transform: scale(0.98);
+}
+
+#playButton {
+    border-color: var(--accent-dim);
+    color: var(--accent);
+}
+
+#playButton:hover,
+#playButton:focus-visible {
+    background: rgba(201, 162, 39, 0.12);
+    border-color: var(--accent);
+    color: #fff;
 }
 
 .menu-version {
-    margin-top: 45px;
-
-    color: #333;
-
-    font-size: 8px;
-
-    letter-spacing: 3px;
+    position: absolute;
+    bottom: 28px;
+    left: 52px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+    text-transform: uppercase;
 }
 
+/* ---- RIGHT: Preview + Credits ---- */
 
-/* =========================
-   PANELS
-========================= */
+.menu-right {
+    flex: 0.9;
+    display: flex;
+    flex-direction: column;
+    padding: 28px 28px 24px 28px;
+    gap: 18px;
+    background: rgba(6, 6, 6, 0.6);
+}
+
+.menu-preview-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    background: #080808;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.preview-label {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--text-muted);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-dim);
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.preview-placeholder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(ellipse at center, rgba(30, 20, 10, 0.3) 0%, transparent 70%),
+        repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 8px,
+            rgba(255, 255, 255, 0.01) 8px,
+            rgba(255, 255, 255, 0.01) 16px
+        );
+    position: relative;
+}
+
+.preview-placeholder span {
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+/* Placeholder for future animation */
+#previewPlaceholder {
+    /* You can later replace the span with a <canvas> or <video> */
+}
+
+.credits-box {
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    padding: 16px 18px 14px 18px;
+}
+
+.credits-title {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+}
+
+.credits-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.credit-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 12px;
+}
+
+.credit-role {
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10px;
+}
+
+.credit-name {
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+}
+
+.credits-footer {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-dim);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--text-muted);
+    text-align: center;
+    text-transform: uppercase;
+}
+
+/* ============================================
+   INSTRUCTIONS / SETTINGS PANELS
+   ============================================ */
+
+#instructionsScreen,
+#settingsScreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.92);
+    z-index: 50;
+}
 
 .panel {
-    position: absolute;
-
-    top: 50%;
-    left: 50%;
-
-    width: min(620px, 90%);
-
-    transform: translate(-50%, -50%);
-
-    padding: 35px;
-
-    background: rgba(8,9,10,0.97);
-
-    border: 1px solid #242424;
-
-    box-shadow:
-        0 30px 100px rgba(0,0,0,0.8);
+    width: min(520px, 92vw);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    padding: 36px 40px 32px 40px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
 }
 
 .panel-title {
-    margin-bottom: 30px;
-
-    font-size: 25px;
-    font-weight: 800;
-
-    letter-spacing: 5px;
+    font-size: 18px;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    margin-bottom: 28px;
+    text-transform: uppercase;
+    font-weight: 600;
 }
 
 .instruction-grid {
     display: grid;
-
-    grid-template-columns:
-        repeat(2, 1fr);
-
-    gap: 12px;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 24px;
+    margin-bottom: 28px;
 }
 
-.instruction-grid > div {
-    padding: 18px;
-
-    border: 1px solid #1d1d1d;
-
-    background: #0c0d0e;
-}
-
-.instruction-grid span {
-    color: #ddd;
-
-    font-size: 10px;
-
-    font-weight: bold;
-
-    letter-spacing: 2px;
-}
-
-.instruction-grid p {
-    margin: 10px 0 0;
-
-    color: #666;
-
+.instruction-grid > div span {
+    display: block;
     font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
 
-    line-height: 1.6;
+.instruction-grid > div p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.45;
 }
 
 .danger-box {
-    margin: 22px 0;
-
-    padding: 17px;
-
-    border: 1px solid #391414;
-
-    background: rgba(70,0,0,0.13);
-
-    color: #666;
-
-    font-size: 11px;
-
-    line-height: 1.7;
+    background: rgba(179, 48, 48, 0.1);
+    border: 1px solid rgba(179, 48, 48, 0.35);
+    padding: 16px 18px;
+    margin-bottom: 28px;
+    font-size: 13px;
+    color: #d4a0a0;
+    line-height: 1.55;
 }
 
 .danger-box strong {
-    color: #9e2525;
+    color: var(--danger);
+    letter-spacing: 0.15em;
+    font-size: 12px;
 }
 
+.panel button,
+.pause-panel button,
+.death-panel button,
+.win-panel button {
+    display: block;
+    width: 100%;
+    padding: 14px 20px;
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--border);
+    transition: all 0.18s ease;
+}
 
-/* =========================
-   SETTINGS
-========================= */
+.panel button:hover,
+.pause-panel button:hover,
+.death-panel button:hover,
+.win-panel button:hover {
+    background: rgba(201, 162, 39, 0.1);
+    border-color: var(--accent-dim);
+    color: #fff;
+}
+
+.panel button:active,
+.pause-panel button:active,
+.death-panel button:active,
+.win-panel button:active {
+    transform: scale(0.98);
+}
+
+/* Settings rows */
 
 .setting-row {
     display: flex;
-
-    justify-content: space-between;
     align-items: center;
-
-    padding: 18px 0;
-
-    border-bottom: 1px solid #1b1b1b;
-
-    color: #aaa;
-
-    font-size: 10px;
-
-    letter-spacing: 2px;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-dim);
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
 }
 
-.setting-row input[type="range"] {
-    width: 180px;
+.setting-row:last-of-type {
+    border-bottom: none;
+    margin-bottom: 20px;
 }
 
 .setting-row input[type="checkbox"] {
     width: 18px;
     height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
 }
 
+.setting-row input[type="range"] {
+    width: 120px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border);
+    outline: none;
+    border-radius: 2px;
+}
 
-/* =========================
-   GAME
-========================= */
+.setting-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.setting-row input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+/* ============================================
+   GAME SCREEN + HUD
+   ============================================ */
 
 #gameScreen {
-    position: absolute;
+    position: fixed;
     inset: 0;
-
     background: #000;
 }
 
 #gameCanvas {
     position: absolute;
     inset: 0;
-}
-
-#gameCanvas canvas {
-    display: block;
-
     width: 100%;
     height: 100%;
 }
 
-
-/* =========================
-   HUD
-========================= */
-
 #hud {
     position: absolute;
     inset: 0;
-
     pointer-events: none;
-
     z-index: 10;
 }
 
 .hud-top {
     position: absolute;
-
     top: 20px;
     left: 20px;
     right: 20px;
-
     display: flex;
-
     justify-content: space-between;
     align-items: flex-start;
+    gap: 16px;
 }
 
 .objective-box,
 .timer-box {
-    padding: 12px 15px;
-
-    border: 1px solid rgba(255,255,255,0.1);
-
-    background: rgba(0,0,0,0.48);
-
-    backdrop-filter: blur(6px);
-}
-
-.objective-box {
-    min-width: 240px;
-}
-
-.timer-box {
-    min-width: 100px;
-
-    text-align: center;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    min-width: 140px;
 }
 
 .hud-label {
-    margin-bottom: 6px;
-
-    color: #555;
-
-    font-size: 8px;
-
-    letter-spacing: 3px;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
 }
 
 #objective {
-    color: #ccc;
-
-    font-size: 11px;
-
-    letter-spacing: 1px;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    color: var(--text);
+    font-weight: 500;
 }
 
 #timer {
-    color: #fff;
-
-    font-size: 21px;
-
-    font-weight: bold;
-
-    letter-spacing: 2px;
+    font-size: 18px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    font-weight: 600;
 }
-
-
-/* =========================
-   BUTTON STATUS
-========================= */
 
 .button-status {
     position: absolute;
-
-    top: 88px;
+    top: 90px;
     left: 20px;
-
     display: flex;
-
+    flex-direction: column;
     gap: 6px;
 }
 
 .button-state {
-    padding: 8px 10px;
-
-    border: 1px solid rgba(255,255,255,0.08);
-
-    background: rgba(0,0,0,0.5);
-
-    color: #555;
-
-    font-size: 8px;
-
-    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.5);
+    padding: 6px 12px;
+    border: 1px solid var(--border-dim);
+    text-transform: uppercase;
 }
 
 .button-state i {
     display: inline-block;
-
-    width: 6px;
-    height: 6px;
-
-    margin-right: 6px;
-
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-
-    background: #282828;
+    background: var(--text-muted);
+    flex-shrink: 0;
 }
 
 .button-state.active {
-    color: #d9ff00;
-
-    border-color: rgba(217,255,0,0.35);
+    color: var(--success);
+    border-color: rgba(42, 138, 74, 0.4);
 }
 
 .button-state.active i {
-    background: #d9ff00;
-
-    box-shadow:
-        0 0 10px #d9ff00;
+    background: var(--success);
+    box-shadow: 0 0 6px rgba(42, 138, 74, 0.6);
 }
 
+/* Sanity */
 
-/* =========================
-   CROSSHAIR
-========================= */
-
-#crosshair {
+.sanity-container {
     position: absolute;
-
-    top: 50%;
-    left: 50%;
-
-    transform: translate(-50%, -50%);
-
-    color: rgba(255,255,255,0.6);
-
-    font-size: 17px;
+    bottom: 80px;
+    left: 20px;
+    width: 160px;
 }
 
-
-/* =========================
-   INTERACTION
-========================= */
-
-#interaction {
-    position: absolute;
-
-    left: 50%;
-    bottom: 105px;
-
-    transform: translateX(-50%);
-
-    text-align: center;
+.sanity-title,
+.noise-title {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
 }
 
-#interactionText {
-    display: block;
-
-    padding: 10px 17px;
-
-    background: rgba(0,0,0,0.75);
-
-    border: 1px solid rgba(255,255,255,0.12);
-
-    color: #ddd;
-
-    font-size: 10px;
-
-    letter-spacing: 2px;
-
-    opacity: 0;
-
-    transition: opacity 0.15s;
+.sanity-bar,
+.noise-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-dim);
+    overflow: hidden;
 }
 
-#interactionText.visible {
-    opacity: 1;
+#sanityFill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, var(--danger), var(--accent));
+    transition: width 0.3s ease;
 }
 
-
-/* =========================
-   NOISE
-========================= */
+/* Noise */
 
 .noise-container {
     position: absolute;
-
-    bottom: 45px;
-    left: 20px;
-
-    width: 190px;
-}
-
-.noise-title {
-    margin-bottom: 5px;
-
-    color: #555;
-
-    font-size: 8px;
-
-    letter-spacing: 2px;
-}
-
-.noise-bar {
-    width: 100%;
-    height: 4px;
-
-    background: rgba(255,255,255,0.1);
+    bottom: 80px;
+    right: 20px;
+    width: 160px;
 }
 
 #noiseFill {
-    width: 0%;
     height: 100%;
-
-    background: #ddd;
-
-    transition: width 0.08s;
+    width: 0%;
+    background: linear-gradient(90deg, #4a4a4a, var(--danger));
+    transition: width 0.15s ease;
 }
 
+/* Crosshair */
 
-/* =========================
-   WARNING
-========================= */
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 300;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* Interaction prompt */
+
+#interaction {
+    position: absolute;
+    top: 58%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    text-align: center;
+    text-transform: uppercase;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 6px 14px;
+    border: 1px solid transparent;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+#interaction.visible {
+    opacity: 1;
+    border-color: var(--border);
+}
+
+/* Hide timer */
+
+.hide-timer {
+    position: absolute;
+    top: 42%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+}
+
+.hide-timer-label {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--danger);
+    margin-bottom: 4px;
+}
+
+#hideTimerValue {
+    font-size: 48px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 20px var(--danger-glow);
+}
+
+/* Danger warning */
 
 #dangerWarning {
     position: absolute;
-
-    top: 50%;
+    top: 28%;
     left: 50%;
-
-    transform: translate(-50%, -50%);
-
-    color: #e00000;
-
-    font-size: 16px;
-    font-weight: bold;
-
-    letter-spacing: 5px;
-
-    text-shadow:
-        0 0 15px #900;
-
+    transform: translateX(-50%);
+    font-size: 14px;
+    letter-spacing: 0.35em;
+    color: var(--danger);
+    text-transform: uppercase;
+    font-weight: 700;
     opacity: 0;
+    transition: opacity 0.3s ease;
+    text-shadow: 0 0 12px var(--danger-glow);
+    pointer-events: none;
 }
 
-#dangerWarning.show {
-    animation:
-        dangerPulse 0.6s infinite alternate;
+#dangerWarning.visible {
+    opacity: 1;
+    animation: pulse-danger 0.8s ease infinite alternate;
 }
 
-@keyframes dangerPulse {
-    from {
-        opacity: 0.2;
-    }
-
-    to {
-        opacity: 1;
-    }
+@keyframes pulse-danger {
+    from { opacity: 0.7; }
+    to { opacity: 1; }
 }
 
+/* Scream overlay */
 
-/* =========================
-   CONTROLS
-========================= */
+.scream-overlay {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(80, 0, 0, 0.35) 100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+}
+
+.scream-overlay.active {
+    opacity: 1;
+}
+
+/* Desktop controls hint */
 
 .controls {
     position: absolute;
-
-    right: 20px;
     bottom: 20px;
-
-    color: #444;
-
-    font-size: 8px;
-
-    letter-spacing: 1px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    white-space: nowrap;
 }
 
 .controls span {
-    margin-left: 15px;
-
-    color: #888;
+    color: var(--text-dim);
+    font-weight: 600;
+    letter-spacing: 0.12em;
 }
 
+/* ============================================
+   MOBILE TOUCH CONTROLS
+   ============================================ */
 
-/* =========================
-   OVERLAYS
-========================= */
+.mobile-controls {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+}
+
+.joystick-zone {
+    position: absolute;
+    bottom: 30px;
+    left: 30px;
+    width: 140px;
+    height: 140px;
+    pointer-events: auto;
+    touch-action: none;
+}
+
+.joystick-base {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.joystick-knob {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(201, 162, 39, 0.45);
+    border: 2px solid rgba(201, 162, 39, 0.7);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transition: background 0.1s ease;
+    pointer-events: none;
+}
+
+.joystick-knob.active {
+    background: rgba(201, 162, 39, 0.7);
+}
+
+.mobile-actions {
+    position: absolute;
+    bottom: 30px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: auto;
+}
+
+.mobile-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.12s ease;
+    touch-action: manipulation;
+}
+
+.mobile-btn:active,
+.mobile-btn.active {
+    background: rgba(201, 162, 39, 0.35);
+    border-color: var(--accent);
+    transform: scale(0.94);
+}
+
+.mobile-run {
+    width: 72px;
+    height: 72px;
+    font-size: 11px;
+}
+
+.mobile-interact {
+    background: rgba(40, 80, 40, 0.4);
+    border-color: rgba(42, 138, 74, 0.5);
+}
+
+.mobile-flash {
+    background: rgba(60, 50, 20, 0.4);
+    border-color: rgba(201, 162, 39, 0.4);
+}
+
+/* Look zone — right half of screen for touch look */
+.look-zone {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 55%;
+    height: 70%;
+    pointer-events: auto;
+    touch-action: none;
+}
+
+/* Hide desktop controls hint on mobile */
+@media (max-width: 768px), (pointer: coarse) {
+    .controls {
+        display: none;
+    }
+}
+
+/* ============================================
+   OVERLAYS (Pause / Death / Win)
+   ============================================ */
 
 .overlay {
     position: absolute;
-
     inset: 0;
-
-    z-index: 50;
-
+    background: rgba(0, 0, 0, 0.85);
     display: flex;
-
     align-items: center;
     justify-content: center;
-
-    background:
-        rgba(0,0,0,0.82);
-
-    backdrop-filter: blur(5px);
+    z-index: 40;
+    pointer-events: auto;
 }
 
 .pause-panel,
 .death-panel,
 .win-panel {
-    width: min(460px, 90%);
-
+    width: min(360px, 90vw);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    padding: 40px 36px;
     text-align: center;
 }
 
 .pause-title,
 .death-title,
 .win-title {
-    margin-bottom: 25px;
-
-    font-size: 38px;
-    font-weight: 900;
-
-    letter-spacing: 6px;
+    font-size: 22px;
+    letter-spacing: 0.3em;
+    margin-bottom: 28px;
+    text-transform: uppercase;
+    font-weight: 600;
 }
 
 .pause-title {
-    color: #ddd;
+    color: var(--text);
 }
 
 .death-title {
-    color: #a50000;
+    color: var(--danger);
 }
 
 .win-title {
-    color: #d9ff00;
+    color: var(--accent);
 }
 
 .death-panel p,
 .win-panel p {
-    margin-bottom: 30px;
-
-    color: #666;
-
-    font-size: 12px;
-
-    line-height: 1.8;
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-bottom: 28px;
 }
 
-.pause-panel button,
-.death-panel button,
-.win-panel button {
-    display: block;
+/* ============================================
+   RESPONSIVE — Mobile menu layout
+   ============================================ */
 
-    width: 240px;
-
-    margin: 8px auto;
-}
-
-
-/* =========================
-   MOBILE
-========================= */
-
-@media (max-width: 700px) {
-
-    .menu-content h1 {
-        font-size: 52px;
-
-        letter-spacing: 7px;
+@media (max-width: 820px) {
+    .menu-layout {
+        flex-direction: column;
+        height: auto;
+        max-height: 92vh;
+        overflow-y: auto;
+        width: 94vw;
     }
 
-    .menu-content h1 strong {
-        letter-spacing: 9px;
+    .menu-left {
+        border-right: none;
+        border-bottom: 1px solid var(--border-dim);
+        padding: 36px 28px 28px 28px;
+        align-items: flex-start;
+    }
+
+    .menu-left h1 {
+        font-size: 36px;
+    }
+
+    .menu-buttons {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .menu-buttons button {
+        text-align: center;
+        padding-left: 16px;
+    }
+
+    .menu-buttons button:hover {
+        padding-left: 16px;
+    }
+
+    .menu-version {
+        position: static;
+        margin-top: 24px;
+    }
+
+    .menu-right {
+        padding: 20px;
+        gap: 14px;
+    }
+
+    .menu-preview-box {
+        min-height: 140px;
+        flex: none;
+        height: 160px;
     }
 
     .instruction-grid {
         grid-template-columns: 1fr;
+        gap: 14px;
     }
 
     .panel {
-        padding: 22px;
+        padding: 28px 24px;
     }
 
     .hud-top {
-        top: 10px;
-        left: 10px;
-        right: 10px;
+        top: 12px;
+        left: 12px;
+        right: 12px;
     }
 
-    .objective-box {
-        min-width: 170px;
+    .objective-box,
+    .timer-box {
+        padding: 8px 12px;
+        min-width: 0;
+    }
+
+    #objective {
+        font-size: 11px;
+    }
+
+    #timer {
+        font-size: 15px;
     }
 
     .button-status {
-        top: 82px;
-        left: 10px;
-
-        flex-wrap: wrap;
-
-        width: 240px;
+        top: 70px;
+        left: 12px;
     }
 
-    .controls {
-        display: none;
+    .sanity-container,
+    .noise-container {
+        bottom: 180px;
+        width: 120px;
+    }
+
+    .sanity-container {
+        left: 12px;
     }
 
     .noise-container {
-        left: 10px;
-        bottom: 20px;
+        right: 12px;
     }
 
-    #interaction {
-        bottom: 85px;
+    .joystick-zone {
+        bottom: 24px;
+        left: 20px;
+        width: 120px;
+        height: 120px;
+    }
+
+    .joystick-knob {
+        width: 48px;
+        height: 48px;
+    }
+
+    .mobile-actions {
+        bottom: 24px;
+        right: 16px;
+        gap: 10px;
+    }
+
+    .mobile-btn {
+        width: 56px;
+        height: 56px;
+        font-size: 11px;
+    }
+
+    .mobile-run {
+        width: 64px;
+        height: 64px;
     }
 }
 
-
-/* =========================
-   REDUCED MOTION
-========================= */
-
-@media (prefers-reduced-motion: reduce) {
-
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.001ms !important;
-
-        transition-duration: 0.001ms !important;
+@media (max-width: 400px) {
+    .menu-left h1 {
+        font-size: 28px;
     }
+
+    .small-title {
+        font-size: 10px;
+    }
+
+    .menu-subtitle {
+        font-size: 11px;
+        margin-bottom: 28px;
+    }
+}
+
+/* ============================================
+   UTILITY / FOCUS
+   ============================================ */
+
+button:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Smooth fade for screens if you toggle classes later */
+.screen {
+    animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
