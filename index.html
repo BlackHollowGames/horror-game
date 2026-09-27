@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>THE SEEKER</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -17,39 +17,81 @@
 
         <div class="menu-background"></div>
 
-        <div class="menu-content">
+        <div class="menu-layout">
 
-            <div class="small-title">BLACKHOLLOW GAMES</div>
+            <!-- LEFT: Title + Buttons -->
+            <div class="menu-left">
 
-            <h1>
-                THE
-                <strong>SEEKER</strong>
-            </h1>
+                <div class="small-title">BLACKHOLLOW GAMES</div>
 
-            <div class="menu-line"></div>
+                <h1>
+                    THE
+                    <strong>SEEKER</strong>
+                </h1>
 
-            <p class="menu-subtitle">
-                IT CAN HEAR YOU.
-            </p>
+                <div class="menu-line"></div>
 
-            <div class="menu-buttons">
+                <p class="menu-subtitle">
+                    IT CAN HEAR YOU.
+                </p>
 
-                <button id="playButton">
-                    PLAY
-                </button>
+                <div class="menu-buttons">
 
-                <button id="instructionsButton">
-                    HOW TO PLAY
-                </button>
+                    <button id="playButton">
+                        PLAY
+                    </button>
 
-                <button id="settingsButton">
-                    SETTINGS
-                </button>
+                    <button id="instructionsButton">
+                        HOW TO PLAY
+                    </button>
+
+                    <button id="settingsButton">
+                        SETTINGS
+                    </button>
+
+                </div>
+
+                <div class="menu-version">
+                    THE SEEKER // EARLY BUILD
+                </div>
 
             </div>
 
-            <div class="menu-version">
-                THE SEEKER // EARLY BUILD
+            <!-- RIGHT: Credits + Gameplay preview -->
+            <div class="menu-right">
+
+                <div class="menu-preview-box">
+                    <div class="preview-label">GAMEPLAY</div>
+                    <div class="preview-placeholder" id="previewPlaceholder">
+                        <span>ANIMATION COMING SOON</span>
+                    </div>
+                </div>
+
+                <div class="credits-box">
+                    <div class="credits-title">CREDITS</div>
+                    <div class="credits-list">
+                        <div class="credit-row">
+                            <span class="credit-role">Creator</span>
+                            <span class="credit-name">Stive Pierre</span>
+                        </div>
+                        <div class="credit-row">
+                            <span class="credit-role">Studio</span>
+                            <span class="credit-name">BlackHollow Games</span>
+                        </div>
+                        <div class="credit-row">
+                            <span class="credit-role">Engine</span>
+                            <span class="credit-name">Three.js</span>
+                        </div>
+                        <div class="credit-row">
+                            <span class="credit-role">Audio</span>
+                            <span class="credit-name">Custom SFX</span>
+                        </div>
+                    </div>
+                    <div class="credits-footer">
+                        © 2026 BLACKHOLLOW GAMES
+                    </div>
+                </div>
+
             </div>
 
         </div>
@@ -72,33 +114,33 @@
             <div class="instruction-grid">
 
                 <div>
-                    <span>W A S D</span>
+                    <span>W A S D / JOYSTICK</span>
                     <p>Move around the building.</p>
                 </div>
 
                 <div>
-                    <span>MOUSE</span>
+                    <span>MOUSE / TOUCH</span>
                     <p>Look around.</p>
                 </div>
 
                 <div>
-                    <span>SHIFT</span>
+                    <span>SHIFT / RUN BTN</span>
                     <p>Run faster, but make more noise.</p>
                 </div>
 
                 <div>
-                    <span>E</span>
-                    <p>Interact with buttons, keys and gates.</p>
+                    <span>E / INTERACT</span>
+                    <p>Buttons, keys, gates and hide in boxes.</p>
                 </div>
 
                 <div>
-                    <span>F</span>
+                    <span>F / FLASHLIGHT</span>
                     <p>Toggle your flashlight.</p>
                 </div>
 
                 <div>
                     <span>OBJECTIVE</span>
-                    <p>Find all 3 buttons, get the key and escape.</p>
+                    <p>Find all 3 buttons, get the key and escape. Hide when it hears you.</p>
                 </div>
 
             </div>
@@ -108,7 +150,8 @@
                 <br>
                 The Seeker reacts to sound.
                 Running creates more noise.
-                Footsteps can give away your location.
+                Pressing a button makes it scream — you have 10 seconds to hide.
+                Low sanity will kill you.
             </div>
 
             <button id="instructionsBack">
@@ -175,172 +218,112 @@
             <div class="hud-top">
 
                 <div class="objective-box">
-
-                    <div class="hud-label">
-                        OBJECTIVE
-                    </div>
-
-                    <div id="objective">
-                        FIND THE 3 BUTTONS
-                    </div>
-
+                    <div class="hud-label">OBJECTIVE</div>
+                    <div id="objective">FIND THE 3 BUTTONS</div>
                 </div>
 
                 <div class="timer-box">
-
-                    <div class="hud-label">
-                        TIME
-                    </div>
-
-                    <div id="timer">
-                        03:00
-                    </div>
-
+                    <div class="hud-label">TIME</div>
+                    <div id="timer">03:00</div>
                 </div>
 
             </div>
-
 
             <div class="button-status">
-
-                <div id="button1" class="button-state">
-                    <i></i>
-                    BUTTON 1
-                </div>
-
-                <div id="button2" class="button-state">
-                    <i></i>
-                    BUTTON 2
-                </div>
-
-                <div id="button3" class="button-state">
-                    <i></i>
-                    BUTTON 3
-                </div>
-
+                <div id="button1" class="button-state"><i></i> BUTTON 1</div>
+                <div id="button2" class="button-state"><i></i> BUTTON 2</div>
+                <div id="button3" class="button-state"><i></i> BUTTON 3</div>
             </div>
 
-
-            <div id="crosshair">
-                +
+            <div class="sanity-container">
+                <div class="sanity-title">SANITY</div>
+                <div class="sanity-bar">
+                    <div id="sanityFill"></div>
+                </div>
             </div>
 
+            <div id="crosshair">+</div>
 
             <div id="interaction">
                 <span id="interactionText"></span>
             </div>
 
-
             <div class="noise-container">
-
-                <div class="noise-title">
-                    NOISE
-                </div>
-
+                <div class="noise-title">NOISE</div>
                 <div class="noise-bar">
                     <div id="noiseFill"></div>
                 </div>
-
             </div>
 
-
-            <div id="dangerWarning">
-                IT HEARD YOU
+            <div id="hideTimer" class="hide-timer hidden">
+                <div class="hide-timer-label">HIDE</div>
+                <div id="hideTimerValue">10</div>
             </div>
 
+            <div id="dangerWarning">IT HEARD YOU</div>
+
+            <div id="screamOverlay" class="scream-overlay"></div>
 
             <div class="controls">
-
                 <span>WASD</span> MOVE
                 <span>SHIFT</span> RUN
                 <span>E</span> INTERACT
                 <span>F</span> FLASHLIGHT
-
             </div>
+
+        </div>
+
+
+        <!-- MOBILE TOUCH CONTROLS -->
+        <div id="mobileControls" class="mobile-controls hidden">
+
+            <div id="joystickZone" class="joystick-zone">
+                <div id="joystickBase" class="joystick-base">
+                    <div id="joystickKnob" class="joystick-knob"></div>
+                </div>
+            </div>
+
+            <div class="mobile-actions">
+                <button id="mobileRun" class="mobile-btn mobile-run">RUN</button>
+                <button id="mobileInteract" class="mobile-btn mobile-interact">E</button>
+                <button id="mobileFlashlight" class="mobile-btn mobile-flash">F</button>
+            </div>
+
+            <div id="lookZone" class="look-zone"></div>
 
         </div>
 
 
         <!-- PAUSE -->
-
         <div id="pauseScreen" class="overlay hidden">
-
             <div class="pause-panel">
-
-                <div class="pause-title">
-                    PAUSED
-                </div>
-
-                <button id="resumeButton">
-                    RESUME
-                </button>
-
-                <button id="quitButton">
-                    QUIT TO MENU
-                </button>
-
+                <div class="pause-title">PAUSED</div>
+                <button id="resumeButton">RESUME</button>
+                <button id="quitButton">QUIT TO MENU</button>
             </div>
-
         </div>
 
-
-        <!-- GAME OVER -->
-
+        <!-- DEATH -->
         <div id="deathScreen" class="overlay hidden">
-
             <div class="death-panel">
-
-                <div class="death-title">
-                    YOU WERE FOUND
-                </div>
-
-                <p id="deathReason">
-                    THE SEEKER FOUND YOU.
-                </p>
-
-                <button id="retryButton">
-                    TRY AGAIN
-                </button>
-
-                <button id="deathMenuButton">
-                    MAIN MENU
-                </button>
-
+                <div class="death-title">YOU WERE FOUND</div>
+                <p id="deathReason">THE SEEKER FOUND YOU.</p>
+                <button id="retryButton">TRY AGAIN</button>
+                <button id="deathMenuButton">MAIN MENU</button>
             </div>
-
         </div>
-
 
         <!-- WIN -->
-
         <div id="winScreen" class="overlay hidden">
-
             <div class="win-panel">
-
-                <div class="win-title">
-                    YOU ESCAPED
-                </div>
-
-                <p>
-                    The gate opened.
-                    <br>
-                    You made it out.
-                </p>
-
-                <button id="winAgainButton">
-                    PLAY AGAIN
-                </button>
-
-                <button id="winMenuButton">
-                    MAIN MENU
-                </button>
-
+                <div class="win-title">YOU ESCAPED</div>
+                <p>The gate opened.<br>You made it out.</p>
+                <button id="winAgainButton">PLAY AGAIN</button>
+                <button id="winMenuButton">MAIN MENU</button>
             </div>
-
         </div>
 
     </main>
-
 
     <script type="module" src="game.js"></script>
 
