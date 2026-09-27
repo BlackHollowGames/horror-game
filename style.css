@@ -1,0 +1,790 @@
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #020304;
+    color: #fff;
+    font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+}
+
+body {
+    user-select: none;
+}
+
+button,
+input {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+
+/* =========================
+   GENERAL
+========================= */
+
+.hidden {
+    display: none !important;
+}
+
+.screen {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+
+/* =========================
+   MAIN MENU
+========================= */
+
+#menuScreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background:
+        radial-gradient(
+            circle at 50% 45%,
+            rgba(70, 70, 70, 0.13),
+            transparent 35%
+        ),
+        linear-gradient(
+            135deg,
+            #030405,
+            #08090a 50%,
+            #010202
+        );
+}
+
+.menu-background {
+    position: absolute;
+    inset: 0;
+
+    background-image:
+        linear-gradient(
+            rgba(255,255,255,0.015) 1px,
+            transparent 1px
+        ),
+        linear-gradient(
+            90deg,
+            rgba(255,255,255,0.015) 1px,
+            transparent 1px
+        );
+
+    background-size: 50px 50px;
+
+    opacity: 0.25;
+}
+
+.menu-content {
+    position: relative;
+    width: min(500px, 90%);
+    text-align: center;
+}
+
+.small-title {
+    margin-bottom: 25px;
+
+    color: #5b5b5b;
+
+    font-size: 9px;
+    letter-spacing: 5px;
+}
+
+.menu-content h1 {
+    margin: 0;
+
+    color: #d9d9d9;
+
+    font-size: clamp(55px, 10vw, 100px);
+    line-height: 0.78;
+
+    font-weight: 200;
+    letter-spacing: 12px;
+}
+
+.menu-content h1 strong {
+    display: block;
+
+    color: #fff;
+
+    font-weight: 900;
+    letter-spacing: 15px;
+}
+
+.menu-line {
+    width: 100px;
+    height: 1px;
+
+    margin: 40px auto 22px;
+
+    background: #777;
+}
+
+.menu-subtitle {
+    color: #666;
+
+    font-size: 11px;
+    letter-spacing: 5px;
+}
+
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+
+    gap: 9px;
+
+    width: 260px;
+
+    margin: 45px auto 0;
+}
+
+.menu-buttons button,
+.panel button,
+.pause-panel button,
+.death-panel button,
+.win-panel button {
+    width: 100%;
+    min-height: 48px;
+
+    border: 1px solid #292929;
+
+    background: rgba(255,255,255,0.025);
+
+    color: #bdbdbd;
+
+    font-size: 10px;
+    font-weight: bold;
+
+    letter-spacing: 3px;
+
+    transition:
+        background 0.18s,
+        border-color 0.18s,
+        color 0.18s;
+}
+
+.menu-buttons button:hover,
+.panel button:hover,
+.pause-panel button:hover,
+.death-panel button:hover,
+.win-panel button:hover {
+    background: #e8e8e8;
+
+    border-color: #fff;
+
+    color: #000;
+}
+
+.menu-version {
+    margin-top: 45px;
+
+    color: #333;
+
+    font-size: 8px;
+
+    letter-spacing: 3px;
+}
+
+
+/* =========================
+   PANELS
+========================= */
+
+.panel {
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    width: min(620px, 90%);
+
+    transform: translate(-50%, -50%);
+
+    padding: 35px;
+
+    background: rgba(8,9,10,0.97);
+
+    border: 1px solid #242424;
+
+    box-shadow:
+        0 30px 100px rgba(0,0,0,0.8);
+}
+
+.panel-title {
+    margin-bottom: 30px;
+
+    font-size: 25px;
+    font-weight: 800;
+
+    letter-spacing: 5px;
+}
+
+.instruction-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, 1fr);
+
+    gap: 12px;
+}
+
+.instruction-grid > div {
+    padding: 18px;
+
+    border: 1px solid #1d1d1d;
+
+    background: #0c0d0e;
+}
+
+.instruction-grid span {
+    color: #ddd;
+
+    font-size: 10px;
+
+    font-weight: bold;
+
+    letter-spacing: 2px;
+}
+
+.instruction-grid p {
+    margin: 10px 0 0;
+
+    color: #666;
+
+    font-size: 11px;
+
+    line-height: 1.6;
+}
+
+.danger-box {
+    margin: 22px 0;
+
+    padding: 17px;
+
+    border: 1px solid #391414;
+
+    background: rgba(70,0,0,0.13);
+
+    color: #666;
+
+    font-size: 11px;
+
+    line-height: 1.7;
+}
+
+.danger-box strong {
+    color: #9e2525;
+}
+
+
+/* =========================
+   SETTINGS
+========================= */
+
+.setting-row {
+    display: flex;
+
+    justify-content: space-between;
+    align-items: center;
+
+    padding: 18px 0;
+
+    border-bottom: 1px solid #1b1b1b;
+
+    color: #aaa;
+
+    font-size: 10px;
+
+    letter-spacing: 2px;
+}
+
+.setting-row input[type="range"] {
+    width: 180px;
+}
+
+.setting-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+
+/* =========================
+   GAME
+========================= */
+
+#gameScreen {
+    position: absolute;
+    inset: 0;
+
+    background: #000;
+}
+
+#gameCanvas {
+    position: absolute;
+    inset: 0;
+}
+
+#gameCanvas canvas {
+    display: block;
+
+    width: 100%;
+    height: 100%;
+}
+
+
+/* =========================
+   HUD
+========================= */
+
+#hud {
+    position: absolute;
+    inset: 0;
+
+    pointer-events: none;
+
+    z-index: 10;
+}
+
+.hud-top {
+    position: absolute;
+
+    top: 20px;
+    left: 20px;
+    right: 20px;
+
+    display: flex;
+
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.objective-box,
+.timer-box {
+    padding: 12px 15px;
+
+    border: 1px solid rgba(255,255,255,0.1);
+
+    background: rgba(0,0,0,0.48);
+
+    backdrop-filter: blur(6px);
+}
+
+.objective-box {
+    min-width: 240px;
+}
+
+.timer-box {
+    min-width: 100px;
+
+    text-align: center;
+}
+
+.hud-label {
+    margin-bottom: 6px;
+
+    color: #555;
+
+    font-size: 8px;
+
+    letter-spacing: 3px;
+}
+
+#objective {
+    color: #ccc;
+
+    font-size: 11px;
+
+    letter-spacing: 1px;
+}
+
+#timer {
+    color: #fff;
+
+    font-size: 21px;
+
+    font-weight: bold;
+
+    letter-spacing: 2px;
+}
+
+
+/* =========================
+   BUTTON STATUS
+========================= */
+
+.button-status {
+    position: absolute;
+
+    top: 88px;
+    left: 20px;
+
+    display: flex;
+
+    gap: 6px;
+}
+
+.button-state {
+    padding: 8px 10px;
+
+    border: 1px solid rgba(255,255,255,0.08);
+
+    background: rgba(0,0,0,0.5);
+
+    color: #555;
+
+    font-size: 8px;
+
+    letter-spacing: 1px;
+}
+
+.button-state i {
+    display: inline-block;
+
+    width: 6px;
+    height: 6px;
+
+    margin-right: 6px;
+
+    border-radius: 50%;
+
+    background: #282828;
+}
+
+.button-state.active {
+    color: #d9ff00;
+
+    border-color: rgba(217,255,0,0.35);
+}
+
+.button-state.active i {
+    background: #d9ff00;
+
+    box-shadow:
+        0 0 10px #d9ff00;
+}
+
+
+/* =========================
+   CROSSHAIR
+========================= */
+
+#crosshair {
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    transform: translate(-50%, -50%);
+
+    color: rgba(255,255,255,0.6);
+
+    font-size: 17px;
+}
+
+
+/* =========================
+   INTERACTION
+========================= */
+
+#interaction {
+    position: absolute;
+
+    left: 50%;
+    bottom: 105px;
+
+    transform: translateX(-50%);
+
+    text-align: center;
+}
+
+#interactionText {
+    display: block;
+
+    padding: 10px 17px;
+
+    background: rgba(0,0,0,0.75);
+
+    border: 1px solid rgba(255,255,255,0.12);
+
+    color: #ddd;
+
+    font-size: 10px;
+
+    letter-spacing: 2px;
+
+    opacity: 0;
+
+    transition: opacity 0.15s;
+}
+
+#interactionText.visible {
+    opacity: 1;
+}
+
+
+/* =========================
+   NOISE
+========================= */
+
+.noise-container {
+    position: absolute;
+
+    bottom: 45px;
+    left: 20px;
+
+    width: 190px;
+}
+
+.noise-title {
+    margin-bottom: 5px;
+
+    color: #555;
+
+    font-size: 8px;
+
+    letter-spacing: 2px;
+}
+
+.noise-bar {
+    width: 100%;
+    height: 4px;
+
+    background: rgba(255,255,255,0.1);
+}
+
+#noiseFill {
+    width: 0%;
+    height: 100%;
+
+    background: #ddd;
+
+    transition: width 0.08s;
+}
+
+
+/* =========================
+   WARNING
+========================= */
+
+#dangerWarning {
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    transform: translate(-50%, -50%);
+
+    color: #e00000;
+
+    font-size: 16px;
+    font-weight: bold;
+
+    letter-spacing: 5px;
+
+    text-shadow:
+        0 0 15px #900;
+
+    opacity: 0;
+}
+
+#dangerWarning.show {
+    animation:
+        dangerPulse 0.6s infinite alternate;
+}
+
+@keyframes dangerPulse {
+    from {
+        opacity: 0.2;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+
+/* =========================
+   CONTROLS
+========================= */
+
+.controls {
+    position: absolute;
+
+    right: 20px;
+    bottom: 20px;
+
+    color: #444;
+
+    font-size: 8px;
+
+    letter-spacing: 1px;
+}
+
+.controls span {
+    margin-left: 15px;
+
+    color: #888;
+}
+
+
+/* =========================
+   OVERLAYS
+========================= */
+
+.overlay {
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 50;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    background:
+        rgba(0,0,0,0.82);
+
+    backdrop-filter: blur(5px);
+}
+
+.pause-panel,
+.death-panel,
+.win-panel {
+    width: min(460px, 90%);
+
+    text-align: center;
+}
+
+.pause-title,
+.death-title,
+.win-title {
+    margin-bottom: 25px;
+
+    font-size: 38px;
+    font-weight: 900;
+
+    letter-spacing: 6px;
+}
+
+.pause-title {
+    color: #ddd;
+}
+
+.death-title {
+    color: #a50000;
+}
+
+.win-title {
+    color: #d9ff00;
+}
+
+.death-panel p,
+.win-panel p {
+    margin-bottom: 30px;
+
+    color: #666;
+
+    font-size: 12px;
+
+    line-height: 1.8;
+}
+
+.pause-panel button,
+.death-panel button,
+.win-panel button {
+    display: block;
+
+    width: 240px;
+
+    margin: 8px auto;
+}
+
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 700px) {
+
+    .menu-content h1 {
+        font-size: 52px;
+
+        letter-spacing: 7px;
+    }
+
+    .menu-content h1 strong {
+        letter-spacing: 9px;
+    }
+
+    .instruction-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .panel {
+        padding: 22px;
+    }
+
+    .hud-top {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+    }
+
+    .objective-box {
+        min-width: 170px;
+    }
+
+    .button-status {
+        top: 82px;
+        left: 10px;
+
+        flex-wrap: wrap;
+
+        width: 240px;
+    }
+
+    .controls {
+        display: none;
+    }
+
+    .noise-container {
+        left: 10px;
+        bottom: 20px;
+    }
+
+    #interaction {
+        bottom: 85px;
+    }
+}
+
+
+/* =========================
+   REDUCED MOTION
+========================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+
+        transition-duration: 0.001ms !important;
+    }
+}

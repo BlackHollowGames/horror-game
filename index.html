@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE SEEKER</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- =========================
+         MAIN MENU
+    ========================== -->
+
+    <main id="menuScreen" class="screen">
+
+        <div class="menu-background"></div>
+
+        <div class="menu-content">
+
+            <div class="small-title">BLACKHOLLOW GAMES</div>
+
+            <h1>
+                THE
+                <strong>SEEKER</strong>
+            </h1>
+
+            <div class="menu-line"></div>
+
+            <p class="menu-subtitle">
+                IT CAN HEAR YOU.
+            </p>
+
+            <div class="menu-buttons">
+
+                <button id="playButton">
+                    PLAY
+                </button>
+
+                <button id="instructionsButton">
+                    HOW TO PLAY
+                </button>
+
+                <button id="settingsButton">
+                    SETTINGS
+                </button>
+
+            </div>
+
+            <div class="menu-version">
+                THE SEEKER // EARLY BUILD
+            </div>
+
+        </div>
+
+    </main>
+
+
+    <!-- =========================
+         HOW TO PLAY
+    ========================== -->
+
+    <section id="instructionsScreen" class="screen hidden">
+
+        <div class="panel">
+
+            <div class="panel-title">
+                HOW TO PLAY
+            </div>
+
+            <div class="instruction-grid">
+
+                <div>
+                    <span>W A S D</span>
+                    <p>Move around the building.</p>
+                </div>
+
+                <div>
+                    <span>MOUSE</span>
+                    <p>Look around.</p>
+                </div>
+
+                <div>
+                    <span>SHIFT</span>
+                    <p>Run faster, but make more noise.</p>
+                </div>
+
+                <div>
+                    <span>E</span>
+                    <p>Interact with buttons, keys and gates.</p>
+                </div>
+
+                <div>
+                    <span>F</span>
+                    <p>Toggle your flashlight.</p>
+                </div>
+
+                <div>
+                    <span>OBJECTIVE</span>
+                    <p>Find all 3 buttons, get the key and escape.</p>
+                </div>
+
+            </div>
+
+            <div class="danger-box">
+                <strong>WARNING</strong>
+                <br>
+                The Seeker reacts to sound.
+                Running creates more noise.
+                Footsteps can give away your location.
+            </div>
+
+            <button id="instructionsBack">
+                BACK
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <!-- =========================
+         SETTINGS
+    ========================== -->
+
+    <section id="settingsScreen" class="screen hidden">
+
+        <div class="panel">
+
+            <div class="panel-title">
+                SETTINGS
+            </div>
+
+            <label class="setting-row">
+                <span>FLASHLIGHT</span>
+                <input id="flashlightSetting" type="checkbox" checked>
+            </label>
+
+            <label class="setting-row">
+                <span>FOOTSTEP AUDIO</span>
+                <input id="footstepSetting" type="checkbox" checked>
+            </label>
+
+            <label class="setting-row">
+                <span>MASTER VOLUME</span>
+                <input
+                    id="volumeSetting"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="45"
+                >
+            </label>
+
+            <button id="settingsBack">
+                BACK
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <!-- =========================
+         GAME
+    ========================== -->
+
+    <main id="gameScreen" class="hidden">
+
+        <div id="gameCanvas"></div>
+
+        <div id="hud">
+
+            <div class="hud-top">
+
+                <div class="objective-box">
+
+                    <div class="hud-label">
+                        OBJECTIVE
+                    </div>
+
+                    <div id="objective">
+                        FIND THE 3 BUTTONS
+                    </div>
+
+                </div>
+
+                <div class="timer-box">
+
+                    <div class="hud-label">
+                        TIME
+                    </div>
+
+                    <div id="timer">
+                        03:00
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="button-status">
+
+                <div id="button1" class="button-state">
+                    <i></i>
+                    BUTTON 1
+                </div>
+
+                <div id="button2" class="button-state">
+                    <i></i>
+                    BUTTON 2
+                </div>
+
+                <div id="button3" class="button-state">
+                    <i></i>
+                    BUTTON 3
+                </div>
+
+            </div>
+
+
+            <div id="crosshair">
+                +
+            </div>
+
+
+            <div id="interaction">
+                <span id="interactionText"></span>
+            </div>
+
+
+            <div class="noise-container">
+
+                <div class="noise-title">
+                    NOISE
+                </div>
+
+                <div class="noise-bar">
+                    <div id="noiseFill"></div>
+                </div>
+
+            </div>
+
+
+            <div id="dangerWarning">
+                IT HEARD YOU
+            </div>
+
+
+            <div class="controls">
+
+                <span>WASD</span> MOVE
+                <span>SHIFT</span> RUN
+                <span>E</span> INTERACT
+                <span>F</span> FLASHLIGHT
+
+            </div>
+
+        </div>
+
+
+        <!-- PAUSE -->
+
+        <div id="pauseScreen" class="overlay hidden">
+
+            <div class="pause-panel">
+
+                <div class="pause-title">
+                    PAUSED
+                </div>
+
+                <button id="resumeButton">
+                    RESUME
+                </button>
+
+                <button id="quitButton">
+                    QUIT TO MENU
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- GAME OVER -->
+
+        <div id="deathScreen" class="overlay hidden">
+
+            <div class="death-panel">
+
+                <div class="death-title">
+                    YOU WERE FOUND
+                </div>
+
+                <p id="deathReason">
+                    THE SEEKER FOUND YOU.
+                </p>
+
+                <button id="retryButton">
+                    TRY AGAIN
+                </button>
+
+                <button id="deathMenuButton">
+                    MAIN MENU
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- WIN -->
+
+        <div id="winScreen" class="overlay hidden">
+
+            <div class="win-panel">
+
+                <div class="win-title">
+                    YOU ESCAPED
+                </div>
+
+                <p>
+                    The gate opened.
+                    <br>
+                    You made it out.
+                </p>
+
+                <button id="winAgainButton">
+                    PLAY AGAIN
+                </button>
+
+                <button id="winMenuButton">
+                    MAIN MENU
+                </button>
+
+            </div>
+
+        </div>
+
+    </main>
+
+
+    <script type="module" src="game.js"></script>
+
+</body>
+</html>
