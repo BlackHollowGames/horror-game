@@ -1,3591 +1,5039 @@
 /* ============================================================
    THE SEEKER
    BlackHollow Games
-   Created by Stive Pierre
-
-   Complete browser game runtime.
+   game.js
    ============================================================ */
 
-import * as THREE from "three";
-
-/* ============================================================
-   GLOBAL STATE
-   ============================================================ */
-
-const Game = {
-    running: false,
-    paused: false,
-    dead: false,
-    won: false,
-
-    renderer: null,
-    scene: null,
-    camera: null,
-
-    clock: new THREE.Clock(),
-
-    player: null,
-    seeker: null,
-
-    world: null,
-    walls: [],
-    doors: [],
-    buttons: [],
-    notes: [],
-    decorations: [],
-    lights: [],
-
-    keys: new Set(),
-
-    device: "pc",
-
-    playerSpeed: 4.6,
-    runSpeed: 7.2,
-
-    playerHeight: 1.7,
-    playerRadius: 0.35,
-
-    playerHealth: 100,
-    sanity: 100,
-    noise: 0,
-
-    seekerSpeed: 2.4,
-    seekerChaseSpeed: 3.65,
-    seekerAlertSpeed: 4.4,
-
-    seekerAwake: false,
-    seekerAlerted: false,
-    seekerTargetVisible: false,
-
-    elapsed: 0,
-    remaining: 180,
-
-    hideTime: 0,
-
-    buttonsPressed: 0,
-    keyCollected: false,
-    gateUnlocked: false,
-
-    notesCollected: 0,
-
-    objective: "",
-
-    flashlight: true,
-    flashlightBattery: 100,
-
-    footstepsEnabled: true,
-    masterVolume: 0.7,
-
-    interactionTarget: null,
-
-    lastFootstep: 0,
-    lastSeekerSound: 0,
-    lastAmbient: 0,
-
-    audioContext: null,
-
-    playerVelocity: new THREE.Vector3(),
-    seekerVelocity: new THREE.Vector3(),
-
-    playerDirection: new THREE.Vector3(),
-    forward: new THREE.Vector3(),
-    right: new THREE.Vector3(),
-
-    raycaster: new THREE.Raycaster(),
-
-    minimapCanvas: null,
-    minimapContext: null,
-
-    cameraYaw: 0,
-    cameraPitch: -0.18,
-
-    mouseLocked: false,
-    mouseX: 0,
-    mouseY: 0,
-
-    joystickX: 0,
-    joystickY: 0,
-
-    touchLookX: 0,
-    touchLookY: 0,
-
-    spawn: new THREE.Vector3(0, 0, 8),
-    exitPosition: new THREE.Vector3(0, 0, -78),
-
-    houseSize: 150,
-
-    textures: {},
-
-    tmp: {
-        a: new THREE.Vector3(),
-        b: new THREE.Vector3(),
-        c: new THREE.Vector3(),
-        d: new THREE.Vector3(),
-        e: new THREE.Vector3(),
-        f: new THREE.Vector3()
-    }
-};
-
-/* ============================================================
-   DOM HELPERS
-   ============================================================ */
-
-const $ = id => document.getElementById(id);
-
-function show(element) {
-    if (element) {
-        element.classList.remove("hidden");
-    }
-}
-
-function hide(element) {
-    if (element) {
-        element.classList.add("hidden");
-    }
-}
-
-function setText(id, value) {
-    const element = $(id);
-    if (element) {
-        element.textContent = String(value);
-    }
-}
-
-function setObjective(text) {
-    Game.objective = text || "";
-
-    const element = $("objective");
-
-    if (element) {
-        element.textContent = Game.objective;
-    }
-}
-
-function setNotesCount(value) {
-    Game.notesCollected = Math.max(0, value);
-
-    const element = $("notesCount");
-
-    if (element) {
-        element.textContent = String(Game.notesCollected);
-    }
-}
-
-function setTimer(value) {
-    const seconds = Math.max(0, Math.ceil(value));
-    const minutes = Math.floor(seconds / 60);
-    const remainder = seconds % 60;
-
-    setText(
-        "timer",
-        `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
-    );
-}
-
-function setButtonState(index, state) {
-    const element = $(`button${index}`);
-
-    if (!element) {
-        return;
-    }
-
-    element.textContent = state;
-
-    element.classList.remove(
-        "active",
-        "complete",
-        "pressed",
-        "found"
-    );
-
-    if (
-        state === "ACTIVE" ||
-        state === "FOUND"
-    ) {
-        element.classList.add("active");
-    }
-
-    if (
-        state === "PRESSED" ||
-        state === "COMPLETE"
-    ) {
-        element.classList.add("complete");
-    }
-}
-
-function setSanity(value) {
-    Game.sanity = THREE.MathUtils.clamp(value, 0, 100);
-
-    const fill = $("sanityFill");
-
-    if (fill) {
-        fill.style.width = `${Game.sanity}%`;
-    }
-}
-
-function setNoise(value) {
-    Game.noise = THREE.MathUtils.clamp(value, 0, 100);
-
-    const fill = $("noiseFill");
-
-    if (fill) {
-        fill.style.width = `${Game.noise}%`;
-    }
-}
-
-function setInteraction(text) {
-    const interaction = $("interaction");
-    const interactionText = $("interactionText");
-
-    if (!interaction || !interactionText) {
-        return;
-    }
-
-    if (text) {
-        interactionText.textContent = text;
-        show(interaction);
-    } else {
-        hide(interaction);
-    }
-}
-
-/* ============================================================
-   SAFE SCREEN MANAGEMENT
-   ============================================================ */
-
-function showMenu() {
-    Game.running = false;
-    Game.paused = false;
-
-    hide($("gameScreen"));
-    hide($("pauseScreen"));
-    hide($("deathScreen"));
-    hide($("winScreen"));
-    hide($("notesLogScreen"));
-
-    show($("menuScreen"));
-}
-
-function showGame() {
-    hide($("menuScreen"));
-    hide($("instructionsScreen"));
-    hide($("settingsScreen"));
-
-    show($("gameScreen"));
-}
-
-function showDeath(reason) {
-    Game.running = false;
-    Game.dead = true;
-
-    setText(
-        "deathReason",
-        reason || "The Seeker found you."
-    );
-
-    hide($("gameScreen"));
-    hide($("pauseScreen"));
-    show($("deathScreen"));
-}
-
-function showWin() {
-    Game.running = false;
-    Game.won = true;
-
-    setText(
-        "winTitle",
-        "YOU ESCAPED"
-    );
-
-    setText(
-        "winText",
-        "You unlocked the gate and escaped the house."
-    );
-
-    hide($("gameScreen"));
-    hide($("pauseScreen"));
-    show($("winScreen"));
-}
-
-/* ============================================================
-   AUDIO
-   ============================================================ */
-
-function initializeAudio() {
-    try {
-        if (!Game.audioContext) {
-            const AudioContext =
-                window.AudioContext ||
-                window.webkitAudioContext;
-
-            if (AudioContext) {
-                Game.audioContext = new AudioContext();
-            }
-        }
-
-        if (
-            Game.audioContext &&
-            Game.audioContext.state === "suspended"
-        ) {
-            Game.audioContext.resume().catch(() => {});
-        }
-    } catch {
-        Game.audioContext = null;
-    }
-}
-
-function tone(
-    frequency = 440,
-    duration = 0.08,
-    type = "sine",
-    volume = 0.04
-) {
-    if (!Game.audioContext) {
-        return;
-    }
-
-    try {
-        const oscillator =
-            Game.audioContext.createOscillator();
-
-        const gain =
-            Game.audioContext.createGain();
-
-        oscillator.type = type;
-        oscillator.frequency.value = frequency;
-
-        gain.gain.setValueAtTime(
-            0.0001,
-            Game.audioContext.currentTime
-        );
-
-        gain.gain.exponentialRampToValueAtTime(
-            Math.max(0.0001, volume * Game.masterVolume),
-            Game.audioContext.currentTime + 0.01
-        );
-
-        gain.gain.exponentialRampToValueAtTime(
-            0.0001,
-            Game.audioContext.currentTime + duration
-        );
-
-        oscillator.connect(gain);
-        gain.connect(Game.audioContext.destination);
-
-        oscillator.start();
-
-        oscillator.stop(
-            Game.audioContext.currentTime + duration + 0.02
-        );
-    } catch {
-        /* Audio is optional. */
-    }
-}
-
-function playButtonSound() {
-    tone(330, 0.07, "square", 0.035);
-    setTimeout(() => {
-        tone(495, 0.1, "square", 0.025);
-    }, 65);
-}
-
-function playPickupSound() {
-    tone(520, 0.07, "sine", 0.035);
-
-    setTimeout(() => {
-        tone(780, 0.12, "sine", 0.035);
-    }, 70);
-}
-
-function playGateSound() {
-    tone(120, 0.25, "sawtooth", 0.025);
-
-    setTimeout(() => {
-        tone(180, 0.35, "sine", 0.025);
-    }, 220);
-}
-
-function playFootstep() {
-    if (!Game.footstepsEnabled) {
-        return;
-    }
-
-    if (!Game.audioContext) {
-        return;
-    }
-
-    const now = performance.now();
-
-    if (now - Game.lastFootstep < 300) {
-        return;
-    }
-
-    Game.lastFootstep = now;
-
-    tone(
-        65 + Math.random() * 20,
-        0.045,
-        "triangle",
-        0.025
-    );
-}
-
-function playSeekerPulse() {
-    const now = performance.now();
-
-    if (now - Game.lastSeekerSound < 1800) {
-        return;
-    }
-
-    Game.lastSeekerSound = now;
-
-    tone(52, 0.25, "sine", 0.025);
-
-    setTimeout(() => {
-        tone(38, 0.4, "sine", 0.02);
-    }, 100);
-}
-
-/* ============================================================
-   BUTTON EVENTS
-   ============================================================ */
-
-function bindButton(id, handler) {
-    const element = $(id);
-
-    if (!element) {
-        return;
-    }
-
-    element.addEventListener("click", event => {
-        event.preventDefault();
-
-        initializeAudio();
-
-        try {
-            handler(event);
-        } catch (error) {
-            console.error(error);
-        }
-    });
-}
-
-function bindInterface() {
-    bindButton("playButton", () => {
-        startGame();
-    });
-
-    bindButton("instructionsButton", () => {
-        hide($("menuScreen"));
-        show($("instructionsScreen"));
-    });
-
-    bindButton("settingsButton", () => {
-        hide($("menuScreen"));
-        show($("settingsScreen"));
-    });
-
-    bindButton("instructionsBack", () => {
-        hide($("instructionsScreen"));
-        show($("menuScreen"));
-    });
-
-    bindButton("settingsBack", () => {
-        hide($("settingsScreen"));
-        show($("menuScreen"));
-    });
-
-    bindButton("resumeButton", () => {
-        resumeGame();
-    });
-
-    bindButton("notesLogButton", () => {
-        showNotesLog();
-    });
-
-    bindButton("quitButton", () => {
-        showMenu();
-    });
-
-    bindButton("notesLogBack", () => {
-        hide($("notesLogScreen"));
-        show($("pauseScreen"));
-    });
-
-    bindButton("retryButton", () => {
-        startGame();
-    });
-
-    bindButton("deathMenuButton", () => {
-        showMenu();
-    });
-
-    bindButton("winAgainButton", () => {
-        startGame();
-    });
-
-    bindButton("winMenuButton", () => {
-        showMenu();
-    });
-
-    bindButton("mobileRun", () => {
-        Game.keys.add("Shift");
-    });
-
-    bindButton("mobileInteract", () => {
-        interact();
-    });
-
-    bindButton("mobileFlashlight", () => {
-        toggleFlashlight();
-    });
-
-    const flashlightSetting = $("flashlightSetting");
-
-    if (flashlightSetting) {
-        flashlightSetting.addEventListener("change", () => {
-            Game.flashlight =
-                flashlightSetting.value !== "off";
-        });
-    }
-
-    const footstepSetting = $("footstepSetting");
-
-    if (footstepSetting) {
-        footstepSetting.addEventListener("change", () => {
-            Game.footstepsEnabled =
-                footstepSetting.value !== "off";
-        });
-    }
-
-    const volumeSetting = $("volumeSetting");
-
-    if (volumeSetting) {
-        volumeSetting.addEventListener("input", () => {
-            const value = Number(volumeSetting.value);
-
-            if (Number.isFinite(value)) {
-                Game.masterVolume =
-                    THREE.MathUtils.clamp(value, 0, 1);
-            }
-        });
-    }
-}
-
-/* ============================================================
-   KEYBOARD
-   ============================================================ */
-
-function bindKeyboard() {
-    window.addEventListener("keydown", event => {
-        Game.keys.add(event.code);
-
-        if (
-            event.code === "Space" ||
-            event.code === "ArrowUp" ||
-            event.code === "ArrowDown" ||
-            event.code === "ArrowLeft" ||
-            event.code === "ArrowRight"
-        ) {
-            event.preventDefault();
-        }
-
-        if (event.code === "Escape") {
-            togglePause();
-        }
-
-        if (event.code === "KeyE") {
-            interact();
-        }
-
-        if (event.code === "KeyF") {
-            toggleFlashlight();
-        }
-
-        if (event.code === "KeyN") {
-            if (Game.running) {
-                showNotesLog();
-            }
-        }
-    });
-
-    window.addEventListener("keyup", event => {
-        Game.keys.delete(event.code);
-    });
-
-    window.addEventListener("blur", () => {
-        Game.keys.clear();
-    });
-}
-
-/* ============================================================
-   MOUSE LOOK
-   ============================================================ */
-
-function bindMouse() {
-    const canvas = $("gameCanvas");
-
-    if (!canvas) {
-        return;
-    }
-
-    canvas.addEventListener("click", () => {
-        if (!Game.running || Game.paused) {
-            return;
-        }
-
-        if (Game.device === "pc") {
-            if (canvas.requestPointerLock) {
-                canvas.requestPointerLock().catch?.(() => {});
-            }
-        }
-    });
-
-    document.addEventListener("pointerlockchange", () => {
-        Game.mouseLocked =
-            document.pointerLockElement === canvas;
-    });
-
-    document.addEventListener("mousemove", event => {
-        if (!Game.mouseLocked || !Game.running) {
-            return;
-        }
-
-        Game.cameraYaw -= event.movementX * 0.0022;
-        Game.cameraPitch -= event.movementY * 0.0018;
-
-        Game.cameraPitch =
-            THREE.MathUtils.clamp(
-                Game.cameraPitch,
-                -1.15,
-                1.15
-            );
-    });
-}
-
-/* ============================================================
-   TOUCH
-   ============================================================ */
-
-function bindTouch() {
-    const lookZone = $("lookZone");
-
-    if (!lookZone) {
-        return;
-    }
-
-    let lastX = 0;
-    let lastY = 0;
-    let active = false;
-
-    lookZone.addEventListener(
-        "pointerdown",
-        event => {
-            active = true;
-            lastX = event.clientX;
-            lastY = event.clientY;
-
-            try {
-                lookZone.setPointerCapture(event.pointerId);
-            } catch {}
-        }
-    );
-
-    lookZone.addEventListener(
-        "pointermove",
-        event => {
-            if (!active || !Game.running) {
-                return;
-            }
-
-            const dx = event.clientX - lastX;
-            const dy = event.clientY - lastY;
-
-            lastX = event.clientX;
-            lastY = event.clientY;
-
-            Game.cameraYaw -= dx * 0.006;
-            Game.cameraPitch -= dy * 0.004;
-
-            Game.cameraPitch =
-                THREE.MathUtils.clamp(
-                    Game.cameraPitch,
-                    -1.15,
-                    1.15
-                );
-        }
-    );
-
-    lookZone.addEventListener(
-        "pointerup",
-        () => {
-            active = false;
-        }
-    );
-
-    lookZone.addEventListener(
-        "pointercancel",
-        () => {
-            active = false;
-        }
-    );
-
-    const joystick =
-        $("joystickZone");
-
-    const knob =
-        $("joystickKnob");
-
-    if (!joystick || !knob) {
-        return;
-    }
-
-    let joystickActive = false;
-
-    joystick.addEventListener(
-        "pointerdown",
-        event => {
-            joystickActive = true;
-
-            try {
-                joystick.setPointerCapture(
-                    event.pointerId
-                );
-            } catch {}
-
-            updateJoystick(
-                event.clientX,
-                event.clientY,
-                joystick,
-                knob
-            );
-        }
-    );
-
-    joystick.addEventListener(
-        "pointermove",
-        event => {
-            if (!joystickActive) {
-                return;
-            }
-
-            updateJoystick(
-                event.clientX,
-                event.clientY,
-                joystick,
-                knob
-            );
-        }
-    );
-
-    const stopJoystick = () => {
-        joystickActive = false;
-
-        Game.joystickX = 0;
-        Game.joystickY = 0;
-
-        knob.style.transform =
-            "translate(-50%, -50%)";
-    };
-
-    joystick.addEventListener(
-        "pointerup",
-        stopJoystick
-    );
-
-    joystick.addEventListener(
-        "pointercancel",
-        stopJoystick
-    );
-}
-
-function updateJoystick(
-    x,
-    y,
-    zone,
-    knob
-) {
-    const rect =
-        zone.getBoundingClientRect();
-
-    const centerX =
-        rect.left + rect.width / 2;
-
-    const centerY =
-        rect.top + rect.height / 2;
-
-    let dx = x - centerX;
-    let dy = y - centerY;
-
-    const radius =
-        Math.min(rect.width, rect.height) * 0.34;
-
-    const distance =
-        Math.sqrt(dx * dx + dy * dy);
-
-    if (distance > radius) {
-        dx =
-            dx / Math.max(distance, 1) *
-            radius;
-
-        dy =
-            dy / Math.max(distance, 1) *
-            radius;
-    }
-
-    Game.joystickX =
-        THREE.MathUtils.clamp(
-            dx / radius,
-            -1,
-            1
-        );
-
-    Game.joystickY =
-        THREE.MathUtils.clamp(
-            dy / radius,
-            -1,
-            1
-        );
-
-    knob.style.transform =
-        `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-}
-
-/* ============================================================
-   RENDERER
-   ============================================================ */
-
-function createRenderer() {
-    let canvas = $("gameCanvas");
-
-    if (!(canvas instanceof HTMLCanvasElement)) {
-        canvas =
-            document.createElement("canvas");
-
-        canvas.id = "gameCanvas";
-
-        const gameScreen =
-            $("gameScreen");
-
-        if (gameScreen) {
-            gameScreen.prepend(canvas);
-        } else {
-            document.body.appendChild(canvas);
-        }
-    }
-
-    try {
-        Game.renderer =
-            new THREE.WebGLRenderer({
-                canvas,
-                antialias: true,
-                alpha: false,
-                powerPreference: "high-performance"
-            });
-    } catch (error) {
+(() => {
+    "use strict";
+
+    /*
+     * ----------------------------------------------------------
+     * GAME.JS
+     * ----------------------------------------------------------
+     * Main gameplay/world module.
+     *
+     * Responsibilities:
+     * - Build the 3D horror world
+     * - Create the player
+     * - Create the Seeker
+     * - Create the three required buttons
+     * - Create the key
+     * - Create the locked gate
+     * - Handle collisions
+     * - Handle player movement
+     * - Handle Seeker movement
+     * - Handle the three-minute preparation period
+     * - Handle the minimap state
+     * - Handle PC/mobile movement
+     * - Handle doors and interactable objects
+     * - Expose game state to main.js/system.js/details.js
+     *
+     * This file intentionally does not own the complete UI.
+     * main.js can control menus and screens.
+     * system.js can control global systems such as audio,
+     * multiplayer, saving, settings, and voice systems.
+     * details.js can add additional visual detail.
+     * ----------------------------------------------------------
+     */
+
+    const THREE = window.THREE;
+
+    if (!THREE) {
         console.error(
-            "Three.js renderer could not start.",
-            error
+            "[THE SEEKER] Three.js was not found. " +
+            "Make sure the Three.js library is loaded before game.js."
         );
-
-        return false;
+        return;
     }
 
-    Game.renderer.setPixelRatio(
-        Math.min(
-            window.devicePixelRatio || 1,
-            2
-        )
-    );
-
-    Game.renderer.setSize(
-        window.innerWidth,
-        window.innerHeight,
-        false
-    );
-
-    Game.renderer.outputColorSpace =
-        THREE.SRGBColorSpace;
-
-    Game.renderer.toneMapping =
-        THREE.ACESFilmicToneMapping;
-
-    Game.renderer.toneMappingExposure = 0.72;
-
-    return true;
-}
-
-/* ============================================================
-   SCENE
-   ============================================================ */
-
-function createScene() {
-    Game.scene =
-        new THREE.Scene();
-
-    Game.scene.background =
-        new THREE.Color(0x020202);
-
-    Game.scene.fog =
-        new THREE.FogExp2(
-            0x050505,
-            0.018
-        );
-}
-
-function createCamera() {
-    Game.camera =
-        new THREE.PerspectiveCamera(
-            72,
-            window.innerWidth /
-            Math.max(1, window.innerHeight),
-            0.05,
-            500
-        );
-
-    Game.camera.position.set(
-        Game.spawn.x,
-        Game.spawn.y + Game.playerHeight,
-        Game.spawn.z
-    );
-
-    Game.camera.rotation.order =
-        "YXZ";
-}
-
-/* ============================================================
-   LIGHTING
-   ============================================================ */
-
-function createLighting() {
-    const ambient =
-        new THREE.HemisphereLight(
-            0x667080,
-            0x080808,
-            0.36
-        );
-
-    Game.scene.add(ambient);
-
-    const moon =
-        new THREE.DirectionalLight(
-            0x8794aa,
-            0.18
-        );
-
-    moon.position.set(
-        -40,
-        70,
-        20
-    );
-
-    Game.scene.add(moon);
-
-    const emergency =
-        new THREE.PointLight(
-            0x552222,
-            0.5,
-            35
-        );
-
-    emergency.position.set(
-        20,
-        3,
-        -20
-    );
-
-    Game.scene.add(emergency);
-
-    Game.lights.push(
-        ambient,
-        moon,
-        emergency
-    );
-}
-
-/* ============================================================
-   MATERIALS
-   ============================================================ */
-
-function material(
-    color,
-    roughness = 0.8,
-    metalness = 0
-) {
-    return new THREE.MeshStandardMaterial({
-        color,
-        roughness,
-        metalness
-    });
-}
-
-const Materials = {
-    floor: material(
-        0x181818,
-        0.95
-    ),
-
-    wall: material(
-        0x242424,
-        0.92
-    ),
-
-    wallDark: material(
-        0x111111,
-        0.95
-    ),
-
-    wood: material(
-        0x2a211b,
-        0.9
-    ),
-
-    metal: material(
-        0x3c3c3c,
-        0.58,
-        0.5
-    ),
-
-    red: material(
-        0x701818,
-        0.7
-    ),
-
-    button: material(
-        0x8b1e1e,
-        0.55
-    ),
-
-    buttonPressed: material(
-        0x287e43,
-        0.5
-    ),
-
-    paper: material(
-        0xd7d1bb,
-        0.9
-    ),
-
-    gate: material(
-        0x161616,
-        0.5,
-        0.8
-    )
-};
-
-/* ============================================================
-   GEOMETRY HELPERS
-   ============================================================ */
-
-function addBox(
-    x,
-    y,
-    z,
-    width,
-    height,
-    depth,
-    mat,
-    options = {}
-) {
-    const geometry =
-        new THREE.BoxGeometry(
-            width,
-            height,
-            depth
-        );
-
-    const mesh =
-        new THREE.Mesh(
-            geometry,
-            mat
-        );
-
-    mesh.position.set(
-        x,
-        y,
-        z
-    );
-
-    if (options.rotationY) {
-        mesh.rotation.y =
-            options.rotationY;
-    }
-
-    mesh.castShadow = false;
-    mesh.receiveShadow = true;
-
-    Game.scene.add(mesh);
-
-    if (options.wall) {
-        Game.walls.push({
-            mesh,
-            minX: x - width / 2,
-            maxX: x + width / 2,
-            minZ: z - depth / 2,
-            maxZ: z + depth / 2
-        });
-    }
-
-    return mesh;
-}
-
-function addCylinder(
-    x,
-    y,
-    z,
-    radius,
-    height,
-    mat
-) {
-    const geometry =
-        new THREE.CylinderGeometry(
-            radius,
-            radius,
-            height,
-            12
-        );
-
-    const mesh =
-        new THREE.Mesh(
-            geometry,
-            mat
-        );
-
-    mesh.position.set(
-        x,
-        y,
-        z
-    );
-
-    mesh.receiveShadow = true;
-    mesh.castShadow = false;
-
-    Game.scene.add(mesh);
-
-    return mesh;
-}
-
-/* ============================================================
-   FLOOR
-   ============================================================ */
-
-function createFloor() {
-    const size =
-        Game.houseSize;
-
-    const floor =
-        addBox(
-            0,
-            -0.12,
-            -20,
-            size,
-            0.25,
-            size,
-            Materials.floor
-        );
-
-    floor.receiveShadow = true;
-
-    const basementFloor =
-        addBox(
-            0,
-            -0.16,
-            75,
-            42,
-            0.22,
-            28,
-            Materials.floor
-        );
-
-    basementFloor.receiveShadow = true;
-}
-
-/* ============================================================
-   OUTER HOUSE
-   ============================================================ */
-
-function createOuterHouse() {
-    const half = 75;
-
-    addBox(
-        0,
-        2.5,
-        -half,
-        150,
-        5,
-        1,
-        Materials.wallDark,
-        { wall: true }
-    );
-
-    addBox(
-        0,
-        2.5,
-        half,
-        150,
-        5,
-        1,
-        Materials.wallDark,
-        { wall: true }
-    );
-
-    addBox(
-        -half,
-        2.5,
-        0,
-        1,
-        5,
-        150,
-        Materials.wallDark,
-        { wall: true }
-    );
-
-    addBox(
-        half,
-        2.5,
-        0,
-        1,
-        5,
-        150,
-        Materials.wallDark,
-        { wall: true }
-    );
-}
-
-/* ============================================================
-   INTERIOR ROOMS
-   ============================================================ */
-
-function createInterior() {
-    const walls = [
-        [0, 2.5, 35, 1, 5, 40],
-        [-25, 2.5, 10, 30, 5, 1],
-        [25, 2.5, 10, 30, 5, 1],
-
-        [-45, 2.5, -25, 1, 5, 45],
-        [45, 2.5, -25, 1, 5, 45],
-
-        [-22, 2.5, -55, 40, 5, 1],
-        [22, 2.5, -55, 40, 5, 1],
-
-        [-55, 2.5, 35, 20, 5, 1],
-        [55, 2.5, 35, 20, 5, 1],
-
-        [-20, 2.5, -5, 1, 5, 30],
-        [20, 2.5, -5, 1, 5, 30],
-
-        [-20, 2.5, -42, 1, 5, 26],
-        [20, 2.5, -42, 1, 5, 26],
-
-        [-55, 2.5, 60, 1, 5, 30],
-        [55, 2.5, 60, 1, 5, 30]
-    ];
-
-    for (const wall of walls) {
-        addBox(
-            wall[0],
-            wall[1],
-            wall[2],
-            wall[3],
-            wall[4],
-            wall[5],
-            Materials.wall,
-            { wall: true }
-        );
-    }
-
-    createDoorway(
-        0,
-        0,
-        34.4,
-        0
-    );
-
-    createDoorway(
-        -25,
-        0,
-        10,
-        Math.PI / 2
-    );
-
-    createDoorway(
-        25,
-        0,
-        10,
-        Math.PI / 2
-    );
-}
-
-/* ============================================================
-   DOORS
-   ============================================================ */
-
-function createDoorway(
-    x,
-    y,
-    z,
-    rotation
-) {
-    const door =
-        addBox(
-            x,
-            2,
-            z,
-            3.2,
-            4,
-            0.35,
-            Materials.wood,
-            {
-                rotationY: rotation
-            }
-        );
-
-    const data = {
-        mesh: door,
-        open: false,
-        x,
-        z,
-        rotation
+    /* =========================================================
+       CONSTANTS
+       ========================================================= */
+
+    const GAME = {
+        NAME: "THE SEEKER",
+        DEVELOPER: "BlackHollow Games",
+
+        WORLD_SIZE: 1000,
+
+        PLAYER_HEIGHT: 1.8,
+        PLAYER_RADIUS: 0.42,
+
+        PLAYER_WALK_SPEED: 5.2,
+        PLAYER_RUN_SPEED: 8.4,
+
+        SEEKER_SPEED: 3.7,
+        SEEKER_CHASE_SPEED: 6.2,
+        SEEKER_HEARING_DISTANCE: 42,
+        SEEKER_DETECTION_DISTANCE: 85,
+
+        SETUP_TIME: 180,
+
+        INTERACTION_DISTANCE: 3.2,
+
+        REQUIRED_BUTTONS: 3,
+
+        MAP_NAMES: [
+            "THE OLD HOUSE",
+            "THE WOODS",
+            "THE FACILITY"
+        ],
+
+        COLORS: {
+            VOID: 0x050607,
+            FLOOR: 0x161719,
+            WALL: 0x222326,
+            METAL: 0x393b3e,
+            DARK_METAL: 0x17191b,
+            WOOD: 0x30251c,
+            WOOD_DARK: 0x19130f,
+            CONCRETE: 0x393a39,
+            RED: 0x9e2222,
+            YELLOW: 0xc9a227,
+            WHITE: 0xd8d8d2,
+            GREEN: 0x2a8a4a,
+            BLACK: 0x020202
+        }
     };
 
-    Game.doors.push(data);
+    /* =========================================================
+       GAME STATE
+       ========================================================= */
 
-    return data;
-}
+    const state = {
+        initialized: false,
+        running: false,
+        paused: false,
 
-/* ============================================================
-   FURNITURE
-   ============================================================ */
+        device: "pc",
 
-function createFurniture() {
-    const furniture = [
-        [-32, 0.8, 18, 7, 1.6, 2],
-        [32, 0.8, 18, 7, 1.6, 2],
-        [-35, 1.1, -10, 4, 2.2, 2],
-        [35, 1.1, -10, 4, 2.2, 2],
-        [-32, 0.9, -40, 5, 1.8, 2],
-        [32, 0.9, -40, 5, 1.8, 2],
-        [-8, 0.8, 25, 4, 1.6, 2],
-        [8, 0.8, 25, 4, 1.6, 2]
-    ];
+        elapsed: 0,
+        delta: 0,
 
-    for (const item of furniture) {
-        addBox(
-            item[0],
-            item[1],
-            item[2],
-            item[3],
-            item[4],
-            item[5],
-            Materials.wood
+        setupRemaining: GAME.SETUP_TIME,
+        seekerActive: false,
+
+        buttonsFound: 0,
+        hasKey: false,
+        gateUnlocked: false,
+
+        playerCaught: false,
+        gameWon: false,
+
+        currentMap: GAME.MAP_NAMES[0],
+
+        player: {
+            position: new THREE.Vector3(0, GAME.PLAYER_HEIGHT, 0),
+            velocity: new THREE.Vector3(),
+            rotationY: 0,
+            running: false,
+            crouching: false,
+            moving: false,
+            sprinting: false
+        },
+
+        seeker: {
+            position: new THREE.Vector3(0, GAME.PLAYER_HEIGHT, -95),
+            velocity: new THREE.Vector3(),
+            rotationY: 0,
+            state: "sleeping",
+            target: null,
+            lastKnownPlayerPosition: new THREE.Vector3(),
+            investigationTimer: 0,
+            hearingTimer: 0,
+            attackCooldown: 0
+        },
+
+        buttons: {
+            button1: false,
+            button2: false,
+            button3: false
+        },
+
+        minimap: {
+            playerX: 0,
+            playerZ: 0,
+            seekerX: 0,
+            seekerZ: 0,
+            playerRotation: 0,
+            seekerRotation: 0
+        }
+    };
+
+    /* =========================================================
+       GLOBAL GAME REFERENCES
+       ========================================================= */
+
+    const world = {
+        scene: null,
+        camera: null,
+        renderer: null,
+
+        playerObject: null,
+        playerCollider: null,
+
+        seekerObject: null,
+        seekerCollider: null,
+
+        gateObject: null,
+        keyObject: null,
+
+        buttons: [],
+
+        walls: [],
+        floors: [],
+        obstacles: [],
+        doors: [],
+        interactables: [],
+
+        lights: [],
+        effects: [],
+
+        spawnPoints: [],
+        seekerWaypoints: [],
+
+        clock: new THREE.Clock()
+    };
+
+    /* =========================================================
+       INPUT
+       ========================================================= */
+
+    const input = {
+        keys: Object.create(null),
+
+        mouseX: 0,
+        mouseY: 0,
+
+        mouseDown: false,
+
+        joystick: {
+            active: false,
+            x: 0,
+            y: 0
+        },
+
+        cameraJoystick: {
+            active: false,
+            x: 0,
+            y: 0
+        }
+    };
+
+    /* =========================================================
+       UTILITY
+       ========================================================= */
+
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function lerp(a, b, t) {
+        return a + (b - a) * t;
+    }
+
+    function distance2D(a, b) {
+        const dx = a.x - b.x;
+        const dz = a.z - b.z;
+
+        return Math.sqrt(
+            dx * dx +
+            dz * dz
         );
     }
 
-    const tables = [
-        [-55, 0.9, 48],
-        [55, 0.9, 48],
-        [-55, 0.9, -45],
-        [55, 0.9, -45]
-    ];
-
-    for (const position of tables) {
-        addBox(
-            position[0],
-            position[1],
-            position[2],
-            5,
-            1.8,
-            3,
-            Materials.wood
-        );
-
-        addCylinder(
-            position[0] - 1.8,
-            0.45,
-            position[2] - 0.9,
-            0.18,
-            0.9,
-            Materials.wood
-        );
-
-        addCylinder(
-            position[0] + 1.8,
-            0.45,
-            position[2] - 0.9,
-            0.18,
-            0.9,
-            Materials.wood
+    function angleToTarget(from, target) {
+        return Math.atan2(
+            target.x - from.x,
+            target.z - from.z
         );
     }
-}
 
-/* ============================================================
-   DECORATIONS
-   ============================================================ */
-
-function createDecorations() {
-    for (let i = 0; i < 80; i++) {
-        const x =
-            THREE.MathUtils.randFloat(
-                -68,
-                68
-            );
-
-        const z =
-            THREE.MathUtils.randFloat(
-                -68,
-                68
-            );
-
-        if (
-            Math.abs(x) < 7 &&
-            Math.abs(z) < 12
-        ) {
-            continue;
+    function normalizeAngle(angle) {
+        while (angle > Math.PI) {
+            angle -= Math.PI * 2;
         }
 
-        const height =
-            THREE.MathUtils.randFloat(
-                0.2,
-                0.9
-            );
+        while (angle < -Math.PI) {
+            angle += Math.PI * 2;
+        }
 
-        const width =
-            THREE.MathUtils.randFloat(
-                0.15,
-                0.45
-            );
+        return angle;
+    }
 
-        const object =
-            addBox(
-                x,
-                height / 2,
-                z,
+    function approachAngle(current, target, amount) {
+        const difference =
+            normalizeAngle(target - current);
+
+        if (Math.abs(difference) <= amount) {
+            return target;
+        }
+
+        return current +
+            Math.sign(difference) *
+            amount;
+    }
+
+    function randomRange(min, max) {
+        return min +
+            Math.random() *
+            (max - min);
+    }
+
+    function randomInt(min, max) {
+        return Math.floor(
+            randomRange(min, max + 1)
+        );
+    }
+
+    function createBox(
+        width,
+        height,
+        depth,
+        material
+    ) {
+        const geometry =
+            new THREE.BoxGeometry(
                 width,
                 height,
-                width,
-                Math.random() > 0.5
-                    ? Materials.metal
-                    : Materials.wood
+                depth
             );
 
-        Game.decorations.push(object);
+        const mesh =
+            new THREE.Mesh(
+                geometry,
+                material
+            );
+
+        return mesh;
     }
-}
 
-/* ============================================================
-   EXIT GATE
-   ============================================================ */
+    function createCylinder(
+        radius,
+        height,
+        material,
+        segments = 16
+    ) {
+        const geometry =
+            new THREE.CylinderGeometry(
+                radius,
+                radius,
+                height,
+                segments
+            );
 
-function createGate() {
-    const group =
-        new THREE.Group();
+        return new THREE.Mesh(
+            geometry,
+            material
+        );
+    }
 
-    group.position.set(
-        Game.exitPosition.x,
-        0,
-        Game.exitPosition.z
-    );
+    function material(color, options = {}) {
+        return new THREE.MeshStandardMaterial({
+            color,
+            roughness:
+                options.roughness ?? 0.8,
+            metalness:
+                options.metalness ?? 0,
+            transparent:
+                options.transparent ?? false,
+            opacity:
+                options.opacity ?? 1
+        });
+    }
 
-    const frameMaterial =
-        Materials.metal;
+    /* =========================================================
+       INITIALIZATION
+       ========================================================= */
 
-    const left =
-        new THREE.Mesh(
-            new THREE.BoxGeometry(
-                0.7,
-                5.5,
-                1
-            ),
-            frameMaterial
+    function initialize(options = {}) {
+        if (state.initialized) {
+            return world;
+        }
+
+        state.device =
+            options.device ||
+            detectDevice();
+
+        world.scene =
+            options.scene ||
+            createScene();
+
+        world.camera =
+            options.camera ||
+            createCamera();
+
+        world.renderer =
+            options.renderer ||
+            createRenderer();
+
+        createWorld();
+        createPlayer();
+        createSeeker();
+        createObjectives();
+        createGate();
+        createLighting();
+        createSpawnPoints();
+        createWaypoints();
+
+        setupInput();
+
+        state.initialized = true;
+
+        exposeAPI();
+
+        console.log(
+            "[THE SEEKER] Game initialized."
         );
 
-    left.position.x = -4;
+        return world;
+    }
 
-    const right =
-        left.clone();
+    function detectDevice() {
+        const touch =
+            "ontouchstart" in window ||
+            navigator.maxTouchPoints > 0;
 
-    right.position.x = 4;
+        const width =
+            window.innerWidth || 1920;
 
-    const top =
-        new THREE.Mesh(
-            new THREE.BoxGeometry(
-                8.7,
-                0.7,
-                1
-            ),
-            frameMaterial
+        if (touch && width < 1000) {
+            return "mobile";
+        }
+
+        return "pc";
+    }
+
+    /* =========================================================
+       SCENE
+       ========================================================= */
+
+    function createScene() {
+        const scene =
+            new THREE.Scene();
+
+        scene.background =
+            new THREE.Color(
+                GAME.COLORS.VOID
+            );
+
+        scene.fog =
+            new THREE.FogExp2(
+                0x080909,
+                0.007
+            );
+
+        return scene;
+    }
+
+    function createCamera() {
+        const camera =
+            new THREE.PerspectiveCamera(
+                70,
+                window.innerWidth /
+                Math.max(1, window.innerHeight),
+                0.05,
+                1600
+            );
+
+        camera.position.set(
+            0,
+            GAME.PLAYER_HEIGHT,
+            0
         );
 
-    top.position.y = 5.1;
+        return camera;
+    }
 
-    group.add(
-        left,
-        right,
-        top
-    );
+    function createRenderer() {
+        const renderer =
+            new THREE.WebGLRenderer({
+                antialias: true,
+                powerPreference: "high-performance"
+            });
 
-    const gate =
-        new THREE.Mesh(
-            new THREE.BoxGeometry(
-                7.8,
-                4.7,
-                0.45
-            ),
-            Materials.gate
+        renderer.setPixelRatio(
+            Math.min(
+                window.devicePixelRatio || 1,
+                2
+            )
         );
 
-    gate.position.y = 2.35;
+        renderer.setSize(
+            window.innerWidth,
+            window.innerHeight
+        );
 
-    group.add(gate);
+        renderer.shadowMap.enabled = true;
 
-    Game.scene.add(group);
+        renderer.shadowMap.type =
+            THREE.PCFSoftShadowMap;
 
-    Game.gate = {
-        group,
-        gate,
-        open: false
-    };
-}
+        renderer.outputColorSpace =
+            THREE.SRGBColorSpace;
 
-/* ============================================================
-   BUTTONS
-   ============================================================ */
+        if (document.body) {
+            const existing =
+                document.querySelector(
+                    "#gameCanvas"
+                );
 
-function createGameButtons() {
-    const positions = [
-        [-52, 1.3, -58],
-        [53, 1.3, -12],
-        [-52, 1.3, 55]
-    ];
+            if (existing) {
+                existing.replaceWith(
+                    renderer.domElement
+                );
+            } else {
+                renderer.domElement.id =
+                    "gameCanvas";
 
-    positions.forEach(
-        (position, index) => {
-            const base =
-                new THREE.Mesh(
-                    new THREE.BoxGeometry(
-                        1.6,
-                        1.2,
+                document.body.appendChild(
+                    renderer.domElement
+                );
+            }
+        }
+
+        window.addEventListener(
+            "resize",
+            resizeRenderer
+        );
+
+        return renderer;
+    }
+
+    function resizeRenderer() {
+        if (!world.camera ||
+            !world.renderer) {
+            return;
+        }
+
+        const width =
+            Math.max(
+                1,
+                window.innerWidth
+            );
+
+        const height =
+            Math.max(
+                1,
+                window.innerHeight
+            );
+
+        world.camera.aspect =
+            width / height;
+
+        world.camera.updateProjectionMatrix();
+
+        world.renderer.setSize(
+            width,
+            height
+        );
+    }
+
+    /* =========================================================
+       WORLD CREATION
+       ========================================================= */
+
+    function createWorld() {
+        createGround();
+        createOuterWalls();
+
+        createMainHouse();
+        createBasement();
+        createHallways();
+
+        createSideRooms();
+        createStorageAreas();
+
+        createWoods();
+
+        createScatteredObjects();
+        createDecorativeStructures();
+    }
+
+    function createGround() {
+        const geometry =
+            new THREE.PlaneGeometry(
+                GAME.WORLD_SIZE,
+                GAME.WORLD_SIZE
+            );
+
+        const ground =
+            new THREE.Mesh(
+                geometry,
+                material(
+                    GAME.COLORS.FLOOR,
+                    {
+                        roughness: 0.96
+                    }
+                )
+            );
+
+        ground.rotation.x =
+            -Math.PI / 2;
+
+        ground.position.y = 0;
+
+        ground.receiveShadow = true;
+
+        world.scene.add(ground);
+
+        world.floors.push(ground);
+    }
+
+    function createOuterWalls() {
+        const wallMaterial =
+            material(
+                GAME.COLORS.WALL,
+                {
+                    roughness: 0.9
+                }
+            );
+
+        const size =
+            GAME.WORLD_SIZE;
+
+        const thickness = 3;
+        const height = 16;
+
+        addWall(
+            0,
+            height / 2,
+            -size / 2,
+            size,
+            height,
+            thickness,
+            wallMaterial
+        );
+
+        addWall(
+            0,
+            height / 2,
+            size / 2,
+            size,
+            height,
+            thickness,
+            wallMaterial
+        );
+
+        addWall(
+            -size / 2,
+            height / 2,
+            0,
+            thickness,
+            height,
+            size,
+            wallMaterial
+        );
+
+        addWall(
+            size / 2,
+            height / 2,
+            0,
+            thickness,
+            height,
+            size,
+            wallMaterial
+        );
+    }
+
+    function addWall(
+        x,
+        y,
+        z,
+        width,
+        height,
+        depth,
+        mat,
+        options = {}
+    ) {
+        const wall =
+            createBox(
+                width,
+                height,
+                depth,
+                mat
+            );
+
+        wall.position.set(
+            x,
+            y,
+            z
+        );
+
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+
+        world.scene.add(wall);
+
+        if (options.collision !== false) {
+            world.walls.push(wall);
+        }
+
+        return wall;
+    }
+
+    /* =========================================================
+       MAIN HOUSE
+       ========================================================= */
+
+    function createMainHouse() {
+        const wallMaterial =
+            material(
+                GAME.COLORS.CONCRETE
+            );
+
+        const woodMaterial =
+            material(
+                GAME.COLORS.WOOD,
+                {
+                    roughness: 0.95
+                }
+            );
+
+        /*
+         * Main structure is intentionally large.
+         * The player is not placed inside a tiny room.
+         */
+
+        addWall(
+            -145,
+            7,
+            -30,
+            4,
+            14,
+            230,
+            wallMaterial
+        );
+
+        addWall(
+            145,
+            7,
+            -30,
+            4,
+            14,
+            230,
+            wallMaterial
+        );
+
+        addWall(
+            0,
+            7,
+            -145,
+            290,
+            14,
+            4,
+            wallMaterial
+        );
+
+        addWall(
+            0,
+            7,
+            85,
+            290,
+            14,
+            4,
+            wallMaterial
+        );
+
+        createMainInteriorWalls(
+            wallMaterial
+        );
+
+        createWoodFloorSections(
+            woodMaterial
+        );
+
+        createRoomLabels();
+    }
+
+    function createMainInteriorWalls(mat) {
+        addWall(
+            0,
+            6,
+            -80,
+            4,
+            12,
+            120,
+            mat
+        );
+
+        addWall(
+            -70,
+            6,
+            -30,
+            100,
+            12,
+            4,
+            mat
+        );
+
+        addWall(
+            70,
+            6,
+            -30,
+            100,
+            12,
+            4,
+            mat
+        );
+
+        addWall(
+            -70,
+            6,
+            35,
+            100,
+            12,
+            4,
+            mat
+        );
+
+        addWall(
+            70,
+            6,
+            35,
+            100,
+            12,
+            4,
+            mat
+        );
+
+        addWall(
+            -100,
+            6,
+            10,
+            4,
+            12,
+            45,
+            mat
+        );
+
+        addWall(
+            100,
+            6,
+            10,
+            4,
+            12,
+            45,
+            mat
+        );
+
+        addWall(
+            -45,
+            6,
+            -110,
+            4,
+            12,
+            50,
+            mat
+        );
+
+        addWall(
+            45,
+            6,
+            -110,
+            4,
+            12,
+            50,
+            mat
+        );
+    }
+
+    function createWoodFloorSections(mat) {
+        const sections = [
+            [-105, 0, 65, 70],
+            [105, 0, 65, 70],
+            [0, -115, 70, 45],
+            [-105, 60, 60, 35],
+            [105, 60, 60, 35]
+        ];
+
+        for (const section of sections) {
+            const [
+                x,
+                z,
+                width,
+                depth
+            ] = section;
+
+            const floor =
+                createBox(
+                    width,
+                    0.25,
+                    depth,
+                    mat
+                );
+
+            floor.position.set(
+                x,
+                0.12,
+                z
+            );
+
+            floor.receiveShadow = true;
+
+            world.scene.add(floor);
+            world.floors.push(floor);
+        }
+    }
+
+    function createRoomLabels() {
+        createSign(
+            "BASEMENT",
+            -105,
+            8,
+            72,
+            0
+        );
+
+        createSign(
+            "STORAGE",
+            105,
+            8,
+            72,
+            Math.PI
+        );
+
+        createSign(
+            "EXIT",
+            0,
+            8,
+            -142,
+            0
+        );
+    }
+
+    function createSign(
+        text,
+        x,
+        y,
+        z,
+        rotation
+    ) {
+        /*
+         * Text geometry is intentionally optional.
+         * If FontLoader/TextGeometry is not present,
+         * the game still works.
+         */
+
+        const canvas =
+            document.createElement("canvas");
+
+        canvas.width = 512;
+        canvas.height = 128;
+
+        const ctx =
+            canvas.getContext("2d");
+
+        if (!ctx) {
+            return;
+        }
+
+        ctx.fillStyle =
+            "rgba(0,0,0,0.8)";
+
+        ctx.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        ctx.fillStyle =
+            "#c9a227";
+
+        ctx.font =
+            "bold 46px Arial";
+
+        ctx.textAlign =
+            "center";
+
+        ctx.textBaseline =
+            "middle";
+
+        ctx.fillText(
+            text,
+            canvas.width / 2,
+            canvas.height / 2
+        );
+
+        const texture =
+            new THREE.CanvasTexture(
+                canvas
+            );
+
+        const mat =
+            new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true
+            });
+
+        const sign =
+            createBox(
+                7,
+                1.7,
+                0.08,
+                mat
+            );
+
+        sign.position.set(
+            x,
+            y,
+            z
+        );
+
+        sign.rotation.y =
+            rotation;
+
+        world.scene.add(sign);
+    }
+
+    /* =========================================================
+       BASEMENT
+       ========================================================= */
+
+    function createBasement() {
+        const basementMat =
+            material(
+                GAME.COLORS.DARK_METAL,
+                {
+                    roughness: 0.95,
+                    metalness: 0.1
+                }
+            );
+
+        const concreteMat =
+            material(
+                0x2c2d2d,
+                {
+                    roughness: 1
+                }
+            );
+
+        /*
+         * Large underground-style area.
+         * It is represented in the same scene for simplicity.
+         */
+
+        addWall(
+            -120,
+            5,
+            -225,
+            170,
+            10,
+            3,
+            basementMat
+        );
+
+        addWall(
+            -120,
+            5,
+            -310,
+            170,
+            10,
+            3,
+            basementMat
+        );
+
+        addWall(
+            -205,
+            5,
+            -267,
+            3,
+            10,
+            90,
+            basementMat
+        );
+
+        addWall(
+            -35,
+            5,
+            -267,
+            3,
+            10,
+            90,
+            basementMat
+        );
+
+        const floor =
+            createBox(
+                165,
+                0.3,
+                82,
+                concreteMat
+            );
+
+        floor.position.set(
+            -120,
+            0.15,
+            -267
+        );
+
+        world.scene.add(floor);
+        world.floors.push(floor);
+
+        createBasementPillars(
+            -120,
+            -267
+        );
+
+        createPipeNetwork();
+    }
+
+    function createBasementPillars(
+        centerX,
+        centerZ
+    ) {
+        const mat =
+            material(
+                GAME.COLORS.METAL,
+                {
+                    metalness: 0.65,
+                    roughness: 0.6
+                }
+            );
+
+        for (let x = -185; x <= -55; x += 32) {
+            for (
+                let z = -295;
+                z <= -235;
+                z += 30
+            ) {
+                const pillar =
+                    createBox(
+                        2.5,
+                        10,
+                        2.5,
+                        mat
+                    );
+
+                pillar.position.set(
+                    x,
+                    5,
+                    z
+                );
+
+                pillar.castShadow = true;
+
+                world.scene.add(pillar);
+                world.obstacles.push(pillar);
+            }
+        }
+    }
+
+    function createPipeNetwork() {
+        const pipeMat =
+            material(
+                0x46484a,
+                {
+                    metalness: 0.8,
+                    roughness: 0.45
+                }
+            );
+
+        const positions = [
+            [-155, 7, -270, 55],
+            [-95, 8, -285, 80],
+            [-65, 6, -250, 45],
+            [-180, 8, -245, 50]
+        ];
+
+        for (const item of positions) {
+            const [
+                x,
+                y,
+                z,
+                length
+            ] = item;
+
+            const pipe =
+                createCylinder(
+                    0.65,
+                    length,
+                    pipeMat,
+                    12
+                );
+
+            pipe.position.set(
+                x,
+                y,
+                z
+            );
+
+            pipe.rotation.z =
+                Math.PI / 2;
+
+            pipe.castShadow = true;
+
+            world.scene.add(pipe);
+        }
+    }
+
+    /* =========================================================
+       HALLWAYS
+       ========================================================= */
+
+    function createHallways() {
+        const mat =
+            material(
+                GAME.COLORS.WALL,
+                {
+                    roughness: 0.92
+                }
+            );
+
+        createHallway(
+            0,
+            -5,
+            18,
+            120,
+            mat
+        );
+
+        createHallway(
+            -55,
+            42,
+            90,
+            14,
+            mat
+        );
+
+        createHallway(
+            55,
+            42,
+            90,
+            14,
+            mat
+        );
+
+        createHallway(
+            0,
+            68,
+            130,
+            14,
+            mat
+        );
+    }
+
+    function createHallway(
+        x,
+        z,
+        length,
+        width,
+        mat
+    ) {
+        const wallThickness = 2.5;
+        const height = 11;
+
+        addWall(
+            x - width / 2,
+            height / 2,
+            z,
+            wallThickness,
+            height,
+            length,
+            mat
+        );
+
+        addWall(
+            x + width / 2,
+            height / 2,
+            z,
+            wallThickness,
+            height,
+            length,
+            mat
+        );
+    }
+
+    /* =========================================================
+       SIDE ROOMS
+       ========================================================= */
+
+    function createSideRooms() {
+        const roomMaterial =
+            material(
+                0x303132,
+                {
+                    roughness: 0.98
+                }
+            );
+
+        createRoom(
+            -245,
+            -80,
+            90,
+            70,
+            roomMaterial
+        );
+
+        createRoom(
+            245,
+            -80,
+            90,
+            70,
+            roomMaterial
+        );
+
+        createRoom(
+            -245,
+            80,
+            90,
+            70,
+            roomMaterial
+        );
+
+        createRoom(
+            245,
+            80,
+            90,
+            70,
+            roomMaterial
+        );
+    }
+
+    function createRoom(
+        centerX,
+        centerZ,
+        width,
+        depth,
+        mat
+    ) {
+        const height = 12;
+        const thickness = 3;
+
+        addWall(
+            centerX - width / 2,
+            height / 2,
+            centerZ,
+            thickness,
+            height,
+            depth,
+            mat
+        );
+
+        addWall(
+            centerX + width / 2,
+            height / 2,
+            centerZ,
+            thickness,
+            height,
+            depth,
+            mat
+        );
+
+        addWall(
+            centerX,
+            height / 2,
+            centerZ - depth / 2,
+            width,
+            height,
+            thickness,
+            mat
+        );
+
+        addWall(
+            centerX,
+            height / 2,
+            centerZ + depth / 2,
+            width,
+            height,
+            thickness,
+            mat
+        );
+
+        const floor =
+            createBox(
+                width - 4,
+                0.2,
+                depth - 4,
+                material(
+                    GAME.COLORS.FLOOR
+                )
+            );
+
+        floor.position.set(
+            centerX,
+            0.1,
+            centerZ
+        );
+
+        floor.receiveShadow = true;
+
+        world.scene.add(floor);
+        world.floors.push(floor);
+    }
+
+    /* =========================================================
+       STORAGE
+       ========================================================= */
+
+    function createStorageAreas() {
+        const storageMat =
+            material(
+                0x252627,
+                {
+                    roughness: 0.94
+                }
+            );
+
+        for (
+            let i = 0;
+            i < 12;
+            i++
+        ) {
+            const x =
+                55 +
+                (i % 4) * 18;
+
+            const z =
+                5 +
+                Math.floor(i / 4) * 20;
+
+            const shelf =
+                createBox(
+                    12,
+                    5,
+                    2,
+                    storageMat
+                );
+
+            shelf.position.set(
+                x,
+                2.5,
+                z
+            );
+
+            shelf.castShadow = true;
+
+            world.scene.add(shelf);
+
+            world.obstacles.push(shelf);
+
+            for (
+                let j = 0;
+                j < 3;
+                j++
+            ) {
+                const crate =
+                    createBox(
+                        2.8,
+                        2.2,
+                        2.8,
+                        material(
+                            GAME.COLORS.WOOD
+                        )
+                    );
+
+                crate.position.set(
+                    x - 3 +
+                    j * 3,
+                    1.2,
+                    z + 2
+                );
+
+                crate.rotation.y =
+                    randomRange(
+                        -0.1,
+                        0.1
+                    );
+
+                crate.castShadow = true;
+
+                world.scene.add(crate);
+
+                world.obstacles.push(crate);
+            }
+        }
+    }
+
+    /* =========================================================
+       WOODS
+       ========================================================= */
+
+    function createWoods() {
+        const treeMaterial =
+            material(
+                0x171c17,
+                {
+                    roughness: 1
+                }
+            );
+
+        const trunkMaterial =
+            material(
+                0x241b13,
+                {
+                    roughness: 1
+                }
+            );
+
+        /*
+         * Procedural forest around the primary structure.
+         */
+
+        for (
+            let i = 0;
+            i < 150;
+            i++
+        ) {
+            let x =
+                randomRange(
+                    -450,
+                    450
+                );
+
+            let z =
+                randomRange(
+                    -450,
+                    450
+                );
+
+            /*
+             * Keep a central clear zone.
+             */
+
+            if (
+                Math.abs(x) < 180 &&
+                Math.abs(z) < 170
+            ) {
+                continue;
+            }
+
+            /*
+             * Avoid the far basement entrance area.
+             */
+
+            if (
+                x < -40 &&
+                x > -220 &&
+                z < -210 &&
+                z > -330
+            ) {
+                continue;
+            }
+
+            const height =
+                randomRange(
+                    8,
+                    18
+                );
+
+            const trunk =
+                createCylinder(
+                    randomRange(
+                        0.35,
+                        0.75
+                    ),
+                    height,
+                    trunkMaterial,
+                    8
+                );
+
+            trunk.position.set(
+                x,
+                height / 2,
+                z
+            );
+
+            trunk.castShadow = true;
+
+            world.scene.add(trunk);
+
+            const canopy =
+                createCylinder(
+                    randomRange(
+                        2.5,
+                        5
+                    ),
+                    randomRange(
+                        5,
+                        10
+                    ),
+                    treeMaterial,
+                    8
+                );
+
+            canopy.position.set(
+                x,
+                height +
+                randomRange(
+                    1,
+                    4
+                ),
+                z
+            );
+
+            canopy.rotation.y =
+                randomRange(
+                    0,
+                    Math.PI
+                );
+
+            canopy.castShadow = true;
+
+            world.scene.add(canopy);
+
+            world.obstacles.push(trunk);
+        }
+    }
+
+    /* =========================================================
+       DECORATIVE OBJECTS
+       ========================================================= */
+
+    function createScatteredObjects() {
+        for (
+            let i = 0;
+            i < 75;
+            i++
+        ) {
+            const x =
+                randomRange(
+                    -130,
+                    130
+                );
+
+            const z =
+                randomRange(
+                    -130,
+                    80
+                );
+
+            if (
+                Math.abs(x) < 8 &&
+                Math.abs(z) < 8
+            ) {
+                continue;
+            }
+
+            const type =
+                i % 4;
+
+            if (type === 0) {
+                createCrate(
+                    x,
+                    z
+                );
+            }
+
+            if (type === 1) {
+                createBarrel(
+                    x,
+                    z
+                );
+            }
+
+            if (type === 2) {
+                createTable(
+                    x,
+                    z
+                );
+            }
+
+            if (type === 3) {
+                createDebris(
+                    x,
+                    z
+                );
+            }
+        }
+    }
+
+    function createCrate(
+        x,
+        z
+    ) {
+        const crate =
+            createBox(
+                randomRange(
+                    1.5,
+                    3.2
+                ),
+                randomRange(
+                    1.5,
+                    3
+                ),
+                randomRange(
+                    1.5,
+                    3.2
+                ),
+                material(
+                    GAME.COLORS.WOOD
+                )
+            );
+
+        crate.position.set(
+            x,
+            crate.geometry.parameters.height / 2,
+            z
+        );
+
+        crate.rotation.y =
+            randomRange(
+                0,
+                Math.PI
+            );
+
+        crate.castShadow = true;
+
+        world.scene.add(crate);
+
+        world.obstacles.push(crate);
+    }
+
+    function createBarrel(
+        x,
+        z
+    ) {
+        const barrel =
+            createCylinder(
+                0.8,
+                2.1,
+                material(
+                    GAME.COLORS.DARK_METAL,
+                    {
+                        metalness: 0.7,
+                        roughness: 0.6
+                    }
+                ),
+                16
+            );
+
+        barrel.position.set(
+            x,
+            1.05,
+            z
+        );
+
+        barrel.castShadow = true;
+
+        world.scene.add(barrel);
+
+        world.obstacles.push(barrel);
+    }
+
+    function createTable(
+        x,
+        z
+    ) {
+        const table =
+            createBox(
+                4,
+                0.4,
+                2,
+                material(
+                    GAME.COLORS.WOOD
+                )
+            );
+
+        table.position.set(
+            x,
+            2,
+            z
+        );
+
+        table.castShadow = true;
+
+        world.scene.add(table);
+
+        const legMaterial =
+            material(
+                GAME.COLORS.WOOD_DARK
+            );
+
+        const positions = [
+            [-1.5, -0.7],
+            [1.5, -0.7],
+            [-1.5, 0.7],
+            [1.5, 0.7]
+        ];
+
+        for (const p of positions) {
+            const leg =
+                createBox(
+                    0.3,
+                    2,
+                    0.3,
+                    legMaterial
+                );
+
+            leg.position.set(
+                x + p[0],
+                1,
+                z + p[1]
+            );
+
+            world.scene.add(leg);
+
+            world.obstacles.push(leg);
+        }
+
+        world.obstacles.push(table);
+    }
+
+    function createDebris(
+        x,
+        z
+    ) {
+        for (
+            let i = 0;
+            i < 3;
+            i++
+        ) {
+            const piece =
+                createBox(
+                    randomRange(
+                        0.3,
+                        1.2
+                    ),
+                    randomRange(
+                        0.15,
                         0.5
                     ),
-                    Materials.metal
+                    randomRange(
+                        0.3,
+                        1.2
+                    ),
+                    material(
+                        GAME.COLORS.METAL
+                    )
                 );
 
-            base.position.set(
-                position[0],
-                position[1],
-                position[2]
+            piece.position.set(
+                x +
+                randomRange(
+                    -1,
+                    1
+                ),
+                randomRange(
+                    0.1,
+                    0.35
+                ),
+                z +
+                randomRange(
+                    -1,
+                    1
+                )
             );
 
-            const button =
-                new THREE.Mesh(
-                    new THREE.BoxGeometry(
-                        0.75,
-                        0.6,
-                        0.7
-                    ),
-                    Materials.button
-                );
-
-            button.position.set(
-                position[0],
-                position[1] + 0.25,
-                position[2] - 0.35
+            piece.rotation.set(
+                randomRange(
+                    -0.5,
+                    0.5
+                ),
+                randomRange(
+                    0,
+                    Math.PI
+                ),
+                randomRange(
+                    -0.5,
+                    0.5
+                )
             );
 
-            Game.scene.add(
-                base,
-                button
-            );
-
-            Game.buttons.push({
-                id: index + 1,
-                base,
-                mesh: button,
-                position:
-                    new THREE.Vector3(
-                        position[0],
-                        0,
-                        position[2]
-                    ),
-                pressed: false
-            });
+            world.scene.add(piece);
         }
-    );
+    }
 
-    setButtonState(1, "READY");
-    setButtonState(2, "READY");
-    setButtonState(3, "READY");
-}
+    function createDecorativeStructures() {
+        createWaterTower();
+        createWatchTower();
+        createGeneratorBuilding();
+        createFence();
+    }
 
-/* ============================================================
-   KEY
-   ============================================================ */
-
-function createKey() {
-    const group =
-        new THREE.Group();
-
-    const shaft =
-        new THREE.Mesh(
-            new THREE.BoxGeometry(
-                0.18,
-                0.18,
-                1.25
-            ),
-            Materials.metal
-        );
-
-    const ring =
-        new THREE.Mesh(
-            new THREE.TorusGeometry(
-                0.28,
-                0.08,
-                8,
-                18
-            ),
-            Materials.metal
-        );
-
-    ring.rotation.x =
-        Math.PI / 2;
-
-    ring.position.z =
-        0.72;
-
-    const tooth =
-        new THREE.Mesh(
-            new THREE.BoxGeometry(
-                0.4,
-                0.18,
-                0.22
-            ),
-            Materials.metal
-        );
-
-    tooth.position.z =
-        -0.65;
-
-    group.add(
-        shaft,
-        ring,
-        tooth
-    );
-
-    group.position.set(
-        0,
-        1.4,
-        -18
-    );
-
-    Game.scene.add(group);
-
-    Game.keyObject = {
-        group,
-        collected: false
-    };
-}
-
-/* ============================================================
-   NOTES
-   ============================================================ */
-
-function createNotes() {
-    const locations = [
-        [-15, 1.3, 20],
-        [15, 1.3, 2],
-        [-32, 1.3, -27],
-        [32, 1.3, -52],
-        [-58, 1.3, 20],
-        [58, 1.3, 20]
-    ];
-
-    locations.forEach(
-        (position, index) => {
-            const paper =
-                new THREE.Mesh(
-                    new THREE.BoxGeometry(
-                        0.8,
-                        0.04,
-                        0.55
-                    ),
-                    Materials.paper
-                );
-
-            paper.position.set(
-                position[0],
-                position[1],
-                position[2]
-            );
-
-            paper.rotation.y =
-                Math.random() * Math.PI;
-
-            Game.scene.add(paper);
-
-            Game.notes.push({
-                id: index + 1,
-                mesh: paper,
-                collected: false,
-                text:
-                    `Note ${index + 1}: The house is larger than it looks.`
-            });
-        }
-    );
-}
-
-/* ============================================================
-   PLAYER
-   ============================================================ */
-
-function createPlayer() {
-    Game.player = {
-        position:
-            Game.spawn.clone(),
-
-        radius:
-            Game.playerRadius,
-
-        height:
-            Game.playerHeight
-    };
-
-    Game.camera.position.set(
-        Game.spawn.x,
-        Game.playerHeight,
-        Game.spawn.z
-    );
-
-    Game.cameraYaw = 0;
-    Game.cameraPitch = -0.18;
-}
-
-/* ============================================================
-   SEEKER
-   ============================================================ */
-
-function createSeeker() {
-    const group =
-        new THREE.Group();
-
-    const body =
-        new THREE.Mesh(
-            new THREE.CylinderGeometry(
-                0.55,
-                0.75,
-                2.4,
-                16
-            ),
+    function createWaterTower() {
+        const metal =
             material(
-                0x111111,
-                0.92
-            )
+                0x414345,
+                {
+                    metalness: 0.8,
+                    roughness: 0.55
+                }
+            );
+
+        const tank =
+            createCylinder(
+                5,
+                8,
+                metal,
+                20
+            );
+
+        tank.position.set(
+            280,
+            12,
+            240
         );
 
-    body.position.y = 1.2;
+        tank.castShadow = true;
 
-    const head =
-        new THREE.Mesh(
-            new THREE.SphereGeometry(
-                0.62,
+        world.scene.add(tank);
+
+        for (
+            let i = 0;
+            i < 4;
+            i++
+        ) {
+            const angle =
+                i *
+                Math.PI /
+                2;
+
+            const leg =
+                createBox(
+                    0.7,
+                    12,
+                    0.7,
+                    metal
+                );
+
+            leg.position.set(
+                280 +
+                Math.cos(angle) * 3.5,
+                6,
+                240 +
+                Math.sin(angle) * 3.5
+            );
+
+            leg.castShadow = true;
+
+            world.scene.add(leg);
+
+            world.obstacles.push(leg);
+        }
+    }
+
+    function createWatchTower() {
+        const metal =
+            material(
+                0x292b2d,
+                {
+                    metalness: 0.6
+                }
+            );
+
+        const tower =
+            createBox(
+                7,
                 18,
-                14
-            ),
+                7,
+                metal
+            );
+
+        tower.position.set(
+            -320,
+            9,
+            260
+        );
+
+        tower.castShadow = true;
+
+        world.scene.add(tower);
+
+        const roof =
+            createBox(
+                10,
+                1,
+                10,
+                material(
+                    GAME.COLORS.DARK_METAL
+                )
+            );
+
+        roof.position.set(
+            -320,
+            18.5,
+            260
+        );
+
+        world.scene.add(roof);
+    }
+
+    function createGeneratorBuilding() {
+        const mat =
             material(
-                0x070707,
-                0.95
-            )
+                0x28292a,
+                {
+                    roughness: 0.9
+                }
+            );
+
+        const building =
+            createBox(
+                45,
+                12,
+                35,
+                mat
+            );
+
+        building.position.set(
+            300,
+            6,
+            -260
         );
 
-    head.position.y = 2.65;
+        building.castShadow = true;
 
-    const eyeMaterial =
-        new THREE.MeshBasicMaterial({
-            color: 0xaa2222
-        });
+        world.scene.add(building);
 
-    const eyeLeft =
-        new THREE.Mesh(
-            new THREE.SphereGeometry(
-                0.055,
-                8,
-                8
+        world.obstacles.push(building);
+    }
+
+    function createFence() {
+        const metal =
+            material(
+                0x353638,
+                {
+                    metalness: 0.7,
+                    roughness: 0.6
+                }
+            );
+
+        for (
+            let x = -400;
+            x <= 400;
+            x += 12
+        ) {
+            if (
+                x > -180 &&
+                x < 180
+            ) {
+                continue;
+            }
+
+            const post =
+                createBox(
+                    0.25,
+                    3,
+                    0.25,
+                    metal
+                );
+
+            post.position.set(
+                x,
+                1.5,
+                390
+            );
+
+            world.scene.add(post);
+        }
+    }
+
+    /* =========================================================
+       PLAYER
+       ========================================================= */
+
+    function createPlayer() {
+        const group =
+            new THREE.Group();
+
+        group.name =
+            "Player";
+
+        const bodyMaterial =
+            material(
+                0x202225,
+                {
+                    roughness: 0.7
+                }
+            );
+
+        const body =
+            createBox(
+                0.7,
+                1.1,
+                0.45,
+                bodyMaterial
+            );
+
+        body.position.y =
+            -0.25;
+
+        body.castShadow = true;
+
+        group.add(body);
+
+        const head =
+            createCylinder(
+                0.3,
+                0.45,
+                bodyMaterial,
+                16
+            );
+
+        head.rotation.z =
+            Math.PI / 2;
+
+        head.position.y =
+            0.65;
+
+        head.castShadow = true;
+
+        group.add(head);
+
+        group.position.copy(
+            state.player.position
+        );
+
+        world.scene.add(group);
+
+        world.playerObject =
+            group;
+
+        world.playerCollider =
+            new THREE.Sphere(
+                new THREE.Vector3(
+                    group.position.x,
+                    GAME.PLAYER_HEIGHT / 2,
+                    group.position.z
+                ),
+                GAME.PLAYER_RADIUS
+            );
+
+        /*
+         * Camera starts at player eye level.
+         */
+
+        world.camera.position.set(
+            group.position.x,
+            GAME.PLAYER_HEIGHT,
+            group.position.z
+        );
+    }
+
+    /* =========================================================
+       SEEKER
+       ========================================================= */
+
+    function createSeeker() {
+        const group =
+            new THREE.Group();
+
+        group.name =
+            "Seeker";
+
+        const darkMaterial =
+            material(
+                0x0c0d0e,
+                {
+                    roughness: 0.75,
+                    metalness: 0.05
+                }
+            );
+
+        const body =
+            createCylinder(
+                0.7,
+                2.4,
+                darkMaterial,
+                18
+            );
+
+        body.position.y =
+            1.8;
+
+        body.castShadow = true;
+
+        group.add(body);
+
+        const head =
+            new THREE.Mesh(
+                new THREE.SphereGeometry(
+                    0.85,
+                    24,
+                    24
+                ),
+                darkMaterial
+            );
+
+        head.position.y =
+            3.45;
+
+        head.castShadow = true;
+
+        group.add(head);
+
+        const eyeMaterial =
+            new THREE.MeshBasicMaterial({
+                color: GAME.COLORS.RED
+            });
+
+        const leftEye =
+            new THREE.Mesh(
+                new THREE.SphereGeometry(
+                    0.08,
+                    8,
+                    8
+                ),
+                eyeMaterial
+            );
+
+        const rightEye =
+            new THREE.Mesh(
+                new THREE.SphereGeometry(
+                    0.08,
+                    8,
+                    8
+                ),
+                eyeMaterial
+            );
+
+        leftEye.position.set(
+            -0.25,
+            3.48,
+            0.76
+        );
+
+        rightEye.position.set(
+            0.25,
+            3.48,
+            0.76
+        );
+
+        group.add(
+            leftEye,
+            rightEye
+        );
+
+        group.position.copy(
+            state.seeker.position
+        );
+
+        group.visible = false;
+
+        world.scene.add(group);
+
+        world.seekerObject =
+            group;
+
+        world.seekerCollider =
+            new THREE.Sphere(
+                new THREE.Vector3(
+                    group.position.x,
+                    1.5,
+                    group.position.z
+                ),
+                1.2
+            );
+    }
+
+    /* =========================================================
+       OBJECTIVES
+       ========================================================= */
+
+    function createObjectives() {
+        const locations = [
+            {
+                id: "button1",
+                x: -105,
+                z: 55
+            },
+            {
+                id: "button2",
+                x: 105,
+                z: -45
+            },
+            {
+                id: "button3",
+                x: -80,
+                z: -115
+            }
+        ];
+
+        for (const data of locations) {
+            createButton(
+                data.id,
+                data.x,
+                data.z
+            );
+        }
+
+        createKey();
+    }
+
+    function createButton(
+        id,
+        x,
+        z
+    ) {
+        const group =
+            new THREE.Group();
+
+        group.name =
+            id;
+
+        const baseMaterial =
+            material(
+                GAME.COLORS.DARK_METAL,
+                {
+                    metalness: 0.7
+                }
+            );
+
+        const base =
+            createBox(
+                1.5,
+                0.25,
+                1.5,
+                baseMaterial
+            );
+
+        base.position.y =
+            0.125;
+
+        group.add(base);
+
+        const buttonMaterial =
+            material(
+                GAME.COLORS.RED,
+                {
+                    roughness: 0.35,
+                    metalness: 0.1
+                }
+            );
+
+        const button =
+            createCylinder(
+                0.38,
+                0.25,
+                buttonMaterial,
+                20
+            );
+
+        button.position.y =
+            0.38;
+
+        group.add(button);
+
+        const indicator =
+            new THREE.Mesh(
+                new THREE.SphereGeometry(
+                    0.08,
+                    8,
+                    8
+                ),
+                new THREE.MeshBasicMaterial({
+                    color: GAME.COLORS.RED
+                })
+            );
+
+        indicator.position.set(
+            0,
+            0.65,
+            0
+        );
+
+        group.add(indicator);
+
+        group.position.set(
+            x,
+            0,
+            z
+        );
+
+        group.userData = {
+            id,
+            pressed: false,
+            indicator
+        };
+
+        world.scene.add(group);
+
+        world.buttons.push(group);
+
+        world.interactables.push(
+            group
+        );
+    }
+
+    function createKey() {
+        const group =
+            new THREE.Group();
+
+        group.name =
+            "ExitKey";
+
+        const keyMaterial =
+            material(
+                GAME.COLORS.YELLOW,
+                {
+                    metalness: 0.85,
+                    roughness: 0.25
+                }
+            );
+
+        const shaft =
+            createCylinder(
+                0.12,
+                1.6,
+                keyMaterial,
+                12
+            );
+
+        shaft.rotation.z =
+            Math.PI / 2;
+
+        group.add(shaft);
+
+        const ring =
+            new THREE.Mesh(
+                new THREE.TorusGeometry(
+                    0.35,
+                    0.1,
+                    10,
+                    20
+                ),
+                keyMaterial
+            );
+
+        ring.rotation.y =
+            Math.PI / 2;
+
+        ring.position.x =
+            -0.7;
+
+        group.add(ring);
+
+        const tooth1 =
+            createBox(
+                0.3,
+                0.25,
+                0.15,
+                keyMaterial
+            );
+
+        tooth1.position.set(
+            0.55,
+            -0.15,
+            0
+        );
+
+        group.add(tooth1);
+
+        const tooth2 =
+            createBox(
+                0.25,
+                0.25,
+                0.15,
+                keyMaterial
+            );
+
+        tooth2.position.set(
+            0.25,
+            -0.15,
+            0
+        );
+
+        group.add(tooth2);
+
+        group.position.set(
+            0,
+            1.2,
+            -15
+        );
+
+        group.visible = false;
+
+        group.userData = {
+            collected: false
+        };
+
+        world.scene.add(group);
+
+        world.keyObject =
+            group;
+
+        world.interactables.push(
+            group
+        );
+    }
+
+    /* =========================================================
+       GATE
+       ========================================================= */
+
+    function createGate() {
+        const gateGroup =
+            new THREE.Group();
+
+        gateGroup.name =
+            "ExitGate";
+
+        const metal =
+            material(
+                0x303235,
+                {
+                    metalness: 0.75,
+                    roughness: 0.5
+                }
+            );
+
+        const frameLeft =
+            createBox(
+                1,
+                10,
+                1,
+                metal
+            );
+
+        frameLeft.position.set(
+            -5,
+            5,
+            0
+        );
+
+        const frameRight =
+            createBox(
+                1,
+                10,
+                1,
+                metal
+            );
+
+        frameRight.position.set(
+            5,
+            5,
+            0
+        );
+
+        const top =
+            createBox(
+                11,
+                1,
+                1,
+                metal
+            );
+
+        top.position.set(
+            0,
+            9.5,
+            0
+        );
+
+        gateGroup.add(
+            frameLeft,
+            frameRight,
+            top
+        );
+
+        const bars =
+            new THREE.Group();
+
+        for (
+            let i = -4;
+            i <= 4;
+            i += 1
+        ) {
+            const bar =
+                createBox(
+                    0.45,
+                    9,
+                    0.45,
+                    metal
+                );
+
+            bar.position.set(
+                i,
+                4.5,
+                0
+            );
+
+            bars.add(bar);
+        }
+
+        gateGroup.add(bars);
+
+        gateGroup.position.set(
+            0,
+            0,
+            -140
+        );
+
+        gateGroup.userData = {
+            bars,
+            unlocked: false,
+            openAmount: 0
+        };
+
+        world.scene.add(
+            gateGroup
+        );
+
+        world.gateObject =
+            gateGroup;
+
+        world.walls.push(
+            gateGroup
+        );
+    }
+
+    /* =========================================================
+       LIGHTING
+       ========================================================= */
+
+    function createLighting() {
+        const ambient =
+            new THREE.HemisphereLight(
+                0x293038,
+                0x050505,
+                0.28
+            );
+
+        world.scene.add(
+            ambient
+        );
+
+        world.lights.push(
+            ambient
+        );
+
+        const moon =
+            new THREE.DirectionalLight(
+                0x8996a4,
+                0.55
+            );
+
+        moon.position.set(
+            -200,
+            350,
+            -200
+        );
+
+        moon.castShadow = true;
+
+        moon.shadow.mapSize.width =
+            2048;
+
+        moon.shadow.mapSize.height =
+            2048;
+
+        moon.shadow.camera.left =
+            -400;
+
+        moon.shadow.camera.right =
+            400;
+
+        moon.shadow.camera.top =
+            400;
+
+        moon.shadow.camera.bottom =
+            -400;
+
+        world.scene.add(
+            moon
+        );
+
+        world.lights.push(
+            moon
+        );
+
+        createLight(
+            -105,
+            7,
+            55,
+            0xffd9a0,
+            4,
+            15
+        );
+
+        createLight(
+            105,
+            7,
+            -45,
+            0xffd9a0,
+            4,
+            15
+        );
+
+        createLight(
+            -80,
+            7,
+            -115,
+            0xffd9a0,
+            4,
+            15
+        );
+
+        createLight(
+            0,
+            6,
+            -80,
+            0x554f43,
+            2,
+            20
+        );
+
+        createLight(
+            0,
+            6,
+            50,
+            0x45484a,
+            2,
+            20
+        );
+
+        createLight(
+            -120,
+            8,
+            -267,
+            0x5c7180,
+            3,
+            22
+        );
+    }
+
+    function createLight(
+        x,
+        y,
+        z,
+        color,
+        intensity,
+        distance
+    ) {
+        const light =
+            new THREE.PointLight(
+                color,
+                intensity,
+                distance
+            );
+
+        light.position.set(
+            x,
+            y,
+            z
+        );
+
+        light.castShadow = true;
+
+        light.shadow.mapSize.width =
+            512;
+
+        light.shadow.mapSize.height =
+            512;
+
+        world.scene.add(
+            light
+        );
+
+        world.lights.push(
+            light
+        );
+
+        return light;
+    }
+
+    /* =========================================================
+       SPAWN POINTS
+       ========================================================= */
+
+    function createSpawnPoints() {
+        world.spawnPoints = [
+            new THREE.Vector3(
+                0,
+                GAME.PLAYER_HEIGHT,
+                35
             ),
-            eyeMaterial
-        );
 
-    const eyeRight =
-        eyeLeft.clone();
+            new THREE.Vector3(
+                -100,
+                GAME.PLAYER_HEIGHT,
+                55
+            ),
 
-    eyeLeft.position.set(
-        -0.2,
-        2.68,
-        -0.53
-    );
+            new THREE.Vector3(
+                100,
+                GAME.PLAYER_HEIGHT,
+                -45
+            ),
 
-    eyeRight.position.set(
-        0.2,
-        2.68,
-        -0.53
-    );
-
-    group.add(
-        body,
-        head,
-        eyeLeft,
-        eyeRight
-    );
-
-    group.position.set(
-        0,
-        0,
-        -40
-    );
-
-    Game.scene.add(group);
-
-    Game.seeker = {
-        group,
-        position: group.position,
-        radius: 0.65
-    };
-}
-
-/* ============================================================
-   FLASHLIGHT
-   ============================================================ */
-
-function createFlashlight() {
-    Game.flashlightObject =
-        new THREE.SpotLight(
-            0xffffff,
-            4.2,
-            28,
-            Math.PI / 7,
-            0.7,
-            1.2
-        );
-
-    Game.flashlightObject.position.set(
-        0,
-        0,
-        0
-    );
-
-    Game.scene.add(
-        Game.flashlightObject
-    );
-
-    Game.flashlightTarget =
-        new THREE.Object3D();
-
-    Game.scene.add(
-        Game.flashlightTarget
-    );
-
-    Game.flashlightObject.target =
-        Game.flashlightTarget;
-}
-
-function updateFlashlight() {
-    if (!Game.flashlightObject) {
-        return;
+            new THREE.Vector3(
+                -80,
+                GAME.PLAYER_HEIGHT,
+                -115
+            )
+        ];
     }
 
-    Game.flashlightObject.visible =
-        Game.flashlight &&
-        Game.flashlightBattery > 0;
+    function createWaypoints() {
+        world.seekerWaypoints = [
+            new THREE.Vector3(
+                0,
+                0,
+                -110
+            ),
 
-    Game.flashlightObject.position.copy(
-        Game.camera.position
-    );
+            new THREE.Vector3(
+                -100,
+                0,
+                -100
+            ),
 
-    const direction =
-        Game.tmp.a.set(
-            0,
-            0,
-            -1
+            new THREE.Vector3(
+                -105,
+                0,
+                50
+            ),
+
+            new THREE.Vector3(
+                -100,
+                0,
+                90
+            ),
+
+            new THREE.Vector3(
+                0,
+                0,
+                65
+            ),
+
+            new THREE.Vector3(
+                100,
+                0,
+                70
+            ),
+
+            new THREE.Vector3(
+                105,
+                0,
+                -45
+            ),
+
+            new THREE.Vector3(
+                80,
+                0,
+                -100
+            ),
+
+            new THREE.Vector3(
+                0,
+                0,
+                -130
+            )
+        ];
+    }
+
+    /* =========================================================
+       INPUT SETUP
+       ========================================================= */
+
+    function setupInput() {
+        window.addEventListener(
+            "keydown",
+            event => {
+                input.keys[
+                    event.code
+                ] = true;
+
+                if (
+                    event.code === "ShiftLeft" ||
+                    event.code === "ShiftRight"
+                ) {
+                    state.player.sprinting =
+                        true;
+                }
+            }
         );
 
-    direction.applyQuaternion(
-        Game.camera.quaternion
-    );
+        window.addEventListener(
+            "keyup",
+            event => {
+                input.keys[
+                    event.code
+                ] = false;
 
-    Game.flashlightTarget.position.copy(
-        Game.camera.position
-    );
+                if (
+                    event.code === "ShiftLeft" ||
+                    event.code === "ShiftRight"
+                ) {
+                    state.player.sprinting =
+                        false;
+                }
+            }
+        );
 
-    Game.flashlightTarget.position.add(
-        direction.multiplyScalar(15)
-    );
+        window.addEventListener(
+            "mousemove",
+            event => {
+                if (
+                    document.pointerLockElement ===
+                    world.renderer?.domElement
+                ) {
+                    state.player.rotationY -=
+                        event.movementX *
+                        0.0023;
+                }
+            }
+        );
 
-    if (Game.flashlight) {
-        Game.flashlightBattery =
+        if (
+            world.renderer &&
+            world.renderer.domElement
+        ) {
+            world.renderer.domElement.addEventListener(
+                "click",
+                () => {
+                    if (
+                        state.device === "pc" &&
+                        !state.paused
+                    ) {
+                        try {
+                            world.renderer.domElement
+                                .requestPointerLock();
+                        } catch (_) {
+                            /*
+                             * Pointer lock may be unavailable.
+                             */
+                        }
+                    }
+                }
+            );
+        }
+
+        setupMobileInput();
+    }
+
+    function setupMobileInput() {
+        if (!document) {
+            return;
+        }
+
+        const moveStick =
+            document.querySelector(
+                "#moveStick"
+            );
+
+        const cameraStick =
+            document.querySelector(
+                "#cameraStick"
+            );
+
+        if (moveStick) {
+            attachJoystick(
+                moveStick,
+                input.joystick
+            );
+        }
+
+        if (cameraStick) {
+            attachJoystick(
+                cameraStick,
+                input.cameraJoystick
+            );
+        }
+    }
+
+    function attachJoystick(
+        element,
+        target
+    ) {
+        let pointerId = null;
+
+        const update =
+            event => {
+                if (
+                    pointerId === null ||
+                    event.pointerId !== pointerId
+                ) {
+                    return;
+                }
+
+                const rect =
+                    element.getBoundingClientRect();
+
+                const centerX =
+                    rect.left +
+                    rect.width / 2;
+
+                const centerY =
+                    rect.top +
+                    rect.height / 2;
+
+                const radius =
+                    rect.width / 2;
+
+                let x =
+                    (event.clientX -
+                        centerX) /
+                    radius;
+
+                let y =
+                    (event.clientY -
+                        centerY) /
+                    radius;
+
+                const length =
+                    Math.sqrt(
+                        x * x +
+                        y * y
+                    );
+
+                if (length > 1) {
+                    x /= length;
+                    y /= length;
+                }
+
+                target.x = x;
+                target.y = y;
+                target.active = true;
+            };
+
+        element.addEventListener(
+            "pointerdown",
+            event => {
+                pointerId =
+                    event.pointerId;
+
+                try {
+                    element.setPointerCapture(
+                        pointerId
+                    );
+                } catch (_) {}
+
+                update(event);
+            }
+        );
+
+        element.addEventListener(
+            "pointermove",
+            update
+        );
+
+        const end =
+            event => {
+                if (
+                    event.pointerId !== pointerId
+                ) {
+                    return;
+                }
+
+                pointerId = null;
+
+                target.x = 0;
+                target.y = 0;
+                target.active = false;
+            };
+
+        element.addEventListener(
+            "pointerup",
+            end
+        );
+
+        element.addEventListener(
+            "pointercancel",
+            end
+        );
+    }
+
+    /* =========================================================
+       GAME LOOP
+       ========================================================= */
+
+    function start() {
+        if (!state.initialized) {
+            initialize();
+        }
+
+        state.running = true;
+        state.paused = false;
+
+        world.clock.start();
+
+        requestAnimationFrame(
+            gameLoop
+        );
+    }
+
+    function stop() {
+        state.running = false;
+    }
+
+    function pause() {
+        state.paused = true;
+    }
+
+    function resume() {
+        state.paused = false;
+        world.clock.getDelta();
+    }
+
+    function gameLoop() {
+        if (!state.running) {
+            return;
+        }
+
+        requestAnimationFrame(
+            gameLoop
+        );
+
+        state.delta =
+            Math.min(
+                world.clock.getDelta(),
+                0.05
+            );
+
+        if (state.paused) {
+            render();
+            return;
+        }
+
+        update(
+            state.delta
+        );
+
+        render();
+    }
+
+    function update(delta) {
+        if (
+            state.playerCaught ||
+            state.gameWon
+        ) {
+            updateCamera(delta);
+            updateEffects(delta);
+            render();
+            return;
+        }
+
+        state.elapsed += delta;
+
+        updateSetupTimer(
+            delta
+        );
+
+        updatePlayer(
+            delta
+        );
+
+        updateObjectives(
+            delta
+        );
+
+        updateGate(
+            delta
+        );
+
+        updateSeeker(
+            delta
+        );
+
+        updateCamera(
+            delta
+        );
+
+        updateMinimap();
+
+        updateEffects(
+            delta
+        );
+    }
+
+    function render() {
+        if (
+            world.renderer &&
+            world.scene &&
+            world.camera
+        ) {
+            world.renderer.render(
+                world.scene,
+                world.camera
+            );
+        }
+    }
+
+    /* =========================================================
+       SETUP TIMER
+       ========================================================= */
+
+    function updateSetupTimer(delta) {
+        if (state.seekerActive) {
+            return;
+        }
+
+        state.setupRemaining =
             Math.max(
                 0,
-                Game.flashlightBattery -
-                Game.clock.getDelta() * 0.35
+                state.setupRemaining -
+                delta
             );
-    }
-}
-
-/* ============================================================
-   COLLISION
-   ============================================================ */
-
-function isInsideWall(
-    x,
-    z,
-    radius
-) {
-    for (const wall of Game.walls) {
-        if (
-            x + radius > wall.minX &&
-            x - radius < wall.maxX &&
-            z + radius > wall.minZ &&
-            z - radius < wall.maxZ
-        ) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-function moveWithCollision(
-    object,
-    dx,
-    dz
-) {
-    const oldX =
-        object.position.x;
-
-    const oldZ =
-        object.position.z;
-
-    const nextX =
-        oldX + dx;
-
-    const nextZ =
-        oldZ + dz;
-
-    if (
-        !isInsideWall(
-            nextX,
-            oldZ,
-            object.radius || 0.3
-        )
-    ) {
-        object.position.x =
-            nextX;
-    }
-
-    if (
-        !isInsideWall(
-            object.position.x,
-            nextZ,
-            object.radius || 0.3
-        )
-    ) {
-        object.position.z =
-            nextZ;
-    }
-}
-
-/* ============================================================
-   PLAYER MOVEMENT
-   ============================================================ */
-
-function updatePlayer(delta) {
-    if (!Game.player) {
-        return;
-    }
-
-    let forward = 0;
-    let strafe = 0;
-
-    if (Game.keys.has("KeyW")) {
-        forward += 1;
-    }
-
-    if (Game.keys.has("KeyS")) {
-        forward -= 1;
-    }
-
-    if (Game.keys.has("KeyA")) {
-        strafe -= 1;
-    }
-
-    if (Game.keys.has("KeyD")) {
-        strafe += 1;
-    }
-
-    if (Game.device === "mobile") {
-        strafe += Game.joystickX;
-        forward -= Game.joystickY;
-    }
-
-    if (Game.keys.has("ArrowUp")) {
-        forward += 1;
-    }
-
-    if (Game.keys.has("ArrowDown")) {
-        forward -= 1;
-    }
-
-    if (Game.keys.has("ArrowLeft")) {
-        strafe -= 1;
-    }
-
-    if (Game.keys.has("ArrowRight")) {
-        strafe += 1;
-    }
-
-    const length =
-        Math.sqrt(
-            forward * forward +
-            strafe * strafe
-        );
-
-    if (length > 1) {
-        forward /= length;
-        strafe /= length;
-    }
-
-    let speed =
-        Game.playerSpeed;
-
-    if (
-        Game.keys.has("Shift") ||
-        Game.keys.has("Space")
-    ) {
-        speed =
-            Game.runSpeed;
-    }
-
-    const yaw =
-        Game.cameraYaw;
-
-    const moveX =
-        (
-            Math.sin(yaw) * forward +
-            Math.cos(yaw) * strafe
-        ) * speed * delta;
-
-    const moveZ =
-        (
-            Math.cos(yaw) * forward -
-            Math.sin(yaw) * strafe
-        ) * speed * delta;
-
-    moveWithCollision(
-        Game.player,
-        moveX,
-        moveZ
-    );
-
-    Game.camera.position.set(
-        Game.player.position.x,
-        Game.playerHeight,
-        Game.player.position.z
-    );
-
-    if (length > 0.05) {
-        setNoise(
-            Game.keys.has("Shift") ||
-            Game.keys.has("Space")
-                ? 75
-                : 35
-        );
 
         if (
-            Game.elapsed -
-            Game.lastFootstep >
-            (
-                Game.keys.has("Shift") ||
-                Game.keys.has("Space")
-                    ? 0.32
-                    : 0.52
-            )
+            state.setupRemaining <= 0
         ) {
-            playFootstep();
+            activateSeeker();
         }
-    } else {
-        setNoise(
-            Math.max(
+
+        emitState();
+    }
+
+    function activateSeeker() {
+        if (state.seekerActive) {
+            return;
+        }
+
+        state.seekerActive = true;
+
+        state.seeker.state =
+            "patrolling";
+
+        world.seekerObject.visible =
+            true;
+
+        const spawn =
+            world.seekerWaypoints[0];
+
+        state.seeker.position.copy(
+            spawn
+        );
+
+        syncSeekerObject();
+
+        emitEvent(
+            "seekerActivated",
+            {
+                remaining: 0
+            }
+        );
+    }
+
+    /* =========================================================
+       PLAYER UPDATE
+       ========================================================= */
+
+    function updatePlayer(delta) {
+        if (
+            !world.playerObject
+        ) {
+            return;
+        }
+
+        const move =
+            getMovementInput();
+
+        const magnitude =
+            Math.min(
+                1,
+                Math.sqrt(
+                    move.x * move.x +
+                    move.z * move.z
+                )
+            );
+
+        state.player.moving =
+            magnitude > 0.05;
+
+        const sprint =
+            state.player.sprinting &&
+            !state.player.crouching &&
+            magnitude > 0.05;
+
+        state.player.running =
+            sprint;
+
+        let speed =
+            sprint
+                ? GAME.PLAYER_RUN_SPEED
+                : GAME.PLAYER_WALK_SPEED;
+
+        if (
+            state.player.crouching
+        ) {
+            speed *= 0.55;
+        }
+
+        const forward =
+            new THREE.Vector3(
+                Math.sin(
+                    state.player.rotationY
+                ),
                 0,
-                Game.noise -
-                delta * 45
-            )
+                Math.cos(
+                    state.player.rotationY
+                )
+            );
+
+        const right =
+            new THREE.Vector3(
+                Math.cos(
+                    state.player.rotationY
+                ),
+                0,
+                -Math.sin(
+                    state.player.rotationY
+                )
+            );
+
+        const desired =
+            new THREE.Vector3();
+
+        desired.addScaledVector(
+            forward,
+            move.z
         );
-    }
-}
 
-/* ============================================================
-   CAMERA
-   ============================================================ */
+        desired.addScaledVector(
+            right,
+            move.x
+        );
 
-function updateCamera() {
-    if (!Game.camera) {
-        return;
-    }
-
-    Game.camera.rotation.order =
-        "YXZ";
-
-    Game.camera.rotation.y =
-        Game.cameraYaw;
-
-    Game.camera.rotation.x =
-        Game.cameraPitch;
-}
-
-/* ============================================================
-   BUTTON INTERACTION
-   ============================================================ */
-
-function distanceTo(
-    a,
-    b
-) {
-    return a.distanceTo(b);
-}
-
-function updateInteraction() {
-    Game.interactionTarget =
-        null;
-
-    if (!Game.player) {
-        return;
-    }
-
-    let closest =
-        Infinity;
-
-    for (const button of Game.buttons) {
-        if (button.pressed) {
-            continue;
+        if (
+            desired.lengthSq() > 0
+        ) {
+            desired.normalize();
         }
 
-        const distance =
-            distanceTo(
-                Game.player.position,
-                button.position
+        const targetVelocity =
+            desired.multiplyScalar(
+                speed
+            );
+
+        state.player.velocity.x =
+            lerp(
+                state.player.velocity.x,
+                targetVelocity.x,
+                Math.min(
+                    1,
+                    delta * 12
+                )
+            );
+
+        state.player.velocity.z =
+            lerp(
+                state.player.velocity.z,
+                targetVelocity.z,
+                Math.min(
+                    1,
+                    delta * 12
+                )
+            );
+
+        const next =
+            world.playerObject.position
+                .clone();
+
+        next.x +=
+            state.player.velocity.x *
+            delta;
+
+        next.z +=
+            state.player.velocity.z *
+            delta;
+
+        const resolved =
+            resolvePlayerCollision(
+                next
+            );
+
+        world.playerObject.position.copy(
+            resolved
+        );
+
+        state.player.position.copy(
+            world.playerObject.position
+        );
+
+        world.playerObject.rotation.y =
+            state.player.rotationY;
+
+        updatePlayerCollider();
+
+        if (
+            state.player.moving
+        ) {
+            emitFootstepEvent();
+        }
+    }
+
+    function getMovementInput() {
+        let x = 0;
+        let z = 0;
+
+        if (
+            input.keys.KeyA ||
+            input.keys.ArrowLeft
+        ) {
+            x -= 1;
+        }
+
+        if (
+            input.keys.KeyD ||
+            input.keys.ArrowRight
+        ) {
+            x += 1;
+        }
+
+        if (
+            input.keys.KeyW ||
+            input.keys.ArrowUp
+        ) {
+            z += 1;
+        }
+
+        if (
+            input.keys.KeyS ||
+            input.keys.ArrowDown
+        ) {
+            z -= 1;
+        }
+
+        if (
+            state.device === "mobile" &&
+            input.joystick.active
+        ) {
+            x =
+                input.joystick.x;
+
+            z =
+                -input.joystick.y;
+        }
+
+        return {
+            x,
+            z
+        };
+    }
+
+    function emitFootstepEvent() {
+        /*
+         * System.js can listen for this.
+         * This file does not directly own audio.
+         */
+
+        if (
+            typeof window.dispatchEvent !==
+            "function"
+        ) {
+            return;
+        }
+
+        const event =
+            new CustomEvent(
+                "seeker:footstep",
+                {
+                    detail: {
+                        running:
+                            state.player.running,
+                        position:
+                            state.player.position.clone()
+                    }
+                }
+            );
+
+        window.dispatchEvent(
+            event
+        );
+    }
+
+    /* =========================================================
+       PLAYER COLLISION
+       ========================================================= */
+
+    function resolvePlayerCollision(
+        position
+    ) {
+        const result =
+            position.clone();
+
+        result.x =
+            clamp(
+                result.x,
+                -GAME.WORLD_SIZE / 2 + 5,
+                GAME.WORLD_SIZE / 2 - 5
+            );
+
+        result.z =
+            clamp(
+                result.z,
+                -GAME.WORLD_SIZE / 2 + 5,
+                GAME.WORLD_SIZE / 2 - 5
+            );
+
+        const radius =
+            GAME.PLAYER_RADIUS;
+
+        for (const wall of world.walls) {
+            if (
+                !wall ||
+                !wall.geometry
+            ) {
+                continue;
+            }
+
+            const box =
+                new THREE.Box3()
+                    .setFromObject(
+                        wall
+                    );
+
+            const closest =
+                new THREE.Vector3(
+                    clamp(
+                        result.x,
+                        box.min.x,
+                        box.max.x
+                    ),
+                    result.y,
+                    clamp(
+                        result.z,
+                        box.min.z,
+                        box.max.z
+                    )
+                );
+
+            const dx =
+                result.x -
+                closest.x;
+
+            const dz =
+                result.z -
+                closest.z;
+
+            const distance =
+                Math.sqrt(
+                    dx * dx +
+                    dz * dz
+                );
+
+            if (
+                distance < radius
+            ) {
+                if (
+                    distance > 0.0001
+                ) {
+                    const push =
+                        radius -
+                        distance;
+
+                    result.x +=
+                        (dx / distance) *
+                        push;
+
+                    result.z +=
+                        (dz / distance) *
+                        push;
+                } else {
+                    const left =
+                        Math.abs(
+                            result.x -
+                            box.min.x
+                        );
+
+                    const right =
+                        Math.abs(
+                            box.max.x -
+                            result.x
+                        );
+
+                    const top =
+                        Math.abs(
+                            result.z -
+                            box.min.z
+                        );
+
+                    const bottom =
+                        Math.abs(
+                            box.max.z -
+                            result.z
+                        );
+
+                    const smallest =
+                        Math.min(
+                            left,
+                            right,
+                            top,
+                            bottom
+                        );
+
+                    if (
+                        smallest === left
+                    ) {
+                        result.x =
+                            box.min.x -
+                            radius;
+                    } else if (
+                        smallest === right
+                    ) {
+                        result.x =
+                            box.max.x +
+                            radius;
+                    } else if (
+                        smallest === top
+                    ) {
+                        result.z =
+                            box.min.z -
+                            radius;
+                    } else {
+                        result.z =
+                            box.max.z +
+                            radius;
+                    }
+                }
+            }
+        }
+
+        for (const obstacle of world.obstacles) {
+            if (
+                !obstacle ||
+                !obstacle.geometry
+            ) {
+                continue;
+            }
+
+            const box =
+                new THREE.Box3()
+                    .setFromObject(
+                        obstacle
+                    );
+
+            const closest =
+                new THREE.Vector3(
+                    clamp(
+                        result.x,
+                        box.min.x,
+                        box.max.x
+                    ),
+                    result.y,
+                    clamp(
+                        result.z,
+                        box.min.z,
+                        box.max.z
+                    )
+                );
+
+            const dx =
+                result.x -
+                closest.x;
+
+            const dz =
+                result.z -
+                closest.z;
+
+            const distance =
+                Math.sqrt(
+                    dx * dx +
+                    dz * dz
+                );
+
+            if (
+                distance < radius
+            ) {
+                if (
+                    distance > 0.0001
+                ) {
+                    const push =
+                        radius -
+                        distance;
+
+                    result.x +=
+                        dx / distance *
+                        push;
+
+                    result.z +=
+                        dz / distance *
+                        push;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    function updatePlayerCollider() {
+        if (
+            !world.playerCollider ||
+            !world.playerObject
+        ) {
+            return;
+        }
+
+        world.playerCollider.center.set(
+            world.playerObject.position.x,
+            GAME.PLAYER_HEIGHT / 2,
+            world.playerObject.position.z
+        );
+    }
+
+    /* =========================================================
+       OBJECTIVE UPDATE
+       ========================================================= */
+
+    function updateObjectives(delta) {
+        for (const button of world.buttons) {
+            if (
+                !button ||
+                button.userData.pressed
+            ) {
+                continue;
+            }
+
+            button.rotation.y +=
+                delta * 0.25;
+
+            const distance =
+                distance2D(
+                    world.playerObject.position,
+                    button.position
+                );
+
+            if (
+                distance <=
+                GAME.INTERACTION_DISTANCE &&
+                input.keys.KeyE
+            ) {
+                input.keys.KeyE = false;
+
+                pressButton(
+                    button.userData.id
+                );
+            }
+        }
+
+        if (
+            world.keyObject &&
+            !state.hasKey
+        ) {
+            world.keyObject.rotation.y +=
+                delta * 1.8;
+
+            world.keyObject.position.y =
+                1.2 +
+                Math.sin(
+                    state.elapsed * 2
+                ) *
+                0.15;
+
+            const distance =
+                distance2D(
+                    world.playerObject.position,
+                    world.keyObject.position
+                );
+
+            if (
+                world.keyObject.visible &&
+                distance <=
+                GAME.INTERACTION_DISTANCE &&
+                input.keys.KeyE
+            ) {
+                input.keys.KeyE = false;
+
+                collectKey();
+            }
+        }
+    }
+
+    function pressButton(id) {
+        const button =
+            world.buttons.find(
+                item =>
+                    item.userData.id === id
             );
 
         if (
-            distance < 2.5 &&
-            distance < closest
+            !button ||
+            button.userData.pressed
         ) {
-            closest = distance;
-            Game.interactionTarget =
-                button;
+            return;
         }
-    }
 
-    if (
-        Game.keyObject &&
-        !Game.keyObject.collected
-    ) {
-        const distance =
-            distanceTo(
-                Game.player.position,
-                Game.keyObject.group.position
-            );
+        button.userData.pressed =
+            true;
+
+        state.buttons[id] =
+            true;
+
+        state.buttonsFound =
+            Object.values(
+                state.buttons
+            ).filter(Boolean).length;
+
+        const indicator =
+            button.userData.indicator;
+
+        if (indicator) {
+            indicator.material =
+                new THREE.MeshBasicMaterial({
+                    color:
+                        GAME.COLORS.GREEN
+                });
+        }
+
+        const buttonMesh =
+            button.children[1];
+
+        if (buttonMesh) {
+            buttonMesh.position.y =
+                0.28;
+        }
+
+        emitEvent(
+            "buttonPressed",
+            {
+                id,
+                count:
+                    state.buttonsFound,
+                required:
+                    GAME.REQUIRED_BUTTONS
+            }
+        );
 
         if (
-            distance < 2.3 &&
-            distance < closest
+            state.buttonsFound >=
+            GAME.REQUIRED_BUTTONS
         ) {
-            closest = distance;
-
-            Game.interactionTarget = {
-                type: "key",
-                object: Game.keyObject
-            };
+            unlockKeySpawn();
         }
+
+        emitState();
     }
 
-    for (const note of Game.notes) {
-        if (note.collected) {
-            continue;
+    function unlockKeySpawn() {
+        if (
+            !world.keyObject
+        ) {
+            return;
         }
 
-        const distance =
-            distanceTo(
-                Game.player.position,
-                note.mesh.position
-            );
+        world.keyObject.visible =
+            true;
+
+        emitEvent(
+            "keyAvailable"
+        );
+    }
+
+    function collectKey() {
+        if (
+            state.hasKey
+        ) {
+            return;
+        }
+
+        state.hasKey = true;
 
         if (
-            distance < 1.8 &&
-            distance < closest
+            world.keyObject
         ) {
-            closest = distance;
-
-            Game.interactionTarget = {
-                type: "note",
-                object: note
-            };
-        }
-    }
-
-    if (
-        Game.gate &&
-        !Game.gate.open
-    ) {
-        const distance =
-            distanceTo(
-                Game.player.position,
-                Game.exitPosition
-            );
-
-        if (
-            distance < 4 &&
-            distance < closest
-        ) {
-            closest = distance;
-
-            Game.interactionTarget = {
-                type: "gate"
-            };
-        }
-    }
-
-    if (!Game.interactionTarget) {
-        setInteraction("");
-        return;
-    }
-
-    const target =
-        Game.interactionTarget;
-
-    if (target.type === "key") {
-        setInteraction(
-            "PRESS E TO TAKE THE KEY"
-        );
-        return;
-    }
-
-    if (target.type === "note") {
-        setInteraction(
-            "PRESS E TO READ"
-        );
-        return;
-    }
-
-    if (target.type === "gate") {
-        if (Game.keyCollected) {
-            setInteraction(
-                "PRESS E TO UNLOCK THE GATE"
-            );
-        } else {
-            setInteraction(
-                "THE GATE IS LOCKED"
-            );
-        }
-
-        return;
-    }
-
-    setInteraction(
-        `PRESS E TO PRESS BUTTON ${target.id}`
-    );
-}
-
-function interact() {
-    if (!Game.running || Game.paused) {
-        return;
-    }
-
-    const target =
-        Game.interactionTarget;
-
-    if (!target) {
-        return;
-    }
-
-    if (
-        target.type === "key"
-    ) {
-        collectKey();
-        return;
-    }
-
-    if (
-        target.type === "note"
-    ) {
-        collectNote(
-            target.object
-        );
-        return;
-    }
-
-    if (
-        target.type === "gate"
-    ) {
-        if (Game.keyCollected) {
-            unlockGate();
-        } else {
-            setInteraction(
-                "FIND THE KEY FIRST"
-            );
-        }
-
-        return;
-    }
-
-    if (
-        target.mesh &&
-        target.id
-    ) {
-        pressButton(target);
-    }
-}
-
-/* ============================================================
-   BUTTON PRESS
-   ============================================================ */
-
-function pressButton(button) {
-    if (button.pressed) {
-        return;
-    }
-
-    button.pressed = true;
-
-    button.mesh.material =
-        Materials.buttonPressed;
-
-    button.mesh.position.y -= 0.12;
-
-    Game.buttonsPressed++;
-
-    setButtonState(
-        button.id,
-        "PRESSED"
-    );
-
-    playButtonSound();
-
-    setObjective(
-        Game.buttonsPressed >= 3
-            ? "Find the key."
-            : `Press the remaining buttons (${3 - Game.buttonsPressed})`
-    );
-
-    if (Game.buttonsPressed >= 3) {
-        unlockKey();
-    }
-}
-
-/* ============================================================
-   KEY
-   ============================================================ */
-
-function unlockKey() {
-    if (!Game.keyObject) {
-        return;
-    }
-
-    Game.keyObject.group.visible =
-        true;
-
-    setObjective(
-        "Find the key and unlock the gate."
-    );
-
-    playButtonSound();
-}
-
-function collectKey() {
-    if (
-        !Game.keyObject ||
-        Game.keyObject.collected
-    ) {
-        return;
-    }
-
-    Game.keyObject.collected =
-        true;
-
-    Game.keyObject.group.visible =
-        false;
-
-    Game.keyCollected =
-        true;
-
-    setObjective(
-        "Reach the gate."
-    );
-
-    playPickupSound();
-}
-
-/* ============================================================
-   NOTES
-   ============================================================ */
-
-function collectNote(note) {
-    if (note.collected) {
-        return;
-    }
-
-    note.collected = true;
-    note.mesh.visible = false;
-
-    Game.notesCollected++;
-
-    setNotesCount(
-        Game.notesCollected
-    );
-
-    playPickupSound();
-
-    const toast =
-        $("noteToastText");
-
-    if (toast) {
-        toast.textContent =
-            note.text;
-    }
-
-    show($("noteToast"));
-
-    setTimeout(() => {
-        hide($("noteToast"));
-    }, 2800);
-}
-
-function showNotesLog() {
-    const list =
-        $("notesLogList");
-
-    if (!list) {
-        return;
-    }
-
-    list.innerHTML = "";
-
-    const collected =
-        Game.notes.filter(
-            note => note.collected
-        );
-
-    if (!collected.length) {
-        const empty =
-            document.createElement("div");
-
-        empty.className =
-            "notes-log-empty";
-
-        empty.textContent =
-            "No notes collected.";
-
-        list.appendChild(empty);
-    } else {
-        for (const note of collected) {
-            const item =
-                document.createElement("div");
-
-            item.className =
-                "notes-log-item";
-
-            item.textContent =
-                note.text;
-
-            list.appendChild(item);
-        }
-    }
-
-    hide($("pauseScreen"));
-    show($("notesLogScreen"));
-}
-
-/* ============================================================
-   GATE
-   ============================================================ */
-
-function unlockGate() {
-    if (
-        !Game.gate ||
-        Game.gate.open
-    ) {
-        return;
-    }
-
-    Game.gate.open =
-        true;
-
-    Game.gate.gate.position.y =
-        6;
-
-    playGateSound();
-
-    setObjective(
-        "Escape."
-    );
-
-    setInteraction(
-        "THE GATE IS OPEN"
-    );
-
-    setTimeout(() => {
-        if (Game.gate) {
-            Game.gate.gate.visible =
+            world.keyObject.visible =
                 false;
         }
-    }, 700);
-}
 
-/* ============================================================
-   SEEKER AI
-   ============================================================ */
-
-function updateSeeker(delta) {
-    if (
-        !Game.seeker ||
-        !Game.player
-    ) {
-        return;
-    }
-
-    const seeker =
-        Game.seeker;
-
-    const player =
-        Game.player;
-
-    const dx =
-        player.position.x -
-        seeker.position.x;
-
-    const dz =
-        player.position.z -
-        seeker.position.z;
-
-    const distance =
-        Math.sqrt(
-            dx * dx +
-            dz * dz
+        emitEvent(
+            "keyCollected"
         );
 
-    Game.seekerTargetVisible =
-        distance < 22;
+        emitState();
+    }
 
-    const hearingRange =
-        10 +
-        Game.noise * 0.12;
+    /* =========================================================
+       GATE UPDATE
+       ========================================================= */
 
-    if (
-        distance < hearingRange ||
-        Game.noise > 70
-    ) {
-        Game.seekerAlerted =
+    function updateGate(delta) {
+        if (
+            !world.gateObject
+        ) {
+            return;
+        }
+
+        const gate =
+            world.gateObject;
+
+        const distance =
+            distance2D(
+                world.playerObject.position,
+                gate.position
+            );
+
+        if (
+            state.hasKey &&
+            !state.gateUnlocked &&
+            distance <=
+            GAME.INTERACTION_DISTANCE &&
+            input.keys.KeyE
+        ) {
+            input.keys.KeyE = false;
+
+            unlockGate();
+        }
+
+        if (
+            gate.userData.unlocked
+        ) {
+            gate.userData.openAmount =
+                Math.min(
+                    1,
+                    gate.userData.openAmount +
+                    delta * 0.7
+                );
+
+            gate.userData.bars.position.y =
+                gate.userData.openAmount *
+                11;
+        }
+    }
+
+    function unlockGate() {
+        if (
+            state.gateUnlocked
+        ) {
+            return;
+        }
+
+        state.gateUnlocked = true;
+
+        world.gateObject.userData.unlocked =
             true;
-    }
 
-    if (
-        distance < 30 ||
-        Game.elapsed > 15
-    ) {
-        Game.seekerAwake =
-            true;
-    }
+        /*
+         * Remove the gate from collision.
+         */
 
-    if (!Game.seekerAwake) {
-        return;
-    }
+        const index =
+            world.walls.indexOf(
+                world.gateObject
+            );
 
-    let speed =
-        Game.seekerSpeed;
+        if (
+            index !== -1
+        ) {
+            world.walls.splice(
+                index,
+                1
+            );
+        }
 
-    if (Game.seekerAlerted) {
-        speed =
-            Game.seekerChaseSpeed;
-    }
-
-    if (
-        distance < 12
-    ) {
-        speed =
-            Game.seekerAlertSpeed;
-    }
-
-    if (
-        Game.seekerTargetVisible &&
-        distance < 24
-    ) {
-        Game.seekerAlerted =
-            true;
-    }
-
-    const length =
-        Math.sqrt(
-            dx * dx +
-            dz * dz
+        emitEvent(
+            "gateUnlocked"
         );
 
-    if (length > 0.001) {
+        setTimeout(
+            () => {
+                winGame();
+            },
+            900
+        );
+
+        emitState();
+    }
+
+    function winGame() {
+        if (
+            state.gameWon ||
+            state.playerCaught
+        ) {
+            return;
+        }
+
+        state.gameWon = true;
+        state.running = false;
+
+        emitEvent(
+            "gameWon"
+        );
+    }
+
+    /* =========================================================
+       SEEKER AI
+       ========================================================= */
+
+    function updateSeeker(delta) {
+        if (
+            !state.seekerActive ||
+            !world.seekerObject
+        ) {
+            return;
+        }
+
+        if (
+            state.playerCaught ||
+            state.gameWon
+        ) {
+            return;
+        }
+
+        state.seeker.attackCooldown =
+            Math.max(
+                0,
+                state.seeker.attackCooldown -
+                delta
+            );
+
+        const playerPosition =
+            world.playerObject.position;
+
+        const distance =
+            distance2D(
+                world.seekerObject.position,
+                playerPosition
+            );
+
+        if (
+            distance <= 2.15
+        ) {
+            catchPlayer();
+            return;
+        }
+
+        const canSee =
+            canSeekerSeePlayer(
+                distance
+            );
+
+        const canHear =
+            canSeekerHearPlayer(
+                distance
+            );
+
+        if (
+            canSee
+        ) {
+            state.seeker.state =
+                "chasing";
+
+            state.seeker.target =
+                playerPosition.clone();
+
+            state.seeker.lastKnownPlayerPosition =
+                playerPosition.clone();
+
+            state.seeker.investigationTimer =
+                5;
+        } else if (
+            canHear
+        ) {
+            state.seeker.state =
+                "investigating";
+
+            state.seeker.target =
+                playerPosition.clone();
+
+            state.seeker.lastKnownPlayerPosition =
+                playerPosition.clone();
+
+            state.seeker.investigationTimer =
+                7;
+        } else {
+            updateSeekerMemory(
+                delta
+            );
+        }
+
+        moveSeeker(
+            delta
+        );
+
+        syncSeekerObject();
+
+        updateSeekerCollider();
+    }
+
+    function canSeekerSeePlayer(
+        distance
+    ) {
+        if (
+            distance >
+            GAME.SEEKER_DETECTION_DISTANCE
+        ) {
+            return false;
+        }
+
+        /*
+         * A simple visibility check.
+         * System can later replace this with
+         * a raycast-based visibility system.
+         */
+
+        return distance <
+            GAME.SEEKER_DETECTION_DISTANCE;
+    }
+
+    function canSeekerHearPlayer(
+        distance
+    ) {
+        if (
+            !state.player.moving
+        ) {
+            return false;
+        }
+
+        let range =
+            GAME.SEEKER_HEARING_DISTANCE;
+
+        if (
+            state.player.running
+        ) {
+            range *= 1.55;
+        }
+
+        if (
+            state.player.crouching
+        ) {
+            range *= 0.45;
+        }
+
+        return distance <= range;
+    }
+
+    function updateSeekerMemory(
+        delta
+    ) {
+        if (
+            state.seeker.state ===
+            "investigating"
+        ) {
+            state.seeker.investigationTimer -=
+                delta;
+
+            if (
+                state.seeker.investigationTimer <=
+                0
+            ) {
+                state.seeker.state =
+                    "patrolling";
+
+                state.seeker.target =
+                    null;
+            }
+
+            return;
+        }
+
+        if (
+            state.seeker.state ===
+            "chasing"
+        ) {
+            state.seeker.state =
+                "investigating";
+
+            state.seeker.target =
+                state.seeker.lastKnownPlayerPosition
+                    .clone();
+
+            state.seeker.investigationTimer =
+                6;
+
+            return;
+        }
+
+        state.seeker.state =
+            "patrolling";
+
+        if (
+            !state.seeker.target ||
+            distance2D(
+                state.seeker.position,
+                state.seeker.target
+            ) < 4
+        ) {
+            const waypoint =
+                world.seekerWaypoints[
+                    randomInt(
+                        0,
+                        world.seekerWaypoints.length - 1
+                    )
+                ];
+
+            state.seeker.target =
+                waypoint.clone();
+        }
+    }
+
+    function moveSeeker(delta) {
+        const seeker =
+            state.seeker;
+
+        if (
+            !seeker.target
+        ) {
+            return;
+        }
+
+        let speed =
+            GAME.SEEKER_SPEED;
+
+        if (
+            seeker.state ===
+            "chasing"
+        ) {
+            speed =
+                GAME.SEEKER_CHASE_SPEED;
+        }
+
+        const dx =
+            seeker.target.x -
+            seeker.position.x;
+
+        const dz =
+            seeker.target.z -
+            seeker.position.z;
+
+        const length =
+            Math.sqrt(
+                dx * dx +
+                dz * dz
+            );
+
+        if (
+            length < 0.5
+        ) {
+            return;
+        }
+
         const dirX =
             dx / length;
 
         const dirZ =
             dz / length;
 
-        const moveX =
-            dirX * speed * delta;
+        seeker.rotationY =
+            approachAngle(
+                seeker.rotationY,
+                Math.atan2(
+                    dirX,
+                    dirZ
+                ),
+                delta * 4
+            );
 
-        const moveZ =
-            dirZ * speed * delta;
+        const next =
+            seeker.position.clone();
 
-        moveWithCollision(
-            seeker,
-            moveX,
-            moveZ
-        );
+        next.x +=
+            dirX *
+            speed *
+            delta;
 
-        seeker.group.rotation.y =
-            Math.atan2(
-                dirX,
-                dirZ
+        next.z +=
+            dirZ *
+            speed *
+            delta;
+
+        seeker.position =
+            resolveSeekerCollision(
+                next
             );
     }
 
-    if (
-        distance < 2.0
+    function resolveSeekerCollision(
+        position
     ) {
-        triggerDeath(
-            "The Seeker caught you."
+        const result =
+            position.clone();
+
+        const radius =
+            1.0;
+
+        for (const wall of world.walls) {
+            if (
+                !wall ||
+                !wall.geometry
+            ) {
+                continue;
+            }
+
+            const box =
+                new THREE.Box3()
+                    .setFromObject(
+                        wall
+                    );
+
+            const closest =
+                new THREE.Vector3(
+                    clamp(
+                        result.x,
+                        box.min.x,
+                        box.max.x
+                    ),
+                    result.y,
+                    clamp(
+                        result.z,
+                        box.min.z,
+                        box.max.z
+                    )
+                );
+
+            const dx =
+                result.x -
+                closest.x;
+
+            const dz =
+                result.z -
+                closest.z;
+
+            const distance =
+                Math.sqrt(
+                    dx * dx +
+                    dz * dz
+                );
+
+            if (
+                distance < radius
+            ) {
+                if (
+                    distance > 0.001
+                ) {
+                    const push =
+                        radius -
+                        distance;
+
+                    result.x +=
+                        dx /
+                        distance *
+                        push;
+
+                    result.z +=
+                        dz /
+                        distance *
+                        push;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    function syncSeekerObject() {
+        if (
+            !world.seekerObject
+        ) {
+            return;
+        }
+
+        world.seekerObject.position.copy(
+            state.seeker.position
+        );
+
+        world.seekerObject.rotation.y =
+            state.seeker.rotationY;
+    }
+
+    function updateSeekerCollider() {
+        if (
+            !world.seekerCollider
+        ) {
+            return;
+        }
+
+        world.seekerCollider.center.set(
+            state.seeker.position.x,
+            1.5,
+            state.seeker.position.z
         );
     }
 
-    if (
-        distance < 18
-    ) {
-        const intensity =
-            18 -
-            distance;
+    function catchPlayer() {
+        if (
+            state.playerCaught ||
+            state.gameWon
+        ) {
+            return;
+        }
 
-        setSanity(
-            Game.sanity -
-            intensity *
-            delta *
-            0.65
+        state.playerCaught =
+            true;
+
+        state.running = false;
+
+        emitEvent(
+            "playerCaught"
+        );
+    }
+
+    /* =========================================================
+       CAMERA
+       ========================================================= */
+
+    function updateCamera(delta) {
+        if (
+            !world.camera ||
+            !world.playerObject
+        ) {
+            return;
+        }
+
+        const targetY =
+            state.player.crouching
+                ? 1.2
+                : GAME.PLAYER_HEIGHT;
+
+        world.camera.position.x =
+            world.playerObject.position.x;
+
+        world.camera.position.z =
+            world.playerObject.position.z;
+
+        world.camera.position.y =
+            lerp(
+                world.camera.position.y,
+                targetY,
+                Math.min(
+                    1,
+                    delta * 10
+                )
+            );
+
+        const forward =
+            new THREE.Vector3(
+                Math.sin(
+                    state.player.rotationY
+                ),
+                0,
+                Math.cos(
+                    state.player.rotationY
+                )
+            );
+
+        const target =
+            world.camera.position
+                .clone()
+                .add(
+                    forward.multiplyScalar(
+                        10
+                    )
+                );
+
+        target.y =
+            world.camera.position.y;
+
+        world.camera.lookAt(
+            target
         );
 
-        playSeekerPulse();
-    } else {
-        setSanity(
-            Math.min(
-                100,
-                Game.sanity +
-                delta * 2
+        if (
+            state.device === "mobile" &&
+            input.cameraJoystick.active
+        ) {
+            state.player.rotationY -=
+                input.cameraJoystick.x *
+                delta *
+                3;
+
+            world.camera.lookAt(
+                target
+            );
+        }
+    }
+
+    /* =========================================================
+       MINIMAP
+       ========================================================= */
+
+    function updateMinimap() {
+        state.minimap.playerX =
+            state.player.position.x;
+
+        state.minimap.playerZ =
+            state.player.position.z;
+
+        state.minimap.seekerX =
+            state.seeker.position.x;
+
+        state.minimap.seekerZ =
+            state.seeker.position.z;
+
+        state.minimap.playerRotation =
+            state.player.rotationY;
+
+        state.minimap.seekerRotation =
+            state.seeker.rotationY;
+
+        emitEvent(
+            "minimapUpdate",
+            state.minimap
+        );
+    }
+
+    /* =========================================================
+       EFFECTS
+       ========================================================= */
+
+    function updateEffects(delta) {
+        /*
+         * Keep this lightweight.
+         * details.js can attach advanced particles,
+         * fog, post-processing, and environment animation.
+         */
+
+        for (const effect of world.effects) {
+            if (
+                effect &&
+                typeof effect.update ===
+                "function"
+            ) {
+                effect.update(
+                    delta,
+                    state
+                );
+            }
+        }
+
+        if (
+            state.seekerActive &&
+            world.seekerObject
+        ) {
+            const distance =
+                distance2D(
+                    world.seekerObject.position,
+                    world.playerObject.position
+                );
+
+            const danger =
+                clamp(
+                    1 -
+                    distance /
+                    70,
+                    0,
+                    1
+                );
+
+            world.seekerObject.scale.setScalar(
+                1 +
+                danger *
+                0.035
+            );
+        }
+    }
+
+    /* =========================================================
+       INTERACTION API
+       ========================================================= */
+
+    function interact() {
+        if (
+            state.playerCaught ||
+            state.gameWon
+        ) {
+            return false;
+        }
+
+        const player =
+            world.playerObject;
+
+        if (
+            !player
+        ) {
+            return false;
+        }
+
+        let nearest = null;
+        let nearestDistance =
+            Infinity;
+
+        for (
+            const object of
+            world.interactables
+        ) {
+            if (
+                !object ||
+                !object.visible
+            ) {
+                continue;
+            }
+
+            if (
+                object.userData &&
+                object.userData.pressed
+            ) {
+                continue;
+            }
+
+            if (
+                object.userData &&
+                object.userData.collected
+            ) {
+                continue;
+            }
+
+            const distance =
+                distance2D(
+                    player.position,
+                    object.position
+                );
+
+            if (
+                distance <
+                nearestDistance
+            ) {
+                nearestDistance =
+                    distance;
+
+                nearest =
+                    object;
+            }
+        }
+
+        if (
+            !nearest ||
+            nearestDistance >
+            GAME.INTERACTION_DISTANCE
+        ) {
+            return false;
+        }
+
+        if (
+            nearest.name ===
+            "ExitKey"
+        ) {
+            collectKey();
+            return true;
+        }
+
+        if (
+            nearest.userData &&
+            nearest.userData.id
+        ) {
+            pressButton(
+                nearest.userData.id
+            );
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /* =========================================================
+       PLAYER ACTIONS
+       ========================================================= */
+
+    function setCrouching(value) {
+        state.player.crouching =
+            Boolean(value);
+    }
+
+    function setSprinting(value) {
+        state.player.sprinting =
+            Boolean(value);
+    }
+
+    function setDevice(device) {
+        if (
+            device !== "pc" &&
+            device !== "mobile"
+        ) {
+            return;
+        }
+
+        state.device =
+            device;
+
+        emitEvent(
+            "deviceChanged",
+            {
+                device
+            }
+        );
+    }
+
+    /* =========================================================
+       MAP RESET
+       ========================================================= */
+
+    function resetGame(options = {}) {
+        const map =
+            options.map ||
+            GAME.MAP_NAMES[0];
+
+        state.currentMap =
+            map;
+
+        state.running = false;
+        state.paused = false;
+
+        state.elapsed = 0;
+
+        state.setupRemaining =
+            GAME.SETUP_TIME;
+
+        state.seekerActive =
+            false;
+
+        state.buttonsFound =
+            0;
+
+        state.hasKey =
+            false;
+
+        state.gateUnlocked =
+            false;
+
+        state.playerCaught =
+            false;
+
+        state.gameWon =
+            false;
+
+        state.buttons = {
+            button1: false,
+            button2: false,
+            button3: false
+        };
+
+        state.player.position.set(
+            0,
+            GAME.PLAYER_HEIGHT,
+            35
+        );
+
+        state.player.velocity.set(
+            0,
+            0,
+            0
+        );
+
+        state.player.rotationY =
+            0;
+
+        state.player.running =
+            false;
+
+        state.player.crouching =
+            false;
+
+        state.player.moving =
+            false;
+
+        state.player.sprinting =
+            false;
+
+        state.seeker.position.set(
+            0,
+            0,
+            -110
+        );
+
+        state.seeker.velocity.set(
+            0,
+            0,
+            0
+        );
+
+        state.seeker.rotationY =
+            0;
+
+        state.seeker.state =
+            "sleeping";
+
+        state.seeker.target =
+            null;
+
+        state.seeker.investigationTimer =
+            0;
+
+        state.seeker.attackCooldown =
+            0;
+
+        if (
+            world.playerObject
+        ) {
+            world.playerObject.position.copy(
+                state.player.position
+            );
+
+            world.playerObject.rotation.y =
+                0;
+        }
+
+        if (
+            world.seekerObject
+        ) {
+            world.seekerObject.position.copy(
+                state.seeker.position
+            );
+
+            world.seekerObject.visible =
+                false;
+        }
+
+        if (
+            world.keyObject
+        ) {
+            world.keyObject.visible =
+                false;
+            world.keyObject.userData.collected =
+                false;
+        }
+
+        for (const button of world.buttons) {
+            button.userData.pressed =
+                false;
+
+            const indicator =
+                button.userData.indicator;
+
+            if (indicator) {
+                indicator.material =
+                    new THREE.MeshBasicMaterial({
+                        color:
+                            GAME.COLORS.RED
+                    });
+            }
+
+            const buttonMesh =
+                button.children[1];
+
+            if (buttonMesh) {
+                buttonMesh.position.y =
+                    0.38;
+            }
+        }
+
+        if (
+            world.gateObject
+        ) {
+            world.gateObject.userData.unlocked =
+                false;
+
+            world.gateObject.userData.openAmount =
+                0;
+
+            world.gateObject.userData.bars
+                .position.y = 0;
+
+            if (
+                !world.walls.includes(
+                    world.gateObject
+                )
+            ) {
+                world.walls.push(
+                    world.gateObject
+                );
+            }
+        }
+
+        updatePlayerCollider();
+        updateSeekerCollider();
+
+        emitEvent(
+            "gameReset",
+            {
+                map
+            }
+        );
+
+        emitState();
+    }
+
+    /* =========================================================
+       STATE / EVENTS
+       ========================================================= */
+
+    function getState() {
+        return {
+            initialized:
+                state.initialized,
+
+            running:
+                state.running,
+
+            paused:
+                state.paused,
+
+            device:
+                state.device,
+
+            elapsed:
+                state.elapsed,
+
+            setupRemaining:
+                state.setupRemaining,
+
+            seekerActive:
+                state.seekerActive,
+
+            buttonsFound:
+                state.buttonsFound,
+
+            requiredButtons:
+                GAME.REQUIRED_BUTTONS,
+
+            hasKey:
+                state.hasKey,
+
+            gateUnlocked:
+                state.gateUnlocked,
+
+            playerCaught:
+                state.playerCaught,
+
+            gameWon:
+                state.gameWon,
+
+            currentMap:
+                state.currentMap,
+
+            player: {
+                x:
+                    state.player.position.x,
+                y:
+                    state.player.position.y,
+                z:
+                    state.player.position.z,
+                rotation:
+                    state.player.rotationY,
+                moving:
+                    state.player.moving,
+                running:
+                    state.player.running,
+                crouching:
+                    state.player.crouching
+            },
+
+            seeker: {
+                x:
+                    state.seeker.position.x,
+                z:
+                    state.seeker.position.z,
+                rotation:
+                    state.seeker.rotationY,
+                active:
+                    state.seekerActive,
+                state:
+                    state.seeker.state
+            },
+
+            minimap:
+                {
+                    ...state.minimap
+                }
+        };
+    }
+
+    function emitState() {
+        emitEvent(
+            "state",
+            getState()
+        );
+    }
+
+    function emitEvent(
+        name,
+        detail = {}
+    ) {
+        if (
+            typeof window.dispatchEvent !==
+            "function"
+        ) {
+            return;
+        }
+
+        window.dispatchEvent(
+            new CustomEvent(
+                `seeker:${name}`,
+                {
+                    detail
+                }
             )
         );
     }
-}
 
-/* ============================================================
-   GAME TIMER
-   ============================================================ */
+    /* =========================================================
+       PUBLIC API
+       ========================================================= */
 
-function updateTimer(delta) {
-    Game.remaining -= delta;
+    function exposeAPI() {
+        window.TheSeeker =
+            window.TheSeeker || {};
 
-    setTimer(
-        Game.remaining
-    );
+        Object.assign(
+            window.TheSeeker,
+            {
+                GAME,
+                state,
+                world,
 
-    if (
-        Game.remaining <= 0
-    ) {
-        Game.remaining = 0;
+                initialize,
+                start,
+                stop,
+                pause,
+                resume,
+                resetGame,
 
-        triggerDeath(
-            "Time ran out."
+                update,
+                render,
+
+                interact,
+
+                pressButton,
+                collectKey,
+                unlockGate,
+
+                setCrouching,
+                setSprinting,
+                setDevice,
+
+                activateSeeker,
+
+                getState,
+
+                getPlayerPosition() {
+                    return state.player.position.clone();
+                },
+
+                getSeekerPosition() {
+                    return state.seeker.position.clone();
+                },
+
+                getMinimapState() {
+                    return {
+                        ...state.minimap
+                    };
+                }
+            }
         );
     }
-}
 
-/* ============================================================
-   WIN CONDITION
-   ============================================================ */
+    /* =========================================================
+       AUTO INITIALIZATION
+       ========================================================= */
 
-function checkWin() {
     if (
-        !Game.keyCollected ||
-        !Game.gate ||
-        !Game.gate.open ||
-        !Game.player
+        document.readyState ===
+        "loading"
     ) {
-        return;
-    }
+        document.addEventListener(
+            "DOMContentLoaded",
+            () => {
+                /*
+                 * main.js may initialize the game itself.
+                 * Only create the game automatically when
+                 * the page indicates that a game canvas is wanted.
+                 */
 
-    const distance =
-        Game.player.position.distanceTo(
-            Game.exitPosition
+                const shouldAutoInit =
+                    document.body &&
+                    (
+                        document.body.dataset
+                            .autoGame === "true" ||
+                        document.querySelector(
+                            "#gameRoot"
+                        )
+                    );
+
+                if (
+                    shouldAutoInit
+                ) {
+                    initialize();
+                }
+            }
         );
-
-    if (
-        distance < 5
-    ) {
-        showWin();
-    }
-}
-
-/* ============================================================
-   DEATH
-   ============================================================ */
-
-function triggerDeath(reason) {
-    if (
-        Game.dead ||
-        Game.won
-    ) {
-        return;
-    }
-
-    Game.dead = true;
-
-    if (
-        document.pointerLockElement
-    ) {
-        document.exitPointerLock?.();
-    }
-
-    showDeath(reason);
-}
-
-/* ============================================================
-   PAUSE
-   ============================================================ */
-
-function togglePause() {
-    if (
-        !Game.running ||
-        Game.dead ||
-        Game.won
-    ) {
-        return;
-    }
-
-    if (Game.paused) {
-        resumeGame();
     } else {
-        pauseGame();
-    }
-}
-
-function pauseGame() {
-    Game.paused = true;
-
-    show($("pauseScreen"));
-
-    if (
-        document.pointerLockElement
-    ) {
-        document.exitPointerLock?.();
-    }
-}
-
-function resumeGame() {
-    Game.paused = false;
-
-    hide($("pauseScreen"));
-
-    Game.clock.getDelta();
-
-    if (
-        Game.device === "pc" &&
-        $("gameCanvas")
-    ) {
-        $("gameCanvas").requestPointerLock?.();
-    }
-}
-
-/* ============================================================
-   MINIMAP
-   ============================================================ */
-
-function createMinimap() {
-    let map =
-        document.getElementById(
-            "minimap"
-        );
-
-    if (!map) {
-        map =
-            document.createElement("div");
-
-        map.id = "minimap";
-
-        map.style.position =
-            "absolute";
-
-        map.style.left =
-            "18px";
-
-        map.style.top =
-            "18px";
-
-        map.style.width =
-            "170px";
-
-        map.style.height =
-            "170px";
-
-        map.style.background =
-            "rgba(0,0,0,.72)";
-
-        map.style.border =
-            "1px solid rgba(255,255,255,.3)";
-
-        map.style.zIndex =
-            "20";
-
-        const gameScreen =
-            $("gameScreen");
-
-        if (gameScreen) {
-            gameScreen.appendChild(map);
-        }
-    }
-
-    let canvas =
-        map.querySelector(
-            "canvas"
-        );
-
-    if (!canvas) {
-        canvas =
-            document.createElement(
-                "canvas"
-            );
-
-        canvas.width = 340;
-        canvas.height = 340;
-
-        canvas.style.width =
-            "100%";
-
-        canvas.style.height =
-            "100%";
-
-        map.appendChild(canvas);
-    }
-
-    Game.minimapCanvas =
-        canvas;
-
-    Game.minimapContext =
-        canvas.getContext("2d");
-}
-
-function updateMinimap() {
-    if (
-        !Game.minimapContext ||
-        !Game.player ||
-        !Game.seeker
-    ) {
-        return;
-    }
-
-    const ctx =
-        Game.minimapContext;
-
-    const width =
-        Game.minimapCanvas.width;
-
-    const height =
-        Game.minimapCanvas.height;
-
-    ctx.clearRect(
-        0,
-        0,
-        width,
-        height
-    );
-
-    ctx.fillStyle =
-        "#080808";
-
-    ctx.fillRect(
-        0,
-        0,
-        width,
-        height
-    );
-
-    const scale =
-        2.05;
-
-    const convert = (
-        x,
-        z
-    ) => ({
-        x:
-            width / 2 +
-            x * scale,
-
-        y:
-            height / 2 +
-            z * scale
-    });
-
-    ctx.strokeStyle =
-        "rgba(255,255,255,.18)";
-
-    ctx.lineWidth = 2;
-
-    for (
-        let x = -75;
-        x <= 75;
-        x += 15
-    ) {
-        const a =
-            convert(x, -75);
-
-        const b =
-            convert(x, 75);
-
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-    }
-
-    for (
-        let z = -75;
-        z <= 75;
-        z += 15
-    ) {
-        const a =
-            convert(-75, z);
-
-        const b =
-            convert(75, z);
-
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-    }
-
-    ctx.strokeStyle =
-        "rgba(255,255,255,.42)";
-
-    ctx.lineWidth = 3;
-
-    for (const wall of Game.walls) {
-        const a =
-            convert(
-                wall.minX,
-                wall.minZ
-            );
-
-        const b =
-            convert(
-                wall.maxX,
-                wall.maxZ
-            );
-
-        ctx.strokeRect(
-            a.x,
-            a.y,
-            b.x - a.x,
-            b.y - a.y
-        );
-    }
-
-    for (const button of Game.buttons) {
-        const p =
-            convert(
-                button.position.x,
-                button.position.z
-            );
-
-        ctx.fillStyle =
-            button.pressed
-                ? "#4b9b5c"
-                : "#8f2525";
-
-        ctx.beginPath();
-
-        ctx.arc(
-            p.x,
-            p.y,
-            7,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-    }
-
-    const gate =
-        convert(
-            Game.exitPosition.x,
-            Game.exitPosition.z
-        );
-
-    ctx.fillStyle =
-        Game.gate?.open
-            ? "#69a76d"
-            : "#777";
-
-    ctx.fillRect(
-        gate.x - 6,
-        gate.y - 6,
-        12,
-        12
-    );
-
-    const player =
-        convert(
-            Game.player.position.x,
-            Game.player.position.z
-        );
-
-    ctx.save();
-
-    ctx.translate(
-        player.x,
-        player.y
-    );
-
-    ctx.rotate(
-        -Game.cameraYaw
-    );
-
-    ctx.fillStyle =
-        "#ffffff";
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-        0,
-        -12
-    );
-
-    ctx.lineTo(
-        -8,
-        9
-    );
-
-    ctx.lineTo(
-        0,
-        5
-    );
-
-    ctx.lineTo(
-        8,
-        9
-    );
-
-    ctx.closePath();
-
-    ctx.fill();
-
-    ctx.restore();
-
-    const seeker =
-        convert(
-            Game.seeker.position.x,
-            Game.seeker.position.z
-        );
-
-    ctx.save();
-
-    ctx.translate(
-        seeker.x,
-        seeker.y
-    );
-
-    const angle =
-        Math.atan2(
-            Game.player.position.x -
-            Game.seeker.position.x,
-
-            Game.player.position.z -
-            Game.seeker.position.z
-        );
-
-    ctx.rotate(-angle);
-
-    ctx.fillStyle =
-        "#d43b3b";
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-        0,
-        -12
-    );
-
-    ctx.lineTo(
-        -8,
-        8
-    );
-
-    ctx.lineTo(
-        8,
-        8
-    );
-
-    ctx.closePath();
-
-    ctx.fill();
-
-    ctx.restore();
-}
-
-/* ============================================================
-   ENVIRONMENT UPDATE
-   ============================================================ */
-
-function updateEnvironment(delta) {
-    if (
-        Game.seeker &&
-        Game.seeker.group
-    ) {
-        const pulse =
-            1 +
-            Math.sin(
-                Game.elapsed * 2.5
-            ) * 0.025;
-
-        Game.seeker.group.scale.set(
-            pulse,
-            pulse,
-            pulse
-        );
-    }
-
-    if (
-        Game.keyObject &&
-        !Game.keyObject.collected
-    ) {
-        Game.keyObject.group.rotation.y +=
-            delta * 1.5;
-
-        Game.keyObject.group.position.y =
-            1.4 +
-            Math.sin(
-                Game.elapsed * 3
-            ) * 0.12;
-    }
-
-    for (
-        const note of Game.notes
-    ) {
-        if (!note.collected) {
-            note.mesh.rotation.z =
-                Math.sin(
-                    Game.elapsed * 0.7 +
-                    note.id
-                ) * 0.025;
-        }
-    }
-}
-
-/* ============================================================
-   GAME LOOP
-   ============================================================ */
-
-function gameLoop() {
-    requestAnimationFrame(
-        gameLoop
-    );
-
-    if (
-        !Game.renderer ||
-        !Game.scene ||
-        !Game.camera
-    ) {
-        return;
-    }
-
-    const delta =
-        Math.min(
-            Game.clock.getDelta(),
-            0.05
-        );
-
-    if (
-        Game.running &&
-        !Game.paused &&
-        !Game.dead &&
-        !Game.won
-    ) {
-        Game.elapsed += delta;
-
-        updateTimer(delta);
-        updatePlayer(delta);
-        updateCamera();
-        updateInteraction();
-        updateSeeker(delta);
-        updateEnvironment(delta);
-        updateFlashlight();
-        updateMinimap();
-        checkWin();
-    }
-
-    Game.renderer.render(
-        Game.scene,
-        Game.camera
-    );
-}
-
-/* ============================================================
-   RESIZE
-   ============================================================ */
-
-function resize() {
-    if (
-        !Game.renderer ||
-        !Game.camera
-    ) {
-        return;
-    }
-
-    const width =
-        Math.max(
-            1,
-            window.innerWidth
-        );
-
-    const height =
-        Math.max(
-            1,
-            window.innerHeight
-        );
-
-    Game.camera.aspect =
-        width / height;
-
-    Game.camera.updateProjectionMatrix();
-
-    Game.renderer.setSize(
-        width,
-        height,
-        false
-    );
-
-    Game.renderer.setPixelRatio(
-        Math.min(
-            window.devicePixelRatio || 1,
-            2
-        )
-    );
-}
-
-window.addEventListener(
-    "resize",
-    resize
-);
-
-/* ============================================================
-   RESET GAME
-   ============================================================ */
-
-function clearWorld() {
-    if (!Game.scene) {
-        return;
-    }
-
-    while (
-        Game.scene.children.length
-    ) {
-        const object =
-            Game.scene.children.pop();
-
-        if (object.geometry) {
-            object.geometry.dispose?.();
-        }
-
-        if (object.material) {
-            if (
-                Array.isArray(
-                    object.material
+        const shouldAutoInit =
+            document.body &&
+            (
+                document.body.dataset
+                    .autoGame === "true" ||
+                document.querySelector(
+                    "#gameRoot"
                 )
-            ) {
-                object.material.forEach(
-                    material => {
-                        material.dispose?.();
-                    }
-                );
-            } else {
-                object.material.dispose?.();
-            }
-        }
-    }
-
-    Game.walls = [];
-    Game.doors = [];
-    Game.buttons = [];
-    Game.notes = [];
-    Game.decorations = [];
-    Game.lights = [];
-
-    Game.gate = null;
-    Game.keyObject = null;
-    Game.flashlightObject = null;
-    Game.flashlightTarget = null;
-    Game.seeker = null;
-    Game.player = null;
-}
-
-function resetState() {
-    Game.running = false;
-    Game.paused = false;
-    Game.dead = false;
-    Game.won = false;
-
-    Game.elapsed = 0;
-    Game.remaining = 180;
-
-    Game.buttonsPressed = 0;
-    Game.keyCollected = false;
-    Game.gateUnlocked = false;
-
-    Game.notesCollected = 0;
-
-    Game.seekerAwake = false;
-    Game.seekerAlerted = false;
-    Game.seekerTargetVisible = false;
-
-    Game.sanity = 100;
-    Game.noise = 0;
-
-    Game.flashlightBattery = 100;
-
-    Game.interactionTarget = null;
-
-    Game.keys.clear();
-
-    setTimer(180);
-    setSanity(100);
-    setNoise(0);
-    setNotesCount(0);
-
-    setButtonState(1, "READY");
-    setButtonState(2, "READY");
-    setButtonState(3, "READY");
-
-    hide($("noteToast"));
-    hide($("dangerWarning"));
-}
-
-/* ============================================================
-   WORLD BUILD
-   ============================================================ */
-
-function buildWorld() {
-    clearWorld();
-
-    createFloor();
-    createOuterHouse();
-    createInterior();
-    createFurniture();
-    createDecorations();
-
-    createGate();
-    createGameButtons();
-    createKey();
-    createNotes();
-
-    createPlayer();
-    createSeeker();
-    createFlashlight();
-
-    createMinimap();
-}
-
-/* ============================================================
-   DEVICE DETECTION
-   ============================================================ */
-
-function detectDevice() {
-    const touch =
-        "ontouchstart" in window ||
-        navigator.maxTouchPoints > 0;
-
-    const smallScreen =
-        window.innerWidth < 800;
-
-    Game.device =
-        touch && smallScreen
-            ? "mobile"
-            : "pc";
-
-    const mobileControls =
-        $("mobileControls");
-
-    if (
-        mobileControls
-    ) {
-        if (Game.device === "mobile") {
-            show(mobileControls);
-        } else {
-            hide(mobileControls);
-        }
-    }
-}
-
-/* ============================================================
-   GAME START
-   ============================================================ */
-
-function startGame() {
-    initializeAudio();
-
-    Game.device =
-        Game.device ||
-        "pc";
-
-    resetState();
-
-    if (
-        !Game.renderer
-    ) {
-        const rendererReady =
-            createRenderer();
-
-        if (!rendererReady) {
-            return;
-        }
-    }
-
-    createScene();
-    createCamera();
-    createLighting();
-
-    buildWorld();
-
-    showGame();
-
-    Game.running = true;
-    Game.paused = false;
-
-    setObjective(
-        "Find and press all three buttons."
-    );
-
-    setTimer(
-        Game.remaining
-    );
-
-    setNotesCount(
-        0
-    );
-
-    detectDevice();
-
-    Game.clock.start();
-
-    if (
-        Game.device === "pc"
-    ) {
-        setTimeout(() => {
-            if (
-                Game.running &&
-                !Game.paused
-            ) {
-                $("gameCanvas")?.requestPointerLock?.();
-            }
-        }, 150);
-    }
-}
-
-/* ============================================================
-   INITIALIZATION
-   ============================================================ */
-
-function initializeGame() {
-    try {
-        bindInterface();
-        bindKeyboard();
-        bindMouse();
-        bindTouch();
-
-        detectDevice();
-
-        const canvas =
-            $("gameCanvas");
-
-        if (
-            canvas &&
-            !(canvas instanceof HTMLCanvasElement)
-        ) {
-            const replacement =
-                document.createElement(
-                    "canvas"
-                );
-
-            replacement.id =
-                "gameCanvas";
-
-            replacement.className =
-                canvas.className;
-
-            canvas.replaceWith(
-                replacement
             );
-        }
 
         if (
-            $("menuScreen")
+            shouldAutoInit
         ) {
-            show($("menuScreen"));
+            initialize();
         }
-
-        hide($("gameScreen"));
-        hide($("pauseScreen"));
-        hide($("deathScreen"));
-        hide($("winScreen"));
-        hide($("notesLogScreen"));
-
-        setTimer(180);
-        setSanity(100);
-        setNoise(0);
-        setNotesCount(0);
-
-        setObjective(
-            "Find and press all three buttons."
-        );
-
-        gameLoop();
-
-    } catch (error) {
-        /*
-         * Do not create a fake error screen.
-         * Keep the menu playable even if an optional
-         * feature fails.
-         */
-        console.error(
-            "THE SEEKER startup warning:",
-            error
-        );
-
-        gameLoop();
     }
-}
 
-/* ============================================================
-   START
-   ============================================================ */
-
-if (
-    document.readyState === "loading"
-) {
-    document.addEventListener(
-        "DOMContentLoaded",
-        initializeGame,
-        {
-            once: true
-        }
-    );
-} else {
-    initializeGame();
-}
+})();
