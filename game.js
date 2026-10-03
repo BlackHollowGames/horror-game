@@ -1,16 +1,88 @@
 /* ============================================================
    THE SEEKER
+   Complete game.js
    BlackHollow Games
    Created by Stive Pierre
-
-   Complete browser horror-game controller.
-   Requires:
-   - index.html
-   - style.css
-   - Three.js import map in index.html
    ============================================================ */
 
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import * as THREE from "three";
+
+/* ============================================================
+   CONFIGURATION
+   ============================================================ */
+
+const GAME_CONFIG = {
+    title: "THE SEEKER",
+
+    world: {
+        width: 180,
+        depth: 180,
+        wallHeight: 8,
+        wallThickness: 1,
+        roomSize: 18,
+        floorSize: 220
+    },
+
+    player: {
+        height: 2.05,
+        radius: 0.42,
+        speed: 4.2,
+        runSpeed: 7.2,
+        acceleration: 20,
+        friction: 14,
+        gravity: 24,
+        jumpHeight: 0,
+        eyeHeight: 1.75,
+        start: {
+            x: 0,
+            y: 1.05,
+            z: 72
+        }
+    },
+
+    seeker: {
+        height: 2.8,
+        radius: 0.65,
+        walkSpeed: 1.65,
+        chaseSpeed: 3.75,
+        searchSpeed: 2.5,
+        hearingRadius: 18,
+        visionDistance: 30,
+        visionAngle: Math.PI * 0.7,
+        searchTime: 7,
+        attackDistance: 1.6
+    },
+
+    game: {
+        preparationTime: 180,
+        startingSanity: 100,
+        maximumNoise: 100,
+        buttonCount: 3,
+        notesRequired: 3,
+        interactionDistance: 3.2
+    },
+
+    graphics: {
+        shadows: true,
+        pixelRatioLimit: 1.8,
+        fogNear: 18,
+        fogFar: 150
+    },
+
+    colors: {
+        black: 0x030303,
+        floor: 0x111111,
+        wall: 0x191919,
+        wallDark: 0x0d0d0d,
+        ceiling: 0x080808,
+        metal: 0x303030,
+        wood: 0x30251c,
+        red: 0xb33030,
+        yellow: 0xc9a227,
+        green: 0x2a8a4a,
+        white: 0xe8e8e8
+    }
+};
 
 /* ============================================================
    DOM HELPERS
@@ -18,201 +90,139 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
 const $ = (id) => document.getElementById(id);
 
-const qs = (selector, root = document) =>
-  root.querySelector(selector);
+const menuScreen = $("menuScreen");
+const instructionsScreen = $("instructionsScreen");
+const settingsScreen = $("settingsScreen");
+const gameScreen = $("gameScreen");
 
-const qsa = (selector, root = document) =>
-  [...root.querySelectorAll(selector)];
+const playButton = $("playButton");
+const instructionsButton = $("instructionsButton");
+const settingsButton = $("settingsButton");
 
-const show = (idOrElement) => {
-  const element =
-    typeof idOrElement === "string" ? $(idOrElement) : idOrElement;
+const instructionsBack = $("instructionsBack");
+const settingsBack = $("settingsBack");
 
-  if (element) {
-    element.classList.remove("hidden");
-  }
-};
+const gameCanvas = $("gameCanvas");
 
-const hide = (idOrElement) => {
-  const element =
-    typeof idOrElement === "string" ? $(idOrElement) : idOrElement;
+const objectiveElement = $("objective");
+const notesCountElement = $("notesCount");
+const timerElement = $("timer");
 
-  if (element) {
-    element.classList.add("hidden");
-  }
-};
+const button1 = $("button1");
+const button2 = $("button2");
+const button3 = $("button3");
 
-const toggle = (idOrElement, value) => {
-  const element =
-    typeof idOrElement === "string" ? $(idOrElement) : idOrElement;
+const sanityFill = $("sanityFill");
+const interactionElement = $("interaction");
+const interactionText = $("interactionText");
 
-  if (element) {
-    element.classList.toggle("hidden", !value);
-  }
-};
+const noiseContainer = $("noiseFill");
+const hideTimer = $("hideTimer");
+const hideTimerValue = $("hideTimerValue");
+const dangerWarning = $("dangerWarning");
 
-const setText = (id, value) => {
-  const element = $(id);
+const noteToast = $("noteToast");
+const noteToastText = $("noteToastText");
 
-  if (element) {
-    element.textContent = value;
-  }
-};
+const screamOverlay = $("screamOverlay");
 
-const clamp = (value, min, max) =>
-  Math.max(min, Math.min(max, value));
+const mobileControls = $("mobileControls");
+const joystickZone = $("joystickZone");
+const joystickBase = $("joystickBase");
+const joystickKnob = $("joystickKnob");
+const mobileRun = $("mobileRun");
+const mobileInteract = $("mobileInteract");
+const mobileFlashlight = $("mobileFlashlight");
+const lookZone = $("lookZone");
 
-const lerp = (a, b, t) =>
-  a + (b - a) * t;
+const pauseScreen = $("pauseScreen");
+const resumeButton = $("resumeButton");
+const notesLogButton = $("notesLogButton");
+const quitButton = $("quitButton");
 
-const distance2D = (a, b) => {
-  const dx = a.x - b.x;
-  const dz = a.z - b.z;
+const notesLogScreen = $("notesLogScreen");
+const notesLogList = $("notesLogList");
+const notesLogEmpty = $("notesLogEmpty");
+const notesLogBack = $("notesLogBack");
 
-  return Math.sqrt(dx * dx + dz * dz);
-};
+const deathScreen = $("deathScreen");
+const deathReason = $("deathReason");
+const retryButton = $("retryButton");
+const deathMenuButton = $("deathMenuButton");
 
-const randomRange = (min, max) =>
-  min + Math.random() * (max - min);
-
-const randomInt = (min, max) =>
-  Math.floor(randomRange(min, max + 1));
-
-const formatTime = (seconds) => {
-  seconds = Math.max(0, Math.ceil(seconds));
-
-  const minutes = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, "0");
-
-  const remainingSeconds = Math.floor(seconds % 60)
-    .toString()
-    .padStart(2, "0");
-
-  return `${minutes}:${remainingSeconds}`;
-};
-
+const winScreen = $("winScreen");
+const winTitle = $("winTitle");
+const winText = $("winText");
+const winAgainButton = $("winAgainButton");
+const winMenuButton = $("winMenuButton");
 
 /* ============================================================
-   GAME CONFIGURATION
-   ============================================================ */
-
-const CONFIG = {
-  world: {
-    width: 150,
-    depth: 150,
-    wallHeight: 8,
-    floorY: 0,
-    playerRadius: 0.8
-  },
-
-  player: {
-    walkSpeed: 4.5,
-    sprintSpeed: 7.5,
-    acceleration: 18,
-    friction: 12,
-    eyeHeight: 1.65,
-    maxPitch: 1.28,
-    mouseSensitivity: 0.0022,
-    touchSensitivity: 0.008
-  },
-
-  demon: {
-    startDelay: 180,
-    walkSpeed: 2.55,
-    chaseSpeed: 3.75,
-    sprintChaseSpeed: 4.7,
-    hearingRadius: 72,
-    visualRadius: 27,
-    closeRadius: 13,
-    catchDistance: 1.7
-  },
-
-  interaction: {
-    buttonDistance: 4.5,
-    keyDistance: 3.5,
-    gateDistance: 7
-  },
-
-  audio: {
-    volume: 0.65,
-    footsteps: true,
-    stepWalkInterval: 0.43,
-    stepRunInterval: 0.28
-  },
-
-  objective: {
-    buttonCount: 3,
-    setupTime: 180
-  },
-
-  minimap: {
-    size: 190
-  }
-};
-
-
-/* ============================================================
-   GAME STATE
+   GLOBAL STATE
    ============================================================ */
 
 const state = {
-  screen: "menu",
+    initialized: false,
+    running: false,
+    paused: false,
+    dead: false,
+    won: false,
 
-  device: "pc",
+    device: "pc",
 
-  running: false,
-  paused: false,
-  dead: false,
-  won: false,
+    elapsed: 0,
+    preparationRemaining: GAME_CONFIG.game.preparationTime,
 
-  elapsed: 0,
-  setupTime: CONFIG.objective.setupTime,
+    sanity: GAME_CONFIG.game.startingSanity,
+    noise: 0,
 
-  buttons: [
-    false,
-    false,
-    false
-  ],
+    keyCollected: false,
+    gateOpen: false,
 
-  keyFound: false,
-  gateOpen: false,
+    buttons: [
+        {
+            id: 1,
+            pressed: false,
+            position: new THREE.Vector3(-52, 1.2, -40)
+        },
+        {
+            id: 2,
+            pressed: false,
+            position: new THREE.Vector3(48, 1.2, -20)
+        },
+        {
+            id: 3,
+            pressed: false,
+            position: new THREE.Vector3(4, 1.2, -72)
+        }
+    ],
 
-  sanity: 100,
-  noise: 0,
+    notes: [],
 
-  flashlight: true,
-  footsteps: true,
-  volume: CONFIG.audio.volume,
+    flashlightEnabled: true,
+    footstepsEnabled: true,
+    volume: 0.7,
 
-  sprinting: false,
-  moving: false,
+    flashlightOn: true,
 
-  hiding: false,
-  hideTime: 0,
+    hideMode: false,
+    hideRemaining: 0,
 
-  notes: [],
-  notesFound: 0,
+    interactionTarget: null,
 
-  objective:
-    "Find the three buttons.",
+    seekerActive: false,
+    seekerState: "waiting",
+    seekerLastKnownPosition: new THREE.Vector3(),
 
-  interactionText: "",
-  interactionUntil: 0,
+    footstepTimer: 0,
+    footstepIndex: 0,
 
-  danger: false,
+    lastFrame: performance.now(),
+    fps: 60,
 
-  lastTime: performance.now(),
-  stepTimer: 0,
+    deviceScreenShown: false,
 
-  interactionCooldown: 0,
-
-  demonAlert: false,
-  demonLastKnown: null,
-
-  settingsLoaded: false
+    messageQueue: []
 };
-
 
 /* ============================================================
    THREE.JS VARIABLES
@@ -221,4628 +231,5322 @@ const state = {
 let renderer = null;
 let scene = null;
 let camera = null;
+
 let clock = null;
+
+let worldGroup = null;
+let environmentGroup = null;
+let collisionGroup = null;
+let interactableGroup = null;
+let seekerGroup = null;
+let effectGroup = null;
 
 let player = null;
 let playerVelocity = new THREE.Vector3();
 
-let playerYaw = 0;
-let playerPitch = 0;
-
-let demon = null;
-let demonVelocity = new THREE.Vector3();
-
-let gate = null;
-let gateBars = null;
+let seeker = null;
+let seekerVelocity = new THREE.Vector3();
 
 let flashlight = null;
 let flashlightTarget = null;
 
-let ambientLight = null;
+let gate = null;
+let gateLight = null;
 
-let walls = [];
-let interactables = [];
-let pickups = [];
-
-let decorations = [];
-
-let playerSpawn = new THREE.Vector3(
-  0,
-  CONFIG.player.eyeHeight,
-  62
-);
-
-let demonSpawn = new THREE.Vector3(
-  -48,
-  0,
-  48
-);
-
-
-/* ============================================================
-   INPUT STATE
-   ============================================================ */
-
-const keys = Object.create(null);
-
-let pointerLocked = false;
-
-let mobileRunHeld = false;
-let mobileLookActive = false;
-
-let mobileLookX = 0;
-let mobileLookY = 0;
-
-const joystick = {
-  active: false,
-  pointerId: null,
-  x: 0,
-  y: 0
-};
-
-
-/* ============================================================
-   AUDIO
-   ============================================================ */
+let raycaster = new THREE.Raycaster();
 
 let audioContext = null;
 let masterGain = null;
 
-let ambientOscillator = null;
-let ambientGain = null;
+let pointerLocked = false;
 
-function initializeAudio() {
-  if (audioContext) {
-    if (audioContext.state === "suspended") {
-      audioContext.resume();
+let yaw = 0;
+let pitch = 0;
+
+const keys = new Set();
+
+const mouse = {
+    sensitivity: 0.0021,
+    movementX: 0,
+    movementY: 0
+};
+
+const joystick = {
+    active: false,
+    pointerId: null,
+    x: 0,
+    y: 0,
+    startX: 0,
+    startY: 0,
+    maxDistance: 48
+};
+
+const lookTouch = {
+    active: false,
+    pointerId: null,
+    lastX: 0,
+    lastY: 0
+};
+
+const collisionBoxes = [];
+
+const interactables = [];
+
+/* ============================================================
+   UTILITY FUNCTIONS
+   ============================================================ */
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+function smoothstep(t) {
+    return t * t * (3 - 2 * t);
+}
+
+function random(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+function randomInt(min, max) {
+    return Math.floor(random(min, max + 1));
+}
+
+function distanceXZ(a, b) {
+    const dx = a.x - b.x;
+    const dz = a.z - b.z;
+    return Math.sqrt(dx * dx + dz * dz);
+}
+
+function directionTo(from, to) {
+    const result = new THREE.Vector3(
+        to.x - from.x,
+        0,
+        to.z - from.z
+    );
+
+    if (result.lengthSq() > 0.00001) {
+        result.normalize();
     }
 
-    return;
-  }
-
-  const AudioContextClass =
-    window.AudioContext ||
-    window.webkitAudioContext;
-
-  if (!AudioContextClass) {
-    return;
-  }
-
-  audioContext = new AudioContextClass();
-
-  masterGain = audioContext.createGain();
-
-  masterGain.gain.value = state.volume;
-
-  masterGain.connect(
-    audioContext.destination
-  );
+    return result;
 }
 
-function updateMasterVolume() {
-  if (!masterGain) {
-    return;
-  }
-
-  masterGain.gain.value =
-    clamp(state.volume, 0, 1);
+function hideElement(element) {
+    if (element) {
+        element.classList.add("hidden");
+    }
 }
 
-function createTone(
-  frequency = 220,
-  duration = 0.1,
-  type = "sine",
-  volume = 0.05
-) {
-  if (!audioContext || !masterGain) {
-    return;
-  }
-
-  const oscillator =
-    audioContext.createOscillator();
-
-  const gain =
-    audioContext.createGain();
-
-  oscillator.type = type;
-  oscillator.frequency.value = frequency;
-
-  gain.gain.setValueAtTime(
-    0.0001,
-    audioContext.currentTime
-  );
-
-  gain.gain.exponentialRampToValueAtTime(
-    Math.max(0.0001, volume),
-    audioContext.currentTime + 0.01
-  );
-
-  gain.gain.exponentialRampToValueAtTime(
-    0.0001,
-    audioContext.currentTime + duration
-  );
-
-  oscillator.connect(gain);
-  gain.connect(masterGain);
-
-  oscillator.start();
-
-  oscillator.stop(
-    audioContext.currentTime +
-    duration +
-    0.025
-  );
+function showElement(element) {
+    if (element) {
+        element.classList.remove("hidden");
+    }
 }
 
-function createNoiseBurst(
-  duration = 0.1,
-  volume = 0.05
-) {
-  if (!audioContext || !masterGain) {
-    return;
-  }
-
-  const bufferSize =
-    Math.floor(
-      audioContext.sampleRate * duration
-    );
-
-  const buffer =
-    audioContext.createBuffer(
-      1,
-      bufferSize,
-      audioContext.sampleRate
-    );
-
-  const data =
-    buffer.getChannelData(0);
-
-  for (let i = 0; i < bufferSize; i++) {
-    data[i] =
-      (Math.random() * 2 - 1) *
-      (1 - i / bufferSize);
-  }
-
-  const source =
-    audioContext.createBufferSource();
-
-  const gain =
-    audioContext.createGain();
-
-  source.buffer = buffer;
-
-  gain.gain.value = volume;
-
-  source.connect(gain);
-  gain.connect(masterGain);
-
-  source.start();
+function setText(element, text) {
+    if (element) {
+        element.textContent = text;
+    }
 }
-
-function playFootstep() {
-  if (!state.footsteps) {
-    return;
-  }
-
-  if (!state.running) {
-    return;
-  }
-
-  createTone(
-    state.sprinting ? 55 : 72,
-    0.065,
-    "triangle",
-    state.sprinting ? 0.065 : 0.045
-  );
-
-  window.setTimeout(() => {
-    createTone(
-      state.sprinting ? 42 : 55,
-      0.045,
-      "triangle",
-      0.025
-    );
-  }, 25);
-}
-
-function playButtonSound(index) {
-  createTone(
-    180 + index * 95,
-    0.12,
-    "square",
-    0.065
-  );
-
-  window.setTimeout(() => {
-    createTone(
-      300 + index * 100,
-      0.15,
-      "sine",
-      0.045
-    );
-  }, 70);
-}
-
-function playKeySound() {
-  createTone(
-    520,
-    0.12,
-    "sine",
-    0.07
-  );
-
-  window.setTimeout(() => {
-    createTone(
-      760,
-      0.2,
-      "sine",
-      0.055
-    );
-  }, 90);
-}
-
-function playGateSound() {
-  createTone(
-    75,
-    0.75,
-    "sawtooth",
-    0.07
-  );
-
-  createNoiseBurst(
-    0.45,
-    0.035
-  );
-}
-
-function playDangerSound() {
-  createTone(
-    48,
-    0.18,
-    "sine",
-    0.025
-  );
-}
-
-function playDeathSound() {
-  createTone(
-    42,
-    0.7,
-    "sawtooth",
-    0.08
-  );
-
-  createNoiseBurst(
-    0.55,
-    0.045
-  );
-}
-
-function startAmbientAudio() {
-  if (!audioContext || !masterGain) {
-    return;
-  }
-
-  if (ambientOscillator) {
-    return;
-  }
-
-  ambientOscillator =
-    audioContext.createOscillator();
-
-  ambientGain =
-    audioContext.createGain();
-
-  ambientOscillator.type = "sine";
-  ambientOscillator.frequency.value = 39;
-
-  ambientGain.gain.value = 0.009;
-
-  ambientOscillator.connect(
-    ambientGain
-  );
-
-  ambientGain.connect(
-    masterGain
-  );
-
-  ambientOscillator.start();
-}
-
-function stopAmbientAudio() {
-  if (!ambientOscillator) {
-    return;
-  }
-
-  try {
-    ambientOscillator.stop();
-  } catch {}
-
-  ambientOscillator = null;
-  ambientGain = null;
-}
-
 
 /* ============================================================
-   MATERIAL HELPERS
+   OBJECTIVE SYSTEM
    ============================================================ */
 
-function material(
-  color,
-  roughness = 0.8,
-  metalness = 0.05
-) {
-  return new THREE.MeshStandardMaterial({
-    color,
-    roughness,
-    metalness
-  });
+function setObjective(text) {
+    if (!objectiveElement) {
+        return;
+    }
+
+    objectiveElement.textContent = String(text ?? "");
+
+    objectiveElement.classList.remove("objective-update");
+
+    void objectiveElement.offsetWidth;
+
+    objectiveElement.classList.add("objective-update");
+
+    window.setTimeout(() => {
+        objectiveElement.classList.remove("objective-update");
+    }, 600);
 }
 
-function basicMaterial(
-  color
-) {
-  return new THREE.MeshBasicMaterial({
-    color
-  });
-}
+function updateObjective() {
+    if (!state.running) {
+        return;
+    }
 
+    const pressed = state.buttons.filter((button) => button.pressed).length;
+
+    if (!state.seekerActive) {
+        setObjective(
+            `Explore the house. The Seeker will begin searching in ${formatTime(
+                state.preparationRemaining
+            )}.`
+        );
+        return;
+    }
+
+    if (pressed < GAME_CONFIG.game.buttonCount) {
+        setObjective(
+            `Find the remaining buttons. ${pressed}/${GAME_CONFIG.game.buttonCount} activated.`
+        );
+        return;
+    }
+
+    if (!state.keyCollected) {
+        setObjective("All buttons are active. Find the key.");
+        return;
+    }
+
+    if (!state.gateOpen) {
+        setObjective("You have the key. Find the exit gate.");
+        return;
+    }
+
+    setObjective("The gate is open. Escape the house.");
+}
 
 /* ============================================================
-   THREE.JS INITIALIZATION
+   TIME
    ============================================================ */
 
-function initializeThree() {
-  if (renderer) {
-    return;
-  }
+function formatTime(seconds) {
+    const safe = Math.max(0, Math.ceil(seconds));
+    const minutes = Math.floor(safe / 60);
+    const remainingSeconds = safe % 60;
 
-  scene = new THREE.Scene();
+    return `${String(minutes).padStart(2, "0")}:${String(
+        remainingSeconds
+    ).padStart(2, "0")}`;
+}
 
-  scene.background =
-    new THREE.Color(0x020304);
+function updateTimerUI() {
+    if (timerElement) {
+        timerElement.textContent = formatTime(
+            state.seekerActive
+                ? Math.max(0, state.elapsed)
+                : state.preparationRemaining
+        );
+    }
+}
 
-  scene.fog =
-    new THREE.FogExp2(
-      0x020304,
-      0.010
-    );
+/* ============================================================
+   DEVICE SELECTION
+   ============================================================ */
 
-  clock =
-    new THREE.Clock();
+function createDeviceSelection() {
+    if (state.deviceScreenShown) {
+        return;
+    }
 
-  renderer =
-    new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference:
-        "high-performance"
+    state.deviceScreenShown = true;
+
+    const existing = document.getElementById("deviceSelection");
+
+    if (existing) {
+        existing.remove();
+    }
+
+    const screen = document.createElement("div");
+
+    screen.id = "deviceSelection";
+
+    screen.innerHTML = `
+        <div class="device-selection-backdrop"></div>
+
+        <div class="device-selection-panel">
+            <div class="device-selection-kicker">THE SEEKER</div>
+
+            <h2>SELECT CONTROLS</h2>
+
+            <p class="device-selection-subtitle">
+                Choose how you want to play.
+            </p>
+
+            <div class="device-selection-options">
+
+                <button class="device-option" data-device="pc">
+                    <span class="device-option-icon">⌨</span>
+                    <span class="device-option-title">PC</span>
+                    <span class="device-option-description">
+                        Keyboard + mouse
+                    </span>
+                </button>
+
+                <button class="device-option" data-device="mobile">
+                    <span class="device-option-icon">▣</span>
+                    <span class="device-option-title">MOBILE</span>
+                    <span class="device-option-description">
+                        Touch controls
+                    </span>
+                </button>
+
+            </div>
+
+            <button class="device-selection-cancel">
+                BACK
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(screen);
+
+    const options = screen.querySelectorAll(".device-option");
+
+    options.forEach((option) => {
+        option.addEventListener("click", () => {
+            const selectedDevice = option.dataset.device || "pc";
+
+            state.device = selectedDevice;
+
+            screen.remove();
+
+            startGame();
+        });
     });
 
-  renderer.setPixelRatio(
-    Math.min(
-      window.devicePixelRatio || 1,
-      2
-    )
-  );
+    const cancel = screen.querySelector(".device-selection-cancel");
 
-  renderer.setSize(
-    window.innerWidth,
-    window.innerHeight
-  );
-
-  renderer.shadowMap.enabled = true;
-
-  renderer.shadowMap.type =
-    THREE.PCFSoftShadowMap;
-
-  const oldCanvas =
-    $("gameCanvas");
-
-  if (oldCanvas) {
-    oldCanvas.replaceWith(
-      renderer.domElement
-    );
-  }
-
-  renderer.domElement.id =
-    "gameCanvas";
-
-  camera =
-    new THREE.PerspectiveCamera(
-      72,
-      window.innerWidth /
-      window.innerHeight,
-      0.05,
-      350
-    );
-
-  player =
-    new THREE.Object3D();
-
-  player.position.copy(
-    playerSpawn
-  );
-
-  scene.add(player);
-
-  player.add(camera);
-
-  camera.position.set(
-    0,
-    0,
-    0
-  );
-
-  flashlight =
-    new THREE.SpotLight(
-      0xffffff,
-      3.2,
-      30,
-      Math.PI / 7,
-      0.42,
-      1.2
-    );
-
-  flashlight.position.set(
-    0,
-    0,
-    0
-  );
-
-  flashlightTarget =
-    new THREE.Object3D();
-
-  flashlightTarget.position.set(
-    0,
-    0,
-    -10
-  );
-
-  player.add(
-    flashlight
-  );
-
-  player.add(
-    flashlightTarget
-  );
-
-  flashlight.target =
-    flashlightTarget;
-
-  buildLighting();
-  buildWorld();
-  buildDemon();
-  buildMinimap();
-
-  window.addEventListener(
-    "resize",
-    resizeRenderer
-  );
+    cancel?.addEventListener("click", () => {
+        screen.remove();
+        state.deviceScreenShown = false;
+    });
 }
 
+/* ============================================================
+   RENDERER
+   ============================================================ */
+
+function createRenderer() {
+    renderer = new THREE.WebGLRenderer({
+        canvas: gameCanvas || undefined,
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance"
+    });
+
+    renderer.setPixelRatio(
+        Math.min(
+            window.devicePixelRatio || 1,
+            GAME_CONFIG.graphics.pixelRatioLimit
+        )
+    );
+
+    renderer.setSize(
+        window.innerWidth,
+        window.innerHeight,
+        false
+    );
+
+    renderer.shadowMap.enabled = GAME_CONFIG.graphics.shadows;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.72;
+
+    return renderer;
+}
+
+/* ============================================================
+   SCENE
+   ============================================================ */
+
+function createScene() {
+    scene = new THREE.Scene();
+
+    scene.background = new THREE.Color(GAME_CONFIG.colors.black);
+
+    scene.fog = new THREE.Fog(
+        GAME_CONFIG.colors.black,
+        GAME_CONFIG.graphics.fogNear,
+        GAME_CONFIG.graphics.fogFar
+    );
+
+    clock = new THREE.Clock();
+
+    worldGroup = new THREE.Group();
+    environmentGroup = new THREE.Group();
+    collisionGroup = new THREE.Group();
+    interactableGroup = new THREE.Group();
+    seekerGroup = new THREE.Group();
+    effectGroup = new THREE.Group();
+
+    worldGroup.name = "World";
+
+    scene.add(worldGroup);
+
+    worldGroup.add(environmentGroup);
+    worldGroup.add(collisionGroup);
+    worldGroup.add(interactableGroup);
+    worldGroup.add(seekerGroup);
+    worldGroup.add(effectGroup);
+}
+
+/* ============================================================
+   CAMERA
+   ============================================================ */
+
+function createCamera() {
+    camera = new THREE.PerspectiveCamera(
+        74,
+        window.innerWidth / window.innerHeight,
+        0.05,
+        500
+    );
+
+    camera.position.set(
+        GAME_CONFIG.player.start.x,
+        GAME_CONFIG.player.start.y,
+        GAME_CONFIG.player.start.z
+    );
+
+    camera.rotation.order = "YXZ";
+
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+}
 
 /* ============================================================
    LIGHTING
    ============================================================ */
 
-function buildLighting() {
-  ambientLight =
-    new THREE.HemisphereLight(
-      0x50627b,
-      0x030303,
-      0.28
+function createLighting() {
+    const ambient = new THREE.AmbientLight(
+        0x8890a0,
+        0.22
     );
 
-  scene.add(
-    ambientLight
-  );
+    scene.add(ambient);
 
-  const moon =
-    new THREE.DirectionalLight(
-      0x8ca0c0,
-      0.2
+    const moon = new THREE.DirectionalLight(
+        0x9ca8c4,
+        0.18
     );
 
-  moon.position.set(
-    -40,
-    55,
-    -30
-  );
+    moon.position.set(
+        -40,
+        70,
+        30
+    );
 
-  moon.castShadow = true;
+    moon.castShadow = true;
 
-  moon.shadow.mapSize.width = 1024;
-  moon.shadow.mapSize.height = 1024;
+    moon.shadow.mapSize.width = 1024;
+    moon.shadow.mapSize.height = 1024;
 
-  moon.shadow.camera.left = -90;
-  moon.shadow.camera.right = 90;
-  moon.shadow.camera.top = 90;
-  moon.shadow.camera.bottom = -90;
+    moon.shadow.camera.near = 1;
+    moon.shadow.camera.far = 180;
 
-  scene.add(moon);
+    moon.shadow.camera.left = -100;
+    moon.shadow.camera.right = 100;
+    moon.shadow.camera.top = 100;
+    moon.shadow.camera.bottom = -100;
 
-  for (
-    let x = -60;
-    x <= 60;
-    x += 30
-  ) {
-    for (
-      let z = -60;
-      z <= 60;
-      z += 30
-    ) {
-      const light =
-        new THREE.PointLight(
-          0x26384d,
-          0.19,
-          24,
-          2
-        );
+    scene.add(moon);
 
-      light.position.set(
-        x,
-        5.8,
-        z
-      );
+    flashlight = new THREE.SpotLight(
+        0xf2f2e8,
+        9,
+        34,
+        Math.PI / 7,
+        0.65,
+        1.25
+    );
 
-      scene.add(light);
-    }
-  }
+    flashlight.castShadow = true;
+
+    flashlight.shadow.mapSize.width = 512;
+    flashlight.shadow.mapSize.height = 512;
+
+    flashlight.shadow.camera.near = 0.1;
+    flashlight.shadow.camera.far = 40;
+
+    flashlightTarget = new THREE.Object3D();
+
+    scene.add(flashlight);
+    scene.add(flashlightTarget);
+
+    flashlight.target = flashlightTarget;
 }
-
 
 /* ============================================================
-   WORLD
+   MATERIAL HELPERS
    ============================================================ */
 
-function buildWorld() {
-  createFloor();
-  createOuterWalls();
-  createMazeWalls();
-  createRooms();
-  createDecorations();
-  createGate();
-
-  createButton(
-    -57,
-    1,
-    -54,
-    0
-  );
-
-  createButton(
-    56,
-    1,
-    -39,
-    1
-  );
-
-  createButton(
-    48,
-    1,
-    49,
-    2
-  );
-
-  createKey(
-    0,
-    1.4,
-    57
-  );
+function material(color, options = {}) {
+    return new THREE.MeshStandardMaterial({
+        color,
+        roughness: options.roughness ?? 0.82,
+        metalness: options.metalness ?? 0,
+        emissive: options.emissive ?? 0x000000,
+        emissiveIntensity: options.emissiveIntensity ?? 0
+    });
 }
 
-function createFloor() {
-  const floor =
-    new THREE.Mesh(
-      new THREE.PlaneGeometry(
-        CONFIG.world.width,
-        CONFIG.world.depth
-      ),
-      material(
-        0x090c10,
-        1,
-        0
-      )
-    );
-
-  floor.rotation.x =
-    -Math.PI / 2;
-
-  floor.position.y =
-    CONFIG.world.floorY;
-
-  floor.receiveShadow = true;
-
-  scene.add(floor);
-}
-
-function addWall(
-  x,
-  y,
-  z,
-  width,
-  height,
-  depth,
-  color = 0x11151a
+function createBox(
+    width,
+    height,
+    depth,
+    color,
+    position,
+    options = {}
 ) {
-  const wall =
-    new THREE.Mesh(
-      new THREE.BoxGeometry(
+    const geometry = new THREE.BoxGeometry(
         width,
         height,
         depth
-      ),
-      material(
-        color,
-        0.88,
-        0.02
-      )
     );
 
-  wall.position.set(
-    x,
-    y,
-    z
-  );
-
-  wall.castShadow = true;
-  wall.receiveShadow = true;
-
-  scene.add(wall);
-
-  walls.push(wall);
-
-  return wall;
-}
-
-function createOuterWalls() {
-  const halfW =
-    CONFIG.world.width / 2;
-
-  const halfD =
-    CONFIG.world.depth / 2;
-
-  const h =
-    CONFIG.world.wallHeight;
-
-  const t = 1.4;
-
-  addWall(
-    0,
-    h / 2,
-    -halfD,
-    CONFIG.world.width,
-    h,
-    t
-  );
-
-  addWall(
-    0,
-    h / 2,
-    halfD,
-    CONFIG.world.width,
-    h,
-    t
-  );
-
-  addWall(
-    -halfW,
-    h / 2,
-    0,
-    t,
-    h,
-    CONFIG.world.depth
-  );
-
-  addWall(
-    halfW,
-    h / 2,
-    0,
-    t,
-    h,
-    CONFIG.world.depth
-  );
-}
-
-function createMazeWalls() {
-  const h =
-    CONFIG.world.wallHeight;
-
-  const layout = [
-    [-38, -52, 1.4, h, 42],
-    [38, -52, 1.4, h, 42],
-
-    [-38, 52, 1.4, h, 42],
-    [38, 52, 1.4, h, 42],
-
-    [-52, -22, 42, h, 1.4],
-    [-52, 22, 42, h, 1.4],
-
-    [52, -22, 42, h, 1.4],
-    [52, 22, 42, h, 1.4],
-
-    [-10, -28, 1.4, h, 34],
-    [12, 30, 1.4, h, 32],
-
-    [-24, 8, 26, h, 1.4],
-    [24, -8, 26, h, 1.4],
-
-    [0, 0, 20, h, 1.4],
-
-    [-5, 48, 32, h, 1.4],
-    [5, -48, 32, h, 1.4],
-
-    [-48, -2, 1.4, h, 24],
-    [48, 2, 1.4, h, 24],
-
-    [-22, -42, 26, h, 1.4],
-    [22, 42, 26, h, 1.4]
-  ];
-
-  for (
-    const entry of layout
-  ) {
-    addWall(
-      entry[0],
-      h / 2,
-      entry[1],
-      entry[2],
-      entry[3],
-      entry[4]
-    );
-  }
-}
-
-function createRooms() {
-  const roomPositions = [
-    [-62, -62],
-    [62, -62],
-    [-62, 62],
-    [62, 62],
-    [-62, 0],
-    [62, 0],
-    [0, -62],
-    [0, 62]
-  ];
-
-  for (
-    const [x, z]
-    of roomPositions
-  ) {
-    const platform =
-      new THREE.Mesh(
-        new THREE.BoxGeometry(
-          8,
-          0.2,
-          8
-        ),
-        material(
-          0x11161c,
-          0.95
-        )
-      );
-
-    platform.position.set(
-      x,
-      0.1,
-      z
+    const mesh = new THREE.Mesh(
+        geometry,
+        material(color, options)
     );
 
-    platform.receiveShadow =
-      true;
+    mesh.position.copy(position);
 
-    scene.add(platform);
+    mesh.castShadow = options.castShadow !== false;
+    mesh.receiveShadow = options.receiveShadow !== false;
 
-    decorations.push(
-      platform
-    );
-  }
+    environmentGroup.add(mesh);
+
+    return mesh;
 }
-
 
 /* ============================================================
-   ENVIRONMENT DECORATION
+   COLLISION SYSTEM
    ============================================================ */
 
-function createDecorations() {
-  for (
-    let i = 0;
-    i < 85;
-    i++
-  ) {
-    const x =
-      randomRange(
-        -68,
-        68
-      );
-
-    const z =
-      randomRange(
-        -68,
-        68
-      );
-
-    if (
-      Math.abs(x) < 7 &&
-      Math.abs(z - 62) < 8
-    ) {
-      continue;
-    }
-
-    const type =
-      i % 4;
-
-    if (type === 0) {
-      createCrate(
-        x,
-        z
-      );
-    } else if (type === 1) {
-      createPipe(
-        x,
-        z
-      );
-    } else if (type === 2) {
-      createPillar(
-        x,
-        z
-      );
-    } else {
-      createSmallLight(
-        x,
-        z
-      );
-    }
-  }
-}
-
-function createCrate(
-  x,
-  z
-) {
-  const size =
-    randomRange(
-      0.7,
-      1.8
-    );
-
-  const crate =
-    new THREE.Mesh(
-      new THREE.BoxGeometry(
-        size,
-        size,
-        size
-      ),
-      material(
-        0x20252b,
-        0.95
-      )
-    );
-
-  crate.position.set(
+function addCollisionBox(
     x,
-    size / 2,
-    z
-  );
+    y,
+    z,
+    width,
+    height,
+    depth,
+    options = {}
+) {
+    const box = new THREE.Box3();
 
-  crate.rotation.y =
-    randomRange(
-      -0.4,
-      0.4
+    box.min.set(
+        x - width / 2,
+        y - height / 2,
+        z - depth / 2
     );
 
-  crate.castShadow = true;
-  crate.receiveShadow = true;
+    box.max.set(
+        x + width / 2,
+        y + height / 2,
+        z + depth / 2
+    );
 
-  scene.add(crate);
+    collisionBoxes.push({
+        box,
+        solid: options.solid !== false,
+        name: options.name || "wall"
+    });
 
-  decorations.push(
-    crate
-  );
+    return box;
 }
 
-function createPipe(
-  x,
-  z
+function addWall(
+    x,
+    y,
+    z,
+    width,
+    height,
+    depth,
+    color = GAME_CONFIG.colors.wall,
+    options = {}
 ) {
-  const height =
-    randomRange(
-      1.5,
-      4
-    );
-
-  const pipe =
-    new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        0.12,
-        0.12,
+    createBox(
+        width,
         height,
-        10
-      ),
-      material(
-        0x2a3037,
-        0.7,
-        0.15
-      )
+        depth,
+        color,
+        new THREE.Vector3(x, y, z),
+        options
     );
 
-  pipe.position.set(
-    x,
-    height / 2,
-    z
-  );
-
-  pipe.castShadow = true;
-
-  scene.add(pipe);
-
-  decorations.push(
-    pipe
-  );
+    addCollisionBox(
+        x,
+        y,
+        z,
+        width,
+        height,
+        depth,
+        {
+            name: options.name || "wall"
+        }
+    );
 }
 
-function createPillar(
-  x,
-  z
+/* ============================================================
+   FLOOR
+   ============================================================ */
+
+function createFloor() {
+    const floorGeometry = new THREE.PlaneGeometry(
+        GAME_CONFIG.world.floorSize,
+        GAME_CONFIG.world.floorSize,
+        20,
+        20
+    );
+
+    const floorMaterial = new THREE.MeshStandardMaterial({
+        color: GAME_CONFIG.colors.floor,
+        roughness: 0.95,
+        metalness: 0.02
+    });
+
+    const floor = new THREE.Mesh(
+        floorGeometry,
+        floorMaterial
+    );
+
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0;
+
+    floor.receiveShadow = true;
+
+    environmentGroup.add(floor);
+
+    const ceilingGeometry = new THREE.PlaneGeometry(
+        GAME_CONFIG.world.floorSize,
+        GAME_CONFIG.world.floorSize
+    );
+
+    const ceiling = new THREE.Mesh(
+        ceilingGeometry,
+        new THREE.MeshStandardMaterial({
+            color: GAME_CONFIG.colors.ceiling,
+            roughness: 1
+        })
+    );
+
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.y = GAME_CONFIG.world.wallHeight;
+
+    ceiling.receiveShadow = true;
+
+    environmentGroup.add(ceiling);
+}
+
+/* ============================================================
+   HOUSE STRUCTURE
+   ============================================================ */
+
+function buildOuterWalls() {
+    const half = GAME_CONFIG.world.floorSize / 2;
+    const h = GAME_CONFIG.world.wallHeight;
+    const t = GAME_CONFIG.world.wallThickness;
+
+    addWall(
+        0,
+        h / 2,
+        -half,
+        GAME_CONFIG.world.floorSize,
+        h,
+        t
+    );
+
+    addWall(
+        0,
+        h / 2,
+        half,
+        GAME_CONFIG.world.floorSize,
+        h,
+        t
+    );
+
+    addWall(
+        -half,
+        h / 2,
+        0,
+        t,
+        h,
+        GAME_CONFIG.world.floorSize
+    );
+
+    addWall(
+        half,
+        h / 2,
+        0,
+        t,
+        h,
+        GAME_CONFIG.world.floorSize
+    );
+}
+
+function buildMainRooms() {
+    const h = GAME_CONFIG.world.wallHeight;
+    const t = GAME_CONFIG.world.wallThickness;
+
+    /*
+       Large interior layout.
+
+       The map is intentionally much larger than a tiny
+       single-room horror map.
+
+       Approximate areas:
+
+       NORTH
+       ------------------------------------------------
+       | Bedroom | Hall | Storage | Office            |
+       ------------------------------------------------
+       | Hall            | Central Hall | Workshop    |
+       ------------------------------------------------
+       | Kitchen         | Living       | Basement    |
+       ------------------------------------------------
+       | Side Hall       | Entrance     | Exit        |
+       ------------------------------------------------
+       SOUTH
+    */
+
+    addWall(
+        -50,
+        h / 2,
+        -32,
+        45,
+        h,
+        t
+    );
+
+    addWall(
+        50,
+        h / 2,
+        -32,
+        45,
+        h,
+        t
+    );
+
+    addWall(
+        -50,
+        h / 2,
+        32,
+        45,
+        h,
+        t
+    );
+
+    addWall(
+        50,
+        h / 2,
+        32,
+        45,
+        h,
+        t
+    );
+
+    addWall(
+        -30,
+        h / 2,
+        -58,
+        t,
+        h,
+        44
+    );
+
+    addWall(
+        30,
+        h / 2,
+        -58,
+        t,
+        h,
+        44
+    );
+
+    addWall(
+        -30,
+        h / 2,
+        58,
+        t,
+        h,
+        44
+    );
+
+    addWall(
+        30,
+        h / 2,
+        58,
+        t,
+        h,
+        44
+    );
+
+    addWall(
+        -70,
+        h / 2,
+        0,
+        30,
+        h,
+        t
+    );
+
+    addWall(
+        70,
+        h / 2,
+        0,
+        30,
+        h,
+        t
+    );
+
+    addWall(
+        0,
+        h / 2,
+        18,
+        44,
+        h,
+        t
+    );
+
+    addWall(
+        0,
+        h / 2,
+        -18,
+        44,
+        h,
+        t
+    );
+
+    /*
+       Smaller divider walls.
+    */
+
+    addWall(
+        -58,
+        h / 2,
+        -62,
+        t,
+        h,
+        30
+    );
+
+    addWall(
+        -58,
+        h / 2,
+        -12,
+        t,
+        h,
+        28
+    );
+
+    addWall(
+        58,
+        h / 2,
+        -62,
+        t,
+        h,
+        30
+    );
+
+    addWall(
+        58,
+        h / 2,
+        -12,
+        t,
+        h,
+        28
+    );
+
+    addWall(
+        -58,
+        h / 2,
+        62,
+        t,
+        h,
+        30
+    );
+
+    addWall(
+        58,
+        h / 2,
+        62,
+        t,
+        h,
+        30
+    );
+
+    addWall(
+        -76,
+        h / 2,
+        -45,
+        18,
+        h,
+        t
+    );
+
+    addWall(
+        76,
+        h / 2,
+        -45,
+        18,
+        h,
+        t
+    );
+
+    addWall(
+        -76,
+        h / 2,
+        45,
+        18,
+        h,
+        t
+    );
+
+    addWall(
+        76,
+        h / 2,
+        45,
+        18,
+        h,
+        t
+    );
+}
+
+/* ============================================================
+   DECORATION
+   ============================================================ */
+
+function createTable(x, y, z, width = 3.5, depth = 2) {
+    const group = new THREE.Group();
+
+    const top = new THREE.Mesh(
+        new THREE.BoxGeometry(width, 0.22, depth),
+        material(GAME_CONFIG.colors.wood)
+    );
+
+    top.position.y = 1.25;
+
+    group.add(top);
+
+    const legPositions = [
+        [-width / 2 + 0.2, 0.6, -depth / 2 + 0.2],
+        [width / 2 - 0.2, 0.6, -depth / 2 + 0.2],
+        [-width / 2 + 0.2, 0.6, depth / 2 - 0.2],
+        [width / 2 - 0.2, 0.6, depth / 2 - 0.2]
+    ];
+
+    for (const [lx, ly, lz] of legPositions) {
+        const leg = new THREE.Mesh(
+            new THREE.BoxGeometry(0.18, 1.2, 0.18),
+            material(GAME_CONFIG.colors.wood)
+        );
+
+        leg.position.set(lx, ly, lz);
+
+        group.add(leg);
+    }
+
+    group.position.set(x, y, z);
+
+    group.traverse((object) => {
+        if (object.isMesh) {
+            object.castShadow = true;
+            object.receiveShadow = true;
+        }
+    });
+
+    environmentGroup.add(group);
+
+    return group;
+}
+
+function createCrate(x, y, z, size = 2) {
+    const crate = createBox(
+        size,
+        size,
+        size,
+        0x3a2b20,
+        new THREE.Vector3(x, y + size / 2, z),
+        {
+            roughness: 0.95
+        }
+    );
+
+    crate.userData.crate = true;
+
+    addCollisionBox(
+        x,
+        y + size / 2,
+        z,
+        size,
+        size,
+        size,
+        {
+            name: "crate"
+        }
+    );
+
+    return crate;
+}
+
+function createFurniture() {
+    createTable(-54, 0, -54, 4, 2);
+    createTable(53, 0, -54, 4, 2);
+    createTable(-54, 0, 52, 3, 2);
+    createTable(53, 0, 53, 5, 2);
+
+    createCrate(-68, 0, -65, 2.5);
+    createCrate(-64, 0, -67, 2);
+    createCrate(67, 0, -66, 2.5);
+    createCrate(70, 0, -63, 2);
+
+    createCrate(-67, 0, 66, 2);
+    createCrate(66, 0, 65, 2.5);
+
+    createBench(-10, 0, 9);
+    createBench(12, 0, 9);
+    createBench(-12, 0, -9);
+    createBench(12, 0, -9);
+}
+
+function createBench(x, y, z) {
+    const group = new THREE.Group();
+
+    const seat = new THREE.Mesh(
+        new THREE.BoxGeometry(4, 0.3, 1),
+        material(GAME_CONFIG.colors.wood)
+    );
+
+    seat.position.y = 1;
+
+    group.add(seat);
+
+    for (const side of [-1, 1]) {
+        const leg = new THREE.Mesh(
+            new THREE.BoxGeometry(0.25, 1, 0.25),
+            material(GAME_CONFIG.colors.wood)
+        );
+
+        leg.position.set(
+            side * 1.4,
+            0.5,
+            0
+        );
+
+        group.add(leg);
+    }
+
+    group.position.set(x, y, z);
+
+    group.traverse((object) => {
+        if (object.isMesh) {
+            object.castShadow = true;
+            object.receiveShadow = true;
+        }
+    });
+
+    environmentGroup.add(group);
+}
+
+/* ============================================================
+   WINDOWS
+   ============================================================ */
+
+function createWindow(x, y, z, rotationY = 0) {
+    const frameMaterial = material(0x252525, {
+        roughness: 0.55
+    });
+
+    const glassMaterial = new THREE.MeshStandardMaterial({
+        color: 0x263a48,
+        roughness: 0.2,
+        metalness: 0.1,
+        emissive: 0x071016,
+        emissiveIntensity: 0.35,
+        transparent: true,
+        opacity: 0.72
+    });
+
+    const group = new THREE.Group();
+
+    const glass = new THREE.Mesh(
+        new THREE.BoxGeometry(3.5, 3, 0.12),
+        glassMaterial
+    );
+
+    group.add(glass);
+
+    const vertical = new THREE.Mesh(
+        new THREE.BoxGeometry(0.14, 3.3, 0.2),
+        frameMaterial
+    );
+
+    group.add(vertical);
+
+    const horizontal = new THREE.Mesh(
+        new THREE.BoxGeometry(3.7, 0.14, 0.2),
+        frameMaterial
+    );
+
+    group.add(horizontal);
+
+    group.position.set(x, y, z);
+    group.rotation.y = rotationY;
+
+    environmentGroup.add(group);
+}
+
+function createWindows() {
+    createWindow(-89, 4.1, -35, Math.PI / 2);
+    createWindow(-89, 4.1, 35, Math.PI / 2);
+
+    createWindow(89, 4.1, -35, -Math.PI / 2);
+    createWindow(89, 4.1, 35, -Math.PI / 2);
+
+    createWindow(-42, 4.1, -89, 0);
+    createWindow(42, 4.1, -89, 0);
+
+    createWindow(-42, 4.1, 89, Math.PI);
+    createWindow(42, 4.1, 89, Math.PI);
+}
+
+/* ============================================================
+   LIGHTS
+   ============================================================ */
+
+function createRoomLight(
+    x,
+    y,
+    z,
+    color = 0xffd8a0,
+    intensity = 0.35
 ) {
-  const pillar =
-    new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        0.35,
-        0.42,
-        randomRange(
-          2.5,
-          6
+    const light = new THREE.PointLight(
+        color,
+        intensity,
+        18
+    );
+
+    light.position.set(x, y, z);
+
+    light.castShadow = false;
+
+    environmentGroup.add(light);
+
+    const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 12, 8),
+        new THREE.MeshStandardMaterial({
+            color: 0xffd8a0,
+            emissive: color,
+            emissiveIntensity: 1.5
+        })
+    );
+
+    bulb.position.copy(light.position);
+
+    environmentGroup.add(bulb);
+
+    return light;
+}
+
+function createHouseLights() {
+    const positions = [
+        [-65, 6, -65],
+        [-25, 6, -65],
+        [25, 6, -65],
+        [65, 6, -65],
+
+        [-65, 6, -25],
+        [-25, 6, -25],
+        [25, 6, -25],
+        [65, 6, -25],
+
+        [-65, 6, 25],
+        [-25, 6, 25],
+        [25, 6, 25],
+        [65, 6, 25],
+
+        [-65, 6, 65],
+        [-25, 6, 65],
+        [25, 6, 65],
+        [65, 6, 65]
+    ];
+
+    positions.forEach((position, index) => {
+        const intensity =
+            index % 5 === 0
+                ? 0.08
+                : 0.22;
+
+        createRoomLight(
+            position[0],
+            position[1],
+            position[2],
+            0xffd6a0,
+            intensity
+        );
+    });
+}
+
+/* ============================================================
+   EXIT GATE
+   ============================================================ */
+
+function createGate() {
+    gate = new THREE.Group();
+
+    const gateMaterial = material(
+        GAME_CONFIG.colors.metal,
+        {
+            roughness: 0.5,
+            metalness: 0.75
+        }
+    );
+
+    const left = new THREE.Mesh(
+        new THREE.BoxGeometry(
+            0.4,
+            5.5,
+            5
         ),
+        gateMaterial
+    );
+
+    left.position.set(-2.5, 2.75, 0);
+
+    const right = new THREE.Mesh(
+        new THREE.BoxGeometry(
+            0.4,
+            5.5,
+            5
+        ),
+        gateMaterial
+    );
+
+    right.position.set(2.5, 2.75, 0);
+
+    const top = new THREE.Mesh(
+        new THREE.BoxGeometry(
+            5.4,
+            0.4,
+            5
+        ),
+        gateMaterial
+    );
+
+    top.position.set(0, 5.35, 0);
+
+    gate.add(left);
+    gate.add(right);
+    gate.add(top);
+
+    gate.position.set(0, 0, -87);
+
+    environmentGroup.add(gate);
+
+    addCollisionBox(
+        0,
+        2.75,
+        -87,
+        5.5,
+        5.5,
+        1,
+        {
+            name: "exit-gate"
+        }
+    );
+
+    gateLight = new THREE.PointLight(
+        GAME_CONFIG.colors.red,
+        1.2,
         12
-      ),
-      material(
-        0x181d23,
-        0.9
-      )
     );
 
-  pillar.position.set(
-    x,
-    pillar.geometry.parameters.height / 2,
-    z
-  );
-
-  pillar.castShadow = true;
-
-  scene.add(pillar);
-
-  decorations.push(
-    pillar
-  );
-}
-
-function createSmallLight(
-  x,
-  z
-) {
-  const light =
-    new THREE.PointLight(
-      0x32465d,
-      0.28,
-      9
+    gateLight.position.set(
+        0,
+        4.4,
+        -84
     );
 
-  light.position.set(
-    x,
-    randomRange(
-      2,
-      5
-    ),
-    z
-  );
+    environmentGroup.add(gateLight);
 
-  scene.add(light);
+    const exitSign = new THREE.Mesh(
+        new THREE.BoxGeometry(
+            3.2,
+            0.8,
+            0.15
+        ),
+        new THREE.MeshStandardMaterial({
+            color: 0x250707,
+            emissive: GAME_CONFIG.colors.red,
+            emissiveIntensity: 0.45
+        })
+    );
 
-  decorations.push(
-    light
-  );
+    exitSign.position.set(
+        0,
+        6.4,
+        -84.2
+    );
+
+    environmentGroup.add(exitSign);
 }
 
+function openGate() {
+    if (!gate || state.gateOpen) {
+        return;
+    }
+
+    state.gateOpen = true;
+
+    const duration = 1.8;
+    const start = performance.now();
+
+    const left = gate.children[0];
+    const right = gate.children[1];
+
+    const startLeft = left.position.x;
+    const startRight = right.position.x;
+
+    const animateGate = (now) => {
+        const progress = clamp(
+            (now - start) / (duration * 1000),
+            0,
+            1
+        );
+
+        const eased = smoothstep(progress);
+
+        left.position.x = lerp(
+            startLeft,
+            startLeft - 3.5,
+            eased
+        );
+
+        right.position.x = lerp(
+            startRight,
+            startRight + 3.5,
+            eased
+        );
+
+        if (progress < 1) {
+            requestAnimationFrame(animateGate);
+        } else {
+            removeCollisionByName("exit-gate");
+        }
+    };
+
+    requestAnimationFrame(animateGate);
+
+    gateLight.color.setHex(
+        GAME_CONFIG.colors.green
+    );
+
+    gateLight.intensity = 1.7;
+
+    playTone(440, 0.18, "sine");
+    setTimeout(() => {
+        playTone(660, 0.25, "sine");
+    }, 130);
+
+    setObjective("The gate is open. Escape the house.");
+}
+
+function removeCollisionByName(name) {
+    for (let i = collisionBoxes.length - 1; i >= 0; i--) {
+        if (collisionBoxes[i].name === name) {
+            collisionBoxes.splice(i, 1);
+        }
+    }
+}
 
 /* ============================================================
    BUTTONS
    ============================================================ */
 
-function createButton(
-  x,
-  y,
-  z,
-  index
-) {
-  const group =
-    new THREE.Group();
+function createButton(id, position) {
+    const group = new THREE.Group();
 
-  const base =
-    new THREE.Mesh(
-      new THREE.BoxGeometry(
-        2.3,
-        1.1,
-        2.3
-      ),
-      material(
-        0x292f35,
-        0.85
-      )
+    const base = new THREE.Mesh(
+        new THREE.BoxGeometry(0.9, 0.3, 0.9),
+        material(0x181818, {
+            roughness: 0.6,
+            metalness: 0.3
+        })
     );
 
-  base.castShadow = true;
+    base.position.y = 0.15;
 
-  const button =
-    new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        0.62,
-        0.62,
-        0.4,
-        24
-      ),
-      material(
-        0x8e2525,
-        0.65
-      )
+    group.add(base);
+
+    const buttonMaterial = new THREE.MeshStandardMaterial({
+        color: GAME_CONFIG.colors.red,
+        emissive: GAME_CONFIG.colors.red,
+        emissiveIntensity: 0.8,
+        roughness: 0.35
+    });
+
+    const buttonMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(
+            0.27,
+            0.27,
+            0.2,
+            24
+        ),
+        buttonMaterial
     );
 
-  button.rotation.x =
-    Math.PI / 2;
+    buttonMesh.rotation.x = Math.PI / 2;
+    buttonMesh.position.set(
+        0,
+        0.42,
+        0
+    );
 
-  button.position.y =
-    0.65;
+    group.add(buttonMesh);
 
-  button.castShadow = true;
+    const glow = new THREE.PointLight(
+        GAME_CONFIG.colors.red,
+        0.7,
+        5
+    );
 
-  group.add(
-    base,
-    button
-  );
+    glow.position.set(
+        0,
+        0.5,
+        0
+    );
 
-  group.position.set(
-    x,
-    y,
-    z
-  );
+    group.add(glow);
 
-  scene.add(group);
+    group.position.copy(position);
 
-  interactables.push({
-    type: "button",
-    index,
-    object: group,
-    button,
-    range:
-      CONFIG.interaction.buttonDistance
-  });
+    group.userData.buttonId = id;
+    group.userData.buttonMesh = buttonMesh;
+    group.userData.glow = glow;
+
+    interactableGroup.add(group);
+
+    interactables.push({
+        type: "button",
+        id,
+        object: group,
+        position: group.position,
+        label: `Button ${id}`,
+        used: false
+    });
+
+    return group;
 }
 
+function createButtons() {
+    state.buttons[0].position.set(
+        -52,
+        0,
+        -40
+    );
+
+    state.buttons[1].position.set(
+        50,
+        0,
+        -18
+    );
+
+    state.buttons[2].position.set(
+        4,
+        0,
+        -68
+    );
+
+    state.buttons.forEach((button) => {
+        createButton(
+            button.id,
+            button.position
+        );
+    });
+}
+
+function activateButton(id) {
+    const data = state.buttons.find(
+        (button) => button.id === id
+    );
+
+    if (!data || data.pressed) {
+        return;
+    }
+
+    data.pressed = true;
+
+    const interactable = interactables.find(
+        (item) =>
+            item.type === "button" &&
+            item.id === id
+    );
+
+    if (interactable) {
+        interactable.used = true;
+
+        const mesh = interactable.object.userData.buttonMesh;
+        const glow = interactable.object.userData.glow;
+
+        if (mesh) {
+            mesh.material.color.setHex(
+                GAME_CONFIG.colors.green
+            );
+
+            mesh.material.emissive.setHex(
+                GAME_CONFIG.colors.green
+            );
+
+            mesh.material.emissiveIntensity = 1.4;
+
+            mesh.position.z = 0.09;
+        }
+
+        if (glow) {
+            glow.color.setHex(
+                GAME_CONFIG.colors.green
+            );
+
+            glow.intensity = 1.3;
+        }
+    }
+
+    updateButtonUI();
+
+    playTone(540, 0.1, "square");
+
+    setTimeout(() => {
+        playTone(780, 0.16, "sine");
+    }, 100);
+
+    showToast(`Button ${id} activated.`);
+
+    createNoisePulse(
+        data.position,
+        9
+    );
+
+    const pressedCount = state.buttons.filter(
+        (button) => button.pressed
+    ).length;
+
+    if (
+        pressedCount >=
+        GAME_CONFIG.game.buttonCount
+    ) {
+        createKey();
+        setObjective("All buttons are active. Find the key.");
+        showToast("Something unlocked somewhere in the house.");
+    } else {
+        updateObjective();
+    }
+}
+
+/* ============================================================
+   BUTTON UI
+   ============================================================ */
+
+function updateButtonUI() {
+    const elements = [
+        button1,
+        button2,
+        button3
+    ];
+
+    elements.forEach((element, index) => {
+        if (!element) {
+            return;
+        }
+
+        const pressed =
+            state.buttons[index]?.pressed === true;
+
+        element.classList.toggle(
+            "active",
+            pressed
+        );
+
+        element.classList.toggle(
+            "complete",
+            pressed
+        );
+
+        element.textContent = pressed
+            ? "ACTIVE"
+            : "OFF";
+    });
+}
 
 /* ============================================================
    KEY
    ============================================================ */
 
-function createKey(
-  x,
-  y,
-  z
-) {
-  const group =
-    new THREE.Group();
+let keyObject = null;
 
-  const gold =
-    material(
-      0xc9a227,
-      0.38,
-      0.5
-    );
+function createKey() {
+    if (keyObject) {
+        return;
+    }
 
-  const ring =
-    new THREE.Mesh(
-      new THREE.TorusGeometry(
-        0.55,
-        0.15,
-        12,
-        28
-      ),
-      gold
-    );
+    const keyGroup = new THREE.Group();
 
-  const shaft =
-    new THREE.Mesh(
-      new THREE.BoxGeometry(
-        0.2,
-        0.2,
-        1.7
-      ),
-      gold
-    );
-
-  shaft.position.z =
-    0.82;
-
-  const tooth =
-    new THREE.Mesh(
-      new THREE.BoxGeometry(
-        0.4,
-        0.2,
-        0.38
-      ),
-      gold
-    );
-
-  tooth.position.set(
-    0.18,
-    0,
-    1.45
-  );
-
-  group.add(
-    ring,
-    shaft,
-    tooth
-  );
-
-  group.position.set(
-    x,
-    y,
-    z
-  );
-
-  group.visible = false;
-
-  scene.add(group);
-
-  pickups.push({
-    type: "key",
-    object: group,
-    range:
-      CONFIG.interaction.keyDistance
-  });
-}
-
-
-/* ============================================================
-   GATE
-   ============================================================ */
-
-function createGate() {
-  gate =
-    new THREE.Group();
-
-  const gateMaterial =
-    material(
-      0x262c33,
-      0.78,
-      0.25
-    );
-
-  const left =
-    new THREE.Mesh(
-      new THREE.BoxGeometry(
-        1.5,
-        7,
-        2
-      ),
-      gateMaterial
-    );
-
-  left.position.x =
-    -5;
-
-  const right =
-    left.clone();
-
-  right.position.x =
-    5;
-
-  const top =
-    new THREE.Mesh(
-      new THREE.BoxGeometry(
-        11,
-        1.5,
-        2
-      ),
-      gateMaterial
-    );
-
-  top.position.y =
-    3.8;
-
-  gateBars =
-    new THREE.Mesh(
-      new THREE.BoxGeometry(
-        9.5,
-        6.2,
-        1.1
-      ),
-      material(
-        0x3b424a,
-        0.72,
-        0.35
-      )
-    );
-
-  gateBars.position.y =
-    0.4;
-
-  gate.add(
-    left,
-    right,
-    top,
-    gateBars
-  );
-
-  gate.position.set(
-    0,
-    3.5,
-    -68
-  );
-
-  scene.add(gate);
-
-  interactables.push({
-    type: "gate",
-    object: gate,
-    range:
-      CONFIG.interaction.gateDistance
-  });
-}
-
-function openGate() {
-  if (state.gateOpen) {
-    return;
-  }
-
-  state.gateOpen = true;
-
-  if (gateBars) {
-    gateBars.visible = false;
-  }
-
-  playGateSound();
-
-  setObjective(
-    "Escape. Get through the gate."
-  );
-
-  setMessage(
-    "GATE UNLOCKED",
-    1800
-  );
-}
-
-
-/* ============================================================
-   THE SEEKER
-   ============================================================ */
-
-function buildDemon() {
-  demon =
-    new THREE.Group();
-
-  const bodyMaterial =
-    material(
-      0x111419,
-      0.86,
-      0.02
-    );
-
-  const body =
-    new THREE.Mesh(
-      new THREE.CapsuleGeometry(
-        0.9,
-        2.5,
-        8,
-        16
-      ),
-      bodyMaterial
-    );
-
-  body.position.y =
-    2;
-
-  body.castShadow = true;
-
-  const head =
-    new THREE.Mesh(
-      new THREE.SphereGeometry(
-        1.05,
-        20,
-        20
-      ),
-      material(
-        0x1c2025,
-        0.82
-      )
-    );
-
-  head.position.y =
-    4.2;
-
-  head.castShadow = true;
-
-  const eyeMaterial =
-    new THREE.MeshBasicMaterial({
-      color: 0xb33030
+    const metal = new THREE.MeshStandardMaterial({
+        color: GAME_CONFIG.colors.yellow,
+        metalness: 0.85,
+        roughness: 0.22,
+        emissive: GAME_CONFIG.colors.yellow,
+        emissiveIntensity: 0.25
     });
 
-  const leftEye =
-    new THREE.Mesh(
-      new THREE.SphereGeometry(
-        0.12,
-        12,
-        12
-      ),
-      eyeMaterial
+    const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(
+            0.32,
+            0.09,
+            12,
+            24
+        ),
+        metal
     );
 
-  leftEye.position.set(
-    -0.35,
-    4.32,
-    0.93
-  );
+    ring.rotation.x = Math.PI / 2;
 
-  const rightEye =
-    leftEye.clone();
+    keyGroup.add(ring);
 
-  rightEye.position.x =
-    0.35;
-
-  demon.add(
-    body,
-    head,
-    leftEye,
-    rightEye
-  );
-
-  demon.position.copy(
-    demonSpawn
-  );
-
-  scene.add(demon);
-}
-
-function updateDemon(dt) {
-  if (!demon || !player) {
-    return;
-  }
-
-  if (
-    state.elapsed <
-    CONFIG.demon.startDelay
-  ) {
-    return;
-  }
-
-  if (state.paused ||
-      state.dead ||
-      state.won) {
-    return;
-  }
-
-  const distance =
-    distance2D(
-      demon.position,
-      player.position
+    const shaft = new THREE.Mesh(
+        new THREE.BoxGeometry(
+            0.75,
+            0.12,
+            0.12
+        ),
+        metal
     );
 
-  let speed =
-    CONFIG.demon.walkSpeed;
+    shaft.position.x = 0.48;
 
-  const playerIsLoud =
-    state.noise > 48;
+    keyGroup.add(shaft);
 
-  const playerIsVisible =
-    distance <
-    CONFIG.demon.visualRadius;
-
-  const canHear =
-    distance <
-    CONFIG.demon.hearingRadius &&
-    playerIsLoud;
-
-  if (
-    playerIsVisible ||
-    canHear ||
-    state.demonAlert
-  ) {
-    state.demonAlert = true;
-
-    state.demonLastKnown =
-      player.position.clone();
-
-    speed =
-      CONFIG.demon.chaseSpeed;
-
-    if (state.sprinting) {
-      speed =
-        CONFIG.demon.sprintChaseSpeed;
-    }
-
-    if (
-      distance <
-      CONFIG.demon.closeRadius
-    ) {
-      speed += 0.9;
-    }
-  }
-
-  if (state.hiding) {
-    speed *= 0.08;
-  }
-
-  const target =
-    state.demonLastKnown ||
-    player.position;
-
-  const dx =
-    target.x -
-    demon.position.x;
-
-  const dz =
-    target.z -
-    demon.position.z;
-
-  const length =
-    Math.hypot(dx, dz) ||
-    1;
-
-  demonVelocity.set(
-    dx / length,
-    0,
-    dz / length
-  );
-
-  demon.position.x +=
-    demonVelocity.x *
-    speed *
-    dt;
-
-  demon.position.z +=
-    demonVelocity.z *
-    speed *
-    dt;
-
-  demon.lookAt(
-    player.position.x,
-    2,
-    player.position.z
-  );
-
-  resolveDemonWalls();
-
-  if (
-    distance <
-    CONFIG.demon.catchDistance &&
-    !state.hiding
-  ) {
-    die(
-      "The Seeker caught you."
+    const tooth1 = new THREE.Mesh(
+        new THREE.BoxGeometry(
+            0.12,
+            0.2,
+            0.12
+        ),
+        metal
     );
-  }
+
+    tooth1.position.set(
+        0.67,
+        -0.05,
+        0
+    );
+
+    keyGroup.add(tooth1);
+
+    const tooth2 = tooth1.clone();
+
+    tooth2.position.x = 0.88;
+
+    keyGroup.add(tooth2);
+
+    keyGroup.position.set(
+        55,
+        1.4,
+        60
+    );
+
+    interactableGroup.add(keyGroup);
+
+    keyObject = keyGroup;
+
+    interactables.push({
+        type: "key",
+        object: keyGroup,
+        position: keyGroup.position,
+        label: "Key",
+        used: false
+    });
+
+    addFloatingGlow(
+        keyGroup.position,
+        GAME_CONFIG.colors.yellow
+    );
 }
 
-function resolveDemonWalls() {
-  if (!demon) {
-    return;
-  }
-
-  const radius = 0.8;
-
-  for (
-    const wall of walls
-  ) {
-    const box =
-      new THREE.Box3()
-        .setFromObject(wall);
-
-    const closestX =
-      clamp(
-        demon.position.x,
-        box.min.x,
-        box.max.x
-      );
-
-    const closestZ =
-      clamp(
-        demon.position.z,
-        box.min.z,
-        box.max.z
-      );
-
-    const dx =
-      demon.position.x -
-      closestX;
-
-    const dz =
-      demon.position.z -
-      closestZ;
-
-    const distance =
-      Math.hypot(dx, dz);
-
-    if (
-      distance < radius &&
-      distance > 0.001
-    ) {
-      demon.position.x +=
-        dx / distance *
-        (radius - distance);
-
-      demon.position.z +=
-        dz / distance *
-        (radius - distance);
+function collectKey() {
+    if (!keyObject || state.keyCollected) {
+        return;
     }
-  }
-}
 
+    state.keyCollected = true;
+
+    const keyItem = interactables.find(
+        (item) => item.type === "key"
+    );
+
+    if (keyItem) {
+        keyItem.used = true;
+    }
+
+    keyObject.visible = false;
+
+    playTone(660, 0.12, "sine");
+
+    setTimeout(() => {
+        playTone(880, 0.18, "sine");
+    }, 110);
+
+    showToast("Key collected.");
+
+    setObjective("You have the key. Find the exit gate.");
+
+    createNoisePulse(
+        keyObject.position,
+        7
+    );
+}
 
 /* ============================================================
-   PLAYER MOVEMENT
+   FLOATING GLOW
    ============================================================ */
 
-function updatePlayer(dt) {
-  if (!player) {
-    return;
-  }
-
-  if (
-    state.paused ||
-    state.dead ||
-    state.won
-  ) {
-    return;
-  }
-
-  let inputX = 0;
-  let inputZ = 0;
-
-  if (
-    keys.KeyW ||
-    keys.ArrowUp
-  ) {
-    inputZ -= 1;
-  }
-
-  if (
-    keys.KeyS ||
-    keys.ArrowDown
-  ) {
-    inputZ += 1;
-  }
-
-  if (
-    keys.KeyA ||
-    keys.ArrowLeft
-  ) {
-    inputX -= 1;
-  }
-
-  if (
-    keys.KeyD ||
-    keys.ArrowRight
-  ) {
-    inputX += 1;
-  }
-
-  if (
-    state.device === "mobile"
-  ) {
-    inputX += joystick.x;
-    inputZ += joystick.y;
-  }
-
-  const inputLength =
-    Math.hypot(
-      inputX,
-      inputZ
+function addFloatingGlow(position, color) {
+    const light = new THREE.PointLight(
+        color,
+        0.9,
+        5
     );
 
-  state.moving =
-    inputLength > 0.08;
+    light.position.copy(position);
 
-  state.sprinting =
-    state.moving &&
-    (
-      keys.ShiftLeft ||
-      keys.ShiftRight ||
-      mobileRunHeld
+    effectGroup.add(light);
+
+    const halo = new THREE.Mesh(
+        new THREE.SphereGeometry(
+            0.15,
+            16,
+            16
+        ),
+        new THREE.MeshStandardMaterial({
+            color,
+            emissive: color,
+            emissiveIntensity: 1.5,
+            transparent: true,
+            opacity: 0.75
+        })
     );
 
-  if (state.moving) {
-    inputX /=
-      inputLength;
+    halo.position.copy(position);
 
-    inputZ /=
-      inputLength;
+    effectGroup.add(halo);
 
-    const forward =
-      new THREE.Vector3(
-        -Math.sin(playerYaw),
+    light.userData.base = position.clone();
+    halo.userData.base = position.clone();
+
+    light.userData.phase = Math.random() * 10;
+    halo.userData.phase = light.userData.phase;
+}
+
+/* ============================================================
+   NOTES
+   ============================================================ */
+
+function createNotes() {
+    const notePositions = [
+        new THREE.Vector3(-65, 1.2, 42),
+        new THREE.Vector3(36, 1.2, 54),
+        new THREE.Vector3(-42, 1.2, -63)
+    ];
+
+    notePositions.forEach((position, index) => {
+        createNote(
+            index + 1,
+            position,
+            [
+                "The house is much larger than it looks from outside.",
+                "The lights are not always reliable. Stay aware of your surroundings.",
+                "The gate is the only way out."
+            ][index]
+        );
+    });
+}
+
+function createNote(id, position, text) {
+    const group = new THREE.Group();
+
+    const paper = new THREE.Mesh(
+        new THREE.BoxGeometry(
+            0.8,
+            0.03,
+            0.65
+        ),
+        new THREE.MeshStandardMaterial({
+            color: 0xc9c3aa,
+            roughness: 0.9
+        })
+    );
+
+    paper.rotation.x = -0.2;
+
+    group.add(paper);
+
+    group.position.copy(position);
+
+    interactableGroup.add(group);
+
+    interactables.push({
+        type: "note",
+        id,
+        object: group,
+        position: group.position,
+        label: `Note ${id}`,
+        text,
+        used: false
+    });
+}
+
+function collectNote(note) {
+    if (!note || note.used) {
+        return;
+    }
+
+    note.used = true;
+
+    state.notes.push({
+        id: note.id,
+        text: note.text
+    });
+
+    note.object.visible = false;
+
+    if (notesCountElement) {
+        notesCountElement.textContent =
+            `${state.notes.length}/${GAME_CONFIG.game.notesRequired}`;
+    }
+
+    showToast(`Note ${note.id} collected.`);
+
+    renderNotesLog();
+
+    playTone(330, 0.12, "sine");
+}
+
+/* ============================================================
+   NOTES LOG
+   ============================================================ */
+
+function renderNotesLog() {
+    if (!notesLogList) {
+        return;
+    }
+
+    notesLogList.innerHTML = "";
+
+    if (state.notes.length === 0) {
+        showElement(notesLogEmpty);
+        return;
+    }
+
+    hideElement(notesLogEmpty);
+
+    state.notes.forEach((note) => {
+        const entry = document.createElement("div");
+
+        entry.className = "note-log-entry";
+
+        entry.innerHTML = `
+            <div class="note-log-title">
+                NOTE ${note.id}
+            </div>
+            <div class="note-log-text">
+                ${escapeHTML(note.text)}
+            </div>
+        `;
+
+        notesLogList.appendChild(entry);
+    });
+}
+
+function escapeHTML(value) {
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+/* ============================================================
+   SEAKER / ENEMY
+   ============================================================ */
+
+function createSeeker() {
+    seeker = new THREE.Group();
+
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: 0x090909,
+        roughness: 0.72,
+        metalness: 0.05
+    });
+
+    const body = new THREE.Mesh(
+        new THREE.CapsuleGeometry(
+            0.5,
+            1.55,
+            6,
+            12
+        ),
+        bodyMaterial
+    );
+
+    body.position.y = 1.55;
+
+    seeker.add(body);
+
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(
+            0.48,
+            18,
+            14
+        ),
+        bodyMaterial
+    );
+
+    head.position.y = 2.75;
+
+    seeker.add(head);
+
+    const eyeMaterial = new THREE.MeshStandardMaterial({
+        color: GAME_CONFIG.colors.red,
+        emissive: GAME_CONFIG.colors.red,
+        emissiveIntensity: 4
+    });
+
+    const leftEye = new THREE.Mesh(
+        new THREE.SphereGeometry(
+            0.055,
+            10,
+            10
+        ),
+        eyeMaterial
+    );
+
+    leftEye.position.set(
+        -0.16,
+        2.78,
+        -0.43
+    );
+
+    seeker.add(leftEye);
+
+    const rightEye = leftEye.clone();
+
+    rightEye.position.x = 0.16;
+
+    seeker.add(rightEye);
+
+    const shadow = new THREE.Mesh(
+        new THREE.CircleGeometry(
+            1.3,
+            32
+        ),
+        new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            transparent: true,
+            opacity: 0.5,
+            depthWrite: false
+        })
+    );
+
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.02;
+
+    seeker.add(shadow);
+
+    seeker.position.set(
         0,
-        -Math.cos(playerYaw)
-      );
-
-    const right =
-      new THREE.Vector3(
-        Math.cos(playerYaw),
         0,
-        -Math.sin(playerYaw)
-      );
+        -75
+    );
 
-    const movement =
-      forward
-        .multiplyScalar(inputZ)
-        .add(
-          right.multiplyScalar(
-            inputX
-          )
+    seekerGroup.add(seeker);
+
+    seeker.visible = false;
+
+    state.seekerState = "waiting";
+}
+
+function activateSeeker() {
+    if (!seeker || state.seekerActive) {
+        return;
+    }
+
+    state.seekerActive = true;
+    state.seekerState = "patrol";
+
+    seeker.visible = true;
+
+    seeker.position.set(
+        -70,
+        0,
+        -70
+    );
+
+    showToast("The Seeker is awake.");
+
+    createDangerPulse();
+
+    updateObjective();
+}
+
+/* ============================================================
+   SEEKER AI
+   ============================================================ */
+
+const seekerAI = {
+    target: new THREE.Vector3(),
+    pathTimer: 0,
+    pathIndex: 0,
+    searchTimer: 0,
+    investigateTimer: 0,
+    lastPlayerPosition: new THREE.Vector3(),
+    lastSeenTime: 0,
+    hearingCooldown: 0
+};
+
+function updateSeeker(delta) {
+    if (!seeker || !state.seekerActive || state.dead || state.won) {
+        return;
+    }
+
+    seekerAI.pathTimer -= delta;
+    seekerAI.hearingCooldown -= delta;
+
+    const distance = distanceXZ(
+        seeker.position,
+        camera.position
+    );
+
+    const seesPlayer =
+        distance <= GAME_CONFIG.seeker.visionDistance &&
+        canSeePlayer();
+
+    if (seesPlayer) {
+        seekerAI.lastPlayerPosition.copy(
+            camera.position
         );
 
-    const speed =
-      state.sprinting
-        ? CONFIG.player.sprintSpeed
-        : CONFIG.player.walkSpeed;
+        seekerAI.lastSeenTime = state.elapsed;
 
-    const desired =
-      movement.multiplyScalar(
-        speed
-      );
-
-    playerVelocity.x =
-      lerp(
-        playerVelocity.x,
-        desired.x,
-        clamp(
-          CONFIG.player.acceleration *
-          dt,
-          0,
-          1
-        )
-      );
-
-    playerVelocity.z =
-      lerp(
-        playerVelocity.z,
-        desired.z,
-        clamp(
-          CONFIG.player.acceleration *
-          dt,
-          0,
-          1
-        )
-      );
-
-    const noiseRate =
-      state.sprinting
-        ? 46
-        : 23;
-
-    state.noise =
-      clamp(
-        state.noise +
-        noiseRate * dt,
-        0,
-        100
-      );
-
-    state.stepTimer -= dt;
+        state.seekerState = "chase";
+    }
 
     if (
-      state.stepTimer <= 0
+        state.noise > 20 &&
+        seekerAI.hearingCooldown <= 0
     ) {
-      playFootstep();
+        const noiseDistance = distanceXZ(
+            seeker.position,
+            camera.position
+        );
 
-      state.stepTimer =
-        state.sprinting
-          ? CONFIG.audio.stepRunInterval
-          : CONFIG.audio.stepWalkInterval;
+        if (
+            noiseDistance <=
+            GAME_CONFIG.seeker.hearingRadius +
+            state.noise * 0.06
+        ) {
+            seekerAI.lastPlayerPosition.copy(
+                camera.position
+            );
+
+            seekerAI.investigateTimer = 5;
+            seekerAI.hearingCooldown = 1.5;
+
+            if (!seesPlayer) {
+                state.seekerState = "investigate";
+            }
+        }
     }
-  } else {
-    playerVelocity.x =
-      lerp(
+
+    if (
+        state.seekerState === "chase"
+    ) {
+        seekerAI.target.copy(
+            camera.position
+        );
+
+        moveSeekerToward(
+            seekerAI.target,
+            GAME_CONFIG.seeker.chaseSpeed,
+            delta
+        );
+    } else if (
+        state.seekerState === "investigate"
+    ) {
+        seekerAI.target.copy(
+            seekerAI.lastPlayerPosition
+        );
+
+        moveSeekerToward(
+            seekerAI.target,
+            GAME_CONFIG.seeker.searchSpeed,
+            delta
+        );
+
+        if (
+            distanceXZ(
+                seeker.position,
+                seekerAI.target
+            ) < 2
+        ) {
+            seekerAI.investigateTimer -= delta;
+
+            if (seekerAI.investigateTimer <= 0) {
+                state.seekerState = "search";
+                seekerAI.searchTimer =
+                    GAME_CONFIG.seeker.searchTime;
+            }
+        }
+    } else if (
+        state.seekerState === "search"
+    ) {
+        updateSeekerSearch(delta);
+    } else {
+        updateSeekerPatrol(delta);
+    }
+
+    updateSeekerAnimation(delta);
+
+    if (
+        distanceXZ(
+            seeker.position,
+            camera.position
+        ) <= GAME_CONFIG.seeker.attackDistance
+    ) {
+        triggerDeath("The Seeker caught you.");
+    }
+}
+
+function moveSeekerToward(target, speed, delta) {
+    const direction = directionTo(
+        seeker.position,
+        target
+    );
+
+    if (direction.lengthSq() < 0.0001) {
+        return;
+    }
+
+    seeker.rotation.y = Math.atan2(
+        direction.x,
+        direction.z
+    );
+
+    const movement = direction
+        .clone()
+        .multiplyScalar(speed * delta);
+
+    const next = seeker.position.clone().add(
+        movement
+    );
+
+    if (
+        !checkWorldCollision(
+            next,
+            GAME_CONFIG.seeker.radius
+        )
+    ) {
+        seeker.position.copy(next);
+    } else {
+        const alternate1 = seeker.position.clone();
+
+        alternate1.x += movement.x;
+
+        if (
+            !checkWorldCollision(
+                alternate1,
+                GAME_CONFIG.seeker.radius
+            )
+        ) {
+            seeker.position.copy(alternate1);
+        }
+
+        const alternate2 = seeker.position.clone();
+
+        alternate2.z += movement.z;
+
+        if (
+            !checkWorldCollision(
+                alternate2,
+                GAME_CONFIG.seeker.radius
+            )
+        ) {
+            seeker.position.copy(alternate2);
+        }
+    }
+}
+
+function updateSeekerPatrol(delta) {
+    seekerAI.pathTimer -= delta;
+
+    if (seekerAI.pathTimer <= 0) {
+        seekerAI.pathTimer = random(4, 8);
+
+        seekerAI.target.set(
+            random(-70, 70),
+            0,
+            random(-70, 70)
+        );
+    }
+
+    moveSeekerToward(
+        seekerAI.target,
+        GAME_CONFIG.seeker.walkSpeed,
+        delta
+    );
+}
+
+function updateSeekerSearch(delta) {
+    seekerAI.searchTimer -= delta;
+
+    seeker.rotation.y += delta * 0.6;
+
+    if (seekerAI.searchTimer <= 0) {
+        state.seekerState = "patrol";
+        seekerAI.pathTimer = 0;
+    }
+}
+
+function updateSeekerAnimation(delta) {
+    if (!seeker) {
+        return;
+    }
+
+    const body = seeker.children[0];
+
+    if (!body) {
+        return;
+    }
+
+    const walking =
+        state.seekerState !== "search";
+
+    if (walking) {
+        body.position.y =
+            1.55 +
+            Math.sin(
+                performance.now() * 0.006
+            ) * 0.04;
+    }
+}
+
+/* ============================================================
+   SEEKER VISION
+   ============================================================ */
+
+function canSeePlayer() {
+    if (!camera || !seeker) {
+        return false;
+    }
+
+    const from = seeker.position.clone();
+
+    from.y += 1.7;
+
+    const to = camera.position.clone();
+
+    const direction = to.clone().sub(from);
+
+    const distance = direction.length();
+
+    if (
+        distance >
+        GAME_CONFIG.seeker.visionDistance
+    ) {
+        return false;
+    }
+
+    direction.normalize();
+
+    const forward = new THREE.Vector3(
+        Math.sin(seeker.rotation.y),
+        0,
+        Math.cos(seeker.rotation.y)
+    );
+
+    const dot = forward.dot(
+        new THREE.Vector3(
+            direction.x,
+            0,
+            direction.z
+        ).normalize()
+    );
+
+    if (
+        dot <
+        Math.cos(
+            GAME_CONFIG.seeker.visionAngle / 2
+        )
+    ) {
+        return false;
+    }
+
+    raycaster.set(
+        from,
+        direction
+    );
+
+    const intersections =
+        raycaster.intersectObjects(
+            environmentGroup.children,
+            true
+        );
+
+    for (const hit of intersections) {
+        if (
+            hit.distance <
+            distance - 0.3
+        ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/* ============================================================
+   PLAYER
+   ============================================================ */
+
+function resetPlayer() {
+    camera.position.set(
+        GAME_CONFIG.player.start.x,
+        GAME_CONFIG.player.start.y,
+        GAME_CONFIG.player.start.z
+    );
+
+    playerVelocity.set(
+        0,
+        0,
+        0
+    );
+
+    yaw = 0;
+    pitch = 0;
+
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+}
+
+function updatePlayer(delta) {
+    if (
+        !state.running ||
+        state.paused ||
+        state.dead ||
+        state.won
+    ) {
+        return;
+    }
+
+    const input = getMovementInput();
+
+    const moving =
+        Math.abs(input.x) > 0.01 ||
+        Math.abs(input.y) > 0.01;
+
+    const running =
+        keys.has("ShiftLeft") ||
+        keys.has("ShiftRight") ||
+        state.mobileRunning === true;
+
+    const speed =
+        running
+            ? GAME_CONFIG.player.runSpeed
+            : GAME_CONFIG.player.speed;
+
+    const desired = new THREE.Vector3(
+        input.x,
+        0,
+        input.y
+    );
+
+    if (desired.lengthSq() > 1) {
+        desired.normalize();
+    }
+
+    const forward = new THREE.Vector3(
+        -Math.sin(yaw),
+        0,
+        -Math.cos(yaw)
+    );
+
+    const right = new THREE.Vector3(
+        Math.cos(yaw),
+        0,
+        -Math.sin(yaw)
+    );
+
+    const movement = new THREE.Vector3();
+
+    movement.addScaledVector(
+        right,
+        desired.x
+    );
+
+    movement.addScaledVector(
+        forward,
+        desired.z
+    );
+
+    if (movement.lengthSq() > 0.0001) {
+        movement.normalize();
+    }
+
+    const targetVelocity = movement.multiplyScalar(
+        speed
+    );
+
+    playerVelocity.x = moveToward(
         playerVelocity.x,
-        0,
-        clamp(
-          CONFIG.player.friction *
-          dt,
-          0,
-          1
-        )
-      );
+        targetVelocity.x,
+        GAME_CONFIG.player.acceleration * delta
+    );
 
-    playerVelocity.z =
-      lerp(
+    playerVelocity.z = moveToward(
         playerVelocity.z,
-        0,
-        clamp(
-          CONFIG.player.friction *
-          dt,
-          0,
-          1
-        )
-      );
+        targetVelocity.z,
+        GAME_CONFIG.player.acceleration * delta
+    );
 
-    state.noise =
-      Math.max(
+    if (!moving) {
+        playerVelocity.x = moveToward(
+            playerVelocity.x,
+            0,
+            GAME_CONFIG.player.friction * delta
+        );
+
+        playerVelocity.z = moveToward(
+            playerVelocity.z,
+            0,
+            GAME_CONFIG.player.friction * delta
+        );
+    }
+
+    const next = camera.position.clone();
+
+    next.x += playerVelocity.x * delta;
+    next.z += playerVelocity.z * delta;
+
+    const canMove =
+        !checkWorldCollision(
+            next,
+            GAME_CONFIG.player.radius
+        );
+
+    if (canMove) {
+        camera.position.x = next.x;
+        camera.position.z = next.z;
+    } else {
+        const slideX = camera.position.clone();
+
+        slideX.x += playerVelocity.x * delta;
+
+        if (
+            !checkWorldCollision(
+                slideX,
+                GAME_CONFIG.player.radius
+            )
+        ) {
+            camera.position.x = slideX.x;
+        } else {
+            playerVelocity.x = 0;
+        }
+
+        const slideZ = camera.position.clone();
+
+        slideZ.z += playerVelocity.z * delta;
+
+        if (
+            !checkWorldCollision(
+                slideZ,
+                GAME_CONFIG.player.radius
+            )
+        ) {
+            camera.position.z = slideZ.z;
+        } else {
+            playerVelocity.z = 0;
+        }
+    }
+
+    camera.position.x = clamp(
+        camera.position.x,
+        -GAME_CONFIG.world.floorSize / 2 + 2,
+        GAME_CONFIG.world.floorSize / 2 - 2
+    );
+
+    camera.position.z = clamp(
+        camera.position.z,
+        -GAME_CONFIG.world.floorSize / 2 + 2,
+        GAME_CONFIG.world.floorSize / 2 - 2
+    );
+
+    updateFootsteps(
+        delta,
+        moving,
+        running
+    );
+
+    state.noise = Math.max(
         0,
         state.noise -
-        35 * dt
-      );
-  }
-
-  player.position.x +=
-    playerVelocity.x *
-    dt;
-
-  player.position.z +=
-    playerVelocity.z *
-    dt;
-
-  const limitX =
-    CONFIG.world.width / 2 -
-    2;
-
-  const limitZ =
-    CONFIG.world.depth / 2 -
-    2;
-
-  player.position.x =
-    clamp(
-      player.position.x,
-      -limitX,
-      limitX
+        delta * 18
     );
 
-  player.position.z =
-    clamp(
-      player.position.z,
-      -limitZ,
-      limitZ
-    );
-
-  resolvePlayerWalls();
-
-  updatePlayerCameraBob(dt);
+    updateNoiseUI();
 }
 
-function resolvePlayerWalls() {
-  if (!player) {
-    return;
-  }
+function moveToward(current, target, amount) {
+    if (current < target) {
+        return Math.min(
+            current + amount,
+            target
+        );
+    }
 
-  const radius =
-    CONFIG.world.playerRadius;
+    return Math.max(
+        current - amount,
+        target
+    );
+}
 
-  for (
-    const wall of walls
-  ) {
-    const box =
-      new THREE.Box3()
-        .setFromObject(wall);
-
-    const closestX =
-      clamp(
-        player.position.x,
-        box.min.x,
-        box.max.x
-      );
-
-    const closestZ =
-      clamp(
-        player.position.z,
-        box.min.z,
-        box.max.z
-      );
-
-    const dx =
-      player.position.x -
-      closestX;
-
-    const dz =
-      player.position.z -
-      closestZ;
-
-    const distance =
-      Math.hypot(dx, dz);
+function getMovementInput() {
+    let x = 0;
+    let y = 0;
 
     if (
-      distance < radius &&
-      distance > 0.001
+        keys.has("KeyA") ||
+        keys.has("ArrowLeft")
     ) {
-      player.position.x +=
-        dx / distance *
-        (radius - distance);
-
-      player.position.z +=
-        dz / distance *
-        (radius - distance);
+        x -= 1;
     }
-  }
+
+    if (
+        keys.has("KeyD") ||
+        keys.has("ArrowRight")
+    ) {
+        x += 1;
+    }
+
+    if (
+        keys.has("KeyW") ||
+        keys.has("ArrowUp")
+    ) {
+        y += 1;
+    }
+
+    if (
+        keys.has("KeyS") ||
+        keys.has("ArrowDown")
+    ) {
+        y -= 1;
+    }
+
+    if (state.device === "mobile") {
+        x += joystick.x;
+        y += joystick.y;
+    }
+
+    return {
+        x,
+        y
+    };
 }
 
-let cameraBobTime = 0;
+/* ============================================================
+   COLLISION
+   ============================================================ */
 
-function updatePlayerCameraBob(dt) {
-  if (!camera) {
-    return;
-  }
+function checkWorldCollision(position, radius) {
+    for (const collision of collisionBoxes) {
+        if (!collision.solid) {
+            continue;
+        }
 
-  if (state.moving) {
-    cameraBobTime +=
-      dt *
-      (
-        state.sprinting
-          ? 11
-          : 7
-      );
+        const box = collision.box;
 
-    camera.position.y =
-      Math.sin(
-        cameraBobTime
-      ) *
-      (
-        state.sprinting
-          ? 0.045
-          : 0.025
-      );
+        const closestX = clamp(
+            position.x,
+            box.min.x,
+            box.max.x
+        );
 
-    camera.position.x =
-      Math.cos(
-        cameraBobTime * 0.5
-      ) *
-      0.012;
-  } else {
-    cameraBobTime += dt * 1.5;
+        const closestZ = clamp(
+            position.z,
+            box.min.z,
+            box.max.z
+        );
 
-    camera.position.y =
-      Math.sin(
-        cameraBobTime
-      ) *
-      0.004;
+        const dx = position.x - closestX;
+        const dz = position.z - closestZ;
 
-    camera.position.x =
-      0;
-  }
+        if (
+            dx * dx +
+            dz * dz <
+            radius * radius
+        ) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
+/* ============================================================
+   FLASHLIGHT
+   ============================================================ */
+
+function updateFlashlight() {
+    if (!flashlight || !camera) {
+        return;
+    }
+
+    flashlight.position.copy(
+        camera.position
+    );
+
+    flashlightTarget.position.copy(
+        camera.position
+    );
+
+    const forward = new THREE.Vector3(
+        0,
+        0,
+        -1
+    );
+
+    forward.applyEuler(
+        camera.rotation
+    );
+
+    flashlightTarget.position.add(
+        forward.multiplyScalar(10)
+    );
+
+    flashlight.visible =
+        state.flashlightEnabled &&
+        state.flashlightOn;
+}
+
+function toggleFlashlight() {
+    if (!state.flashlightEnabled) {
+        return;
+    }
+
+    state.flashlightOn =
+        !state.flashlightOn;
+
+    updateFlashlight();
+
+    playTone(
+        state.flashlightOn ? 700 : 260,
+        0.05,
+        "square"
+    );
+}
+
+/* ============================================================
+   FOOTSTEPS
+   ============================================================ */
+
+function updateFootsteps(delta, moving, running) {
+    if (!moving || !state.footstepsEnabled) {
+        return;
+    }
+
+    state.footstepTimer -= delta;
+
+    if (state.footstepTimer > 0) {
+        return;
+    }
+
+    state.footstepTimer =
+        running ? 0.3 : 0.46;
+
+    state.footstepIndex++;
+
+    const volume =
+        running ? 0.16 : 0.09;
+
+    playFootstep(volume);
+
+    state.noise = clamp(
+        state.noise +
+        (running ? 22 : 9),
+        0,
+        GAME_CONFIG.game.maximumNoise
+    );
+}
+
+function playFootstep(volume) {
+    if (!state.footstepsEnabled) {
+        return;
+    }
+
+    if (!audioContext) {
+        return;
+    }
+
+    const now =
+        audioContext.currentTime;
+
+    const oscillator =
+        audioContext.createOscillator();
+
+    const gain =
+        audioContext.createGain();
+
+    oscillator.type = "triangle";
+
+    oscillator.frequency.setValueAtTime(
+        state.footstepIndex % 2 === 0
+            ? 72
+            : 58,
+        now
+    );
+
+    gain.gain.setValueAtTime(
+        volume * state.volume,
+        now
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        now + 0.09
+    );
+
+    oscillator.connect(gain);
+    gain.connect(masterGain);
+
+    oscillator.start(now);
+    oscillator.stop(now + 0.1);
+}
+
+/* ============================================================
+   AUDIO
+   ============================================================ */
+
+function initializeAudio() {
+    try {
+        audioContext =
+            new (
+                window.AudioContext ||
+                window.webkitAudioContext
+            )();
+
+        masterGain =
+            audioContext.createGain();
+
+        masterGain.gain.value =
+            state.volume;
+
+        masterGain.connect(
+            audioContext.destination
+        );
+    } catch (error) {
+        console.warn(
+            "[THE SEEKER] Audio unavailable.",
+            error
+        );
+    }
+}
+
+function resumeAudio() {
+    if (
+        audioContext &&
+        audioContext.state === "suspended"
+    ) {
+        audioContext.resume();
+    }
+}
+
+function playTone(
+    frequency,
+    duration,
+    type = "sine"
+) {
+    if (
+        !audioContext ||
+        !masterGain
+    ) {
+        return;
+    }
+
+    const now =
+        audioContext.currentTime;
+
+    const oscillator =
+        audioContext.createOscillator();
+
+    const gain =
+        audioContext.createGain();
+
+    oscillator.type = type;
+
+    oscillator.frequency.setValueAtTime(
+        frequency,
+        now
+    );
+
+    gain.gain.setValueAtTime(
+        0.001,
+        now
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+        0.08 * state.volume,
+        now + 0.01
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        now + duration
+    );
+
+    oscillator.connect(gain);
+    gain.connect(masterGain);
+
+    oscillator.start(now);
+    oscillator.stop(
+        now + duration + 0.02
+    );
+}
 
 /* ============================================================
    INTERACTION
    ============================================================ */
 
-function tryInteract() {
-  if (
-    !state.running ||
-    state.paused ||
-    state.dead ||
-    state.won
-  ) {
-    return;
-  }
+function findInteractionTarget() {
+    if (!camera) {
+        return null;
+    }
 
-  if (
-    state.interactionCooldown > 0
-  ) {
-    return;
-  }
+    let closest = null;
+    let closestDistance =
+        GAME_CONFIG.game.interactionDistance;
 
-  state.interactionCooldown =
-    0.22;
+    for (const item of interactables) {
+        if (
+            item.used ||
+            !item.object.visible
+        ) {
+            continue;
+        }
 
-  let nearest = null;
-  let nearestDistance =
-    Infinity;
+        const distance =
+            distanceXZ(
+                camera.position,
+                item.position
+            );
 
-  for (
-    const object
-    of interactables
-  ) {
+        if (
+            distance >
+            GAME_CONFIG.game.interactionDistance
+        ) {
+            continue;
+        }
+
+        if (
+            distance <
+            closestDistance
+        ) {
+            closestDistance = distance;
+            closest = item;
+        }
+    }
+
+    return closest;
+}
+
+function updateInteraction() {
+    const target =
+        findInteractionTarget();
+
+    state.interactionTarget = target;
+
+    if (!interactionElement) {
+        return;
+    }
+
+    if (!target) {
+        hideElement(interactionElement);
+        return;
+    }
+
+    showElement(interactionElement);
+
+    let text = "INTERACT";
+
+    if (target.type === "button") {
+        text = `PRESS BUTTON ${target.id}`;
+    } else if (target.type === "key") {
+        text = "PICK UP KEY";
+    } else if (target.type === "note") {
+        text = "READ NOTE";
+    } else if (target.type === "gate") {
+        text = "OPEN GATE";
+    }
+
+    setText(
+        interactionText,
+        text
+    );
+}
+
+function interact() {
+    if (
+        !state.running ||
+        state.paused ||
+        state.dead ||
+        state.won
+    ) {
+        return;
+    }
+
+    const target =
+        state.interactionTarget ||
+        findInteractionTarget();
+
+    if (!target) {
+        return;
+    }
+
+    if (target.type === "button") {
+        activateButton(target.id);
+        return;
+    }
+
+    if (target.type === "key") {
+        collectKey();
+        return;
+    }
+
+    if (target.type === "note") {
+        collectNote(target);
+        return;
+    }
+
+    if (target.type === "gate") {
+        if (
+            state.keyCollected &&
+            !state.gateOpen
+        ) {
+            openGate();
+        }
+    }
+}
+
+/* ============================================================
+   NOISE
+   ============================================================ */
+
+function createNoisePulse(position, strength) {
+    state.noise = clamp(
+        state.noise + strength,
+        0,
+        GAME_CONFIG.game.maximumNoise
+    );
+
+    if (
+        seeker &&
+        state.seekerActive
+    ) {
+        const distance =
+            distanceXZ(
+                seeker.position,
+                position
+            );
+
+        if (
+            distance <
+            GAME_CONFIG.seeker.hearingRadius +
+            strength
+        ) {
+            seekerAI.lastPlayerPosition.copy(
+                position
+            );
+
+            seekerAI.investigateTimer = 6;
+
+            state.seekerState =
+                "investigate";
+        }
+    }
+}
+
+function updateNoiseUI() {
+    if (!noiseContainer) {
+        return;
+    }
+
+    const percentage =
+        clamp(
+            state.noise /
+            GAME_CONFIG.game.maximumNoise,
+            0,
+            1
+        ) * 100;
+
+    noiseContainer.style.width =
+        `${percentage}%`;
+}
+
+/* ============================================================
+   SANITY
+   ============================================================ */
+
+function updateSanity(delta) {
+    if (
+        !state.running ||
+        state.dead ||
+        state.won
+    ) {
+        return;
+    }
+
+    let drain = 0;
+
+    if (
+        state.seekerActive &&
+        seeker
+    ) {
+        const distance =
+            distanceXZ(
+                seeker.position,
+                camera.position
+            );
+
+        if (distance < 18) {
+            drain +=
+                (18 - distance) *
+                0.45;
+        }
+    }
+
+    if (
+        state.flashlightEnabled &&
+        !state.flashlightOn
+    ) {
+        drain += 0.18;
+    }
+
+    state.sanity = clamp(
+        state.sanity -
+        drain * delta,
+        0,
+        100
+    );
+
+    if (sanityFill) {
+        sanityFill.style.width =
+            `${state.sanity}%`;
+    }
+
+    if (
+        state.sanity <= 0
+    ) {
+        state.sanity = 25;
+    }
+}
+
+/* ============================================================
+   HIDE MODE
+   ============================================================ */
+
+function startHideMode() {
+    if (state.hideMode) {
+        return;
+    }
+
+    state.hideMode = true;
+    state.hideRemaining = 8;
+
+    showElement(hideTimer);
+
+    setObjective("Stay hidden.");
+
+    createNoisePulse(
+        camera.position,
+        2
+    );
+}
+
+function updateHideMode(delta) {
+    if (!state.hideMode) {
+        return;
+    }
+
+    state.hideRemaining -= delta;
+
+    if (hideTimerValue) {
+        hideTimerValue.textContent =
+            Math.ceil(
+                Math.max(
+                    0,
+                    state.hideRemaining
+                )
+            );
+    }
+
+    if (
+        state.hideRemaining <= 0
+    ) {
+        state.hideMode = false;
+
+        hideElement(hideTimer);
+
+        updateObjective();
+    }
+}
+
+/* ============================================================
+   DANGER EFFECTS
+   ============================================================ */
+
+function createDangerPulse() {
+    if (!dangerWarning) {
+        return;
+    }
+
+    showElement(dangerWarning);
+
+    dangerWarning.classList.add(
+        "danger-pulse"
+    );
+
+    setTimeout(() => {
+        dangerWarning.classList.remove(
+            "danger-pulse"
+        );
+    }, 1200);
+}
+
+function updateDangerUI() {
+    if (
+        !dangerWarning ||
+        !seeker ||
+        !state.seekerActive
+    ) {
+        return;
+    }
+
     const distance =
-      distance2D(
-        player.position,
-        object.object.position
-      );
+        distanceXZ(
+            seeker.position,
+            camera.position
+        );
 
-    if (
-      distance <
-        object.range &&
-      distance <
-        nearestDistance
-    ) {
-      nearest =
-        object;
+    if (distance < 20) {
+        showElement(dangerWarning);
 
-      nearestDistance =
-        distance;
-    }
-  }
+        const intensity =
+            clamp(
+                (20 - distance) / 20,
+                0,
+                1
+            );
 
-  if (
-    nearest &&
-    nearest.type ===
-      "button"
-  ) {
-    activateButton(
-      nearest
-    );
-
-    return;
-  }
-
-  if (
-    nearest &&
-    nearest.type ===
-      "gate"
-  ) {
-    interactGate();
-
-    return;
-  }
-
-  tryPickupKey();
-}
-
-function activateButton(
-  buttonObject
-) {
-  const index =
-    buttonObject.index;
-
-  if (
-    state.buttons[index]
-  ) {
-    setMessage(
-      `BUTTON ${index + 1} ALREADY ACTIVE`,
-      1000
-    );
-
-    return;
-  }
-
-  state.buttons[index] =
-    true;
-
-  buttonObject.button
-    .material.color
-    .set(0x2a8a4a);
-
-  buttonObject.button.scale.y =
-    0.78;
-
-  playButtonSound(
-    index
-  );
-
-  setMessage(
-    `BUTTON ${index + 1} ACTIVATED`,
-    1400
-  );
-
-  updateButtonUI();
-}
-
-function tryPickupKey() {
-  for (
-    const pickup
-    of pickups
-  ) {
-    if (
-      pickup.type !== "key"
-    ) {
-      continue;
-    }
-
-    if (
-      !pickup.object.visible
-    ) {
-      continue;
-    }
-
-    const distance =
-      distance2D(
-        player.position,
-        pickup.object.position
-      );
-
-    if (
-      distance <
-      pickup.range
-    ) {
-      state.keyFound =
-        true;
-
-      pickup.object.visible =
-        false;
-
-      playKeySound();
-
-      setMessage(
-        "KEY FOUND",
-        1500
-      );
-
-      updateObjective();
-
-      return;
-    }
-  }
-}
-
-function interactGate() {
-  if (
-    !state.buttons.every(
-      Boolean
-    )
-  ) {
-    setMessage(
-      "THE GATE NEEDS ALL THREE BUTTONS.",
-      1800
-    );
-
-    return;
-  }
-
-  if (
-    !state.keyFound
-  ) {
-    setMessage(
-      "THE GATE IS LOCKED.",
-      1500
-    );
-
-    return;
-  }
-
-  openGate();
-}
-
-
-/* ============================================================
-   OBJECTIVES
-   ============================================================ */
-
-function updateObjective() {
-  if (
-    state.gateOpen
-  ) {
-    setObjective(
-      "Escape. Get through the gate."
-    );
-
-    return;
-  }
-
-  if (
-    state.keyFound
-  ) {
-    setObjective(
-      "Take the key to the gate."
-    );
-
-    return;
-  }
-
-  if (
-    state.buttons.every(
-      Boolean
-    )
-  ) {
-    if (
-      state.elapsed <
-      CONFIG.demon.startDelay
-    ) {
-      setObjective(
-        "The key will appear when the timer ends."
-      );
+        dangerWarning.style.opacity =
+            String(
+                0.25 +
+                intensity * 0.75
+            );
     } else {
-      setObjective(
-        "The key has been revealed. Find it."
-      );
+        hideElement(dangerWarning);
     }
-
-    return;
-  }
-
-  setObjective(
-    "Find the three buttons."
-  );
 }
-
-function updateButtonUI() {
-  for (
-    let i = 0;
-    i < 3;
-    i++
-  ) {
-    const button =
-      $(
-        `button${i + 1}`
-      );
-
-    if (!button) {
-      continue;
-    }
-
-    button.classList.toggle(
-      "active",
-      state.buttons[i]
-    );
-  }
-
-  updateObjective();
-}
-
 
 /* ============================================================
-   KEY AVAILABILITY
+   TOASTS
    ============================================================ */
 
-function updateKeyVisibility() {
-  if (
-    state.keyFound
-  ) {
-    return;
-  }
+let toastTimer = null;
 
-  if (
-    state.elapsed <
-    CONFIG.demon.startDelay
-  ) {
-    return;
-  }
+function showToast(message) {
+    if (!noteToast) {
+        return;
+    }
 
-  if (
-    !state.buttons.every(
-      Boolean
-    )
-  ) {
-    return;
-  }
+    setText(
+        noteToastText,
+        message
+    );
 
-  for (
-    const pickup
-    of pickups
-  ) {
+    showElement(noteToast);
+
+    clearTimeout(toastTimer);
+
+    toastTimer = setTimeout(() => {
+        hideElement(noteToast);
+    }, 2400);
+}
+
+/* ============================================================
+   DEATH
+   ============================================================ */
+
+function triggerDeath(reason = "You were caught.") {
     if (
-      pickup.type === "key"
+        state.dead ||
+        state.won
     ) {
-      pickup.object.visible =
-        true;
+        return;
     }
-  }
 
-  updateObjective();
+    state.dead = true;
+    state.running = false;
+
+    if (deathReason) {
+        deathReason.textContent =
+            reason;
+    }
+
+    hideElement(gameScreen);
+
+    showElement(deathScreen);
+
+    if (screamOverlay) {
+        showElement(screamOverlay);
+
+        screamOverlay.classList.add(
+            "scream-active"
+        );
+
+        setTimeout(() => {
+            screamOverlay.classList.remove(
+                "scream-active"
+            );
+
+            hideElement(screamOverlay);
+        }, 900);
+    }
+
+    playTone(
+        90,
+        0.55,
+        "sawtooth"
+    );
 }
 
-
-/* ============================================================
-   HUD
-   ============================================================ */
-
-function updateHUD(dt) {
-  if (
-    !state.running ||
-    state.paused
-  ) {
-    return;
-  }
-
-  state.elapsed += dt;
-
-  const remaining =
-    Math.max(
-      0,
-      CONFIG.demon.startDelay -
-      state.elapsed
-    );
-
-  setText(
-    "timer",
-    formatTime(
-      remaining
-    )
-  );
-
-  state.interactionCooldown =
-    Math.max(
-      0,
-      state.interactionCooldown -
-      dt
-    );
-
-  updateKeyVisibility();
-
-  const demonDistance =
-    demon && player
-      ? distance2D(
-          demon.position,
-          player.position
-        )
-      : Infinity;
-
-  updateSanity(
-    dt,
-    demonDistance
-  );
-
-  updateNoise(
-    dt
-  );
-
-  updateDanger(
-    demonDistance
-  );
-
-  if (
-    state.interactionUntil <
-    performance.now()
-  ) {
-    hide("interaction");
-  }
-
-  if (
-    state.elapsed <
-    CONFIG.demon.startDelay
-  ) {
+function triggerWin() {
     if (
-      state.buttons.every(
-        Boolean
-      )
+        state.won ||
+        state.dead
     ) {
-      setObjective(
-        "Wait for the key to appear."
-      );
-    } else {
-      setObjective(
-        "Find the three buttons."
-      );
+        return;
     }
-  }
 
-  if (
-    state.keyFound &&
-    !state.gateOpen
-  ) {
-    setObjective(
-      "Take the key to the gate."
-    );
-  }
+    state.won = true;
+    state.running = false;
 
-  checkEscape();
-}
+    hideElement(gameScreen);
 
-function updateSanity(
-  dt,
-  demonDistance
-) {
-  if (
-    demonDistance <
-    CONFIG.demon.closeRadius
-  ) {
-    const pressure =
-      (
-        CONFIG.demon.closeRadius -
-        demonDistance
-      ) * 1.3;
+    showElement(winScreen);
 
-    state.sanity -=
-      pressure * dt;
-  } else if (
-    demonDistance >
-    CONFIG.demon.visualRadius
-  ) {
-    state.sanity +=
-      3.5 * dt;
-  }
-
-  state.sanity =
-    clamp(
-      state.sanity,
-      0,
-      100
-    );
-
-  const fill =
-    $("sanityFill");
-
-  if (fill) {
-    fill.style.width =
-      `${state.sanity}%`;
-  }
-
-  if (
-    state.sanity <= 0 &&
-    demonDistance <
-      CONFIG.demon.visualRadius
-  ) {
-    die(
-      "Your fear became overwhelming."
-    );
-  }
-}
-
-function updateNoise(dt) {
-  if (
-    !state.moving
-  ) {
-    state.noise -=
-      35 * dt;
-  }
-
-  state.noise =
-    clamp(
-      state.noise,
-      0,
-      100
-    );
-
-  const fill =
-    $("noiseFill");
-
-  if (fill) {
-    fill.style.width =
-      `${state.noise}%`;
-  }
-}
-
-let lastDangerSound = 0;
-
-function updateDanger(
-  demonDistance
-) {
-  const dangerous =
-    demonDistance <
-    CONFIG.demon.closeRadius;
-
-  if (
-    dangerous !==
-    state.danger
-  ) {
-    state.danger =
-      dangerous;
-
-    if (dangerous) {
-      show(
-        "dangerWarning"
-      );
-    } else {
-      hide(
-        "dangerWarning"
-      );
+    if (winTitle) {
+        winTitle.textContent =
+            "YOU ESCAPED";
     }
-  }
 
-  if (
-    dangerous &&
-    performance.now() -
-      lastDangerSound >
-      1500
-  ) {
-    lastDangerSound =
-      performance.now();
+    if (winText) {
+        winText.textContent =
+            "You made it out of the house.";
+    }
 
-    playDangerSound();
-  }
+    playTone(
+        523,
+        0.15,
+        "sine"
+    );
+
+    setTimeout(() => {
+        playTone(
+            659,
+            0.15,
+            "sine"
+        );
+    }, 160);
+
+    setTimeout(() => {
+        playTone(
+            784,
+            0.3,
+            "sine"
+        );
+    }, 320);
 }
-
-function updateNotesHUD() {
-  setText(
-    "notesCount",
-    String(
-      state.notesFound
-    )
-  );
-}
-
-
-/* ============================================================
-   MESSAGE SYSTEM
-   ============================================================ */
-
-function setMessage(
-  text,
-  duration = 1800
-) {
-  state.interactionText =
-    text;
-
-  state.interactionUntil =
-    performance.now() +
-    duration;
-
-  setText(
-    "interactionText",
-    text
-  );
-
-  show(
-    "interaction"
-  );
-}
-
-
-/* ============================================================
-   ESCAPE CHECK
-   ============================================================ */
-
-function checkEscape() {
-  if (
-    !state.gateOpen ||
-    state.won ||
-    state.dead
-  ) {
-    return;
-  }
-
-  if (
-    player.position.z <
-    -69
-  ) {
-    winGame();
-  }
-}
-
-
-/* ============================================================
-   WIN / DEATH
-   ============================================================ */
-
-function winGame() {
-  if (
-    state.won
-  ) {
-    return;
-  }
-
-  state.won =
-    true;
-
-  state.running =
-    false;
-
-  state.paused =
-    false;
-
-  setText(
-    "winTitle",
-    "YOU ESCAPED"
-  );
-
-  setText(
-    "winText",
-    "You found the buttons, recovered the key, and escaped The Seeker."
-  );
-
-  show(
-    "winScreen"
-  );
-
-  stopAmbientAudio();
-}
-
-function die(
-  reason
-) {
-  if (
-    state.dead ||
-    state.won
-  ) {
-    return;
-  }
-
-  state.dead =
-    true;
-
-  state.running =
-    false;
-
-  state.paused =
-    false;
-
-  setText(
-    "deathReason",
-    reason
-  );
-
-  show(
-    "deathScreen"
-  );
-
-  playDeathSound();
-
-  stopAmbientAudio();
-}
-
 
 /* ============================================================
    PAUSE
    ============================================================ */
 
 function pauseGame() {
-  if (
-    !state.running ||
-    state.dead ||
-    state.won
-  ) {
-    return;
-  }
+    if (
+        !state.running ||
+        state.dead ||
+        state.won
+    ) {
+        return;
+    }
 
-  state.paused =
-    true;
+    state.paused = true;
 
-  show(
-    "pauseScreen"
-  );
+    showElement(pauseScreen);
+
+    releasePointerLock();
 }
 
 function resumeGame() {
-  state.paused =
-    false;
-
-  hide(
-    "pauseScreen"
-  );
-
-  state.lastTime =
-    performance.now();
-}
-
-
-/* ============================================================
-   MINIMAP
-   ============================================================ */
-
-let minimap = null;
-let mapPlayer = null;
-let mapDemon = null;
-let mapGate = null;
-
-function buildMinimap() {
-  minimap =
-    document.createElement(
-      "div"
-    );
-
-  minimap.id =
-    "minimap";
-
-  minimap.className =
-    "minimap";
-
-  minimap.innerHTML = `
-    <div class="minimap-title">
-      MAP
-    </div>
-
-    <div class="minimap-frame">
-      <div class="minimap-grid"></div>
-
-      <div class="map-player">
-        <span></span>
-      </div>
-
-      <div class="map-demon">
-        <span></span>
-      </div>
-
-      <div class="map-gate"></div>
-    </div>
-  `;
-
-  const gameScreen =
-    $("gameScreen");
-
-  if (
-    gameScreen
-  ) {
-    gameScreen.appendChild(
-      minimap
-    );
-  }
-
-  mapPlayer =
-    qs(
-      ".map-player",
-      minimap
-    );
-
-  mapDemon =
-    qs(
-      ".map-demon",
-      minimap
-    );
-
-  mapGate =
-    qs(
-      ".map-gate",
-      minimap
-    );
-}
-
-function worldToMapX(x) {
-  const normalized =
-    (
-      x +
-      CONFIG.world.width / 2
-    ) /
-    CONFIG.world.width;
-
-  return clamp(
-    normalized * 100,
-    3,
-    97
-  );
-}
-
-function worldToMapY(z) {
-  const normalized =
-    (
-      z +
-      CONFIG.world.depth / 2
-    ) /
-    CONFIG.world.depth;
-
-  return clamp(
-    normalized * 100,
-    3,
-    97
-  );
-}
-
-function updateMinimap() {
-  if (
-    !minimap ||
-    !player ||
-    !demon
-  ) {
-    return;
-  }
-
-  if (
-    mapPlayer
-  ) {
-    mapPlayer.style.left =
-      `${worldToMapX(
-        player.position.x
-      )}%`;
-
-    mapPlayer.style.top =
-      `${worldToMapY(
-        player.position.z
-      )}%`;
-
-    mapPlayer.style.transform =
-      `translate(-50%, -50%) rotate(${-playerYaw}rad)`;
-  }
-
-  if (
-    mapDemon
-  ) {
-    mapDemon.style.left =
-      `${worldToMapX(
-        demon.position.x
-      )}%`;
-
-    mapDemon.style.top =
-      `${worldToMapY(
-        demon.position.z
-      )}%`;
-  }
-
-  if (
-    mapGate
-  ) {
-    mapGate.style.left =
-      `${worldToMapX(0)}%`;
-
-    mapGate.style.top =
-      `${worldToMapY(-68)}%`;
-
-    mapGate.classList.toggle(
-      "open",
-      state.gateOpen
-    );
-  }
-}
-
-
-/* ============================================================
-   DEVICE SELECTOR
-   ============================================================ */
-
-let deviceScreen = null;
-
-function openDeviceSelector() {
-  if (
-    deviceScreen
-  ) {
-    return;
-  }
-
-  deviceScreen =
-    document.createElement(
-      "div"
-    );
-
-  deviceScreen.className =
-    "device-screen";
-
-  deviceScreen.innerHTML = `
-    <div class="device-panel">
-
-      <div class="device-kicker">
-        THE SEEKER
-      </div>
-
-      <h2>
-        CHOOSE YOUR DEVICE
-      </h2>
-
-      <p>
-        Select your control method before entering the game.
-      </p>
-
-      <div class="device-options">
-
-        <button
-          class="device-choice"
-          data-device="pc"
-        >
-          <strong>PC</strong>
-          <span>
-            Keyboard + mouse
-          </span>
-        </button>
-
-        <button
-          class="device-choice"
-          data-device="mobile"
-        >
-          <strong>MOBILE</strong>
-          <span>
-            Touch controls
-          </span>
-        </button>
-
-      </div>
-
-      <button
-        class="device-back"
-      >
-        BACK
-      </button>
-
-    </div>
-  `;
-
-  document.body.appendChild(
-    deviceScreen
-  );
-
-  qsa(
-    "[data-device]",
-    deviceScreen
-  ).forEach(
-    (button) => {
-      button.addEventListener(
-        "click",
-        () => {
-          state.device =
-            button.dataset.device;
-
-          document.body.classList.toggle(
-            "device-pc",
-            state.device === "pc"
-          );
-
-          document.body.classList.toggle(
-            "device-mobile",
-            state.device === "mobile"
-          );
-
-          deviceScreen.remove();
-
-          deviceScreen =
-            null;
-
-          startGame();
-        }
-      );
-    }
-  );
-
-  const back =
-    qs(
-      ".device-back",
-      deviceScreen
-    );
-
-  back?.addEventListener(
-    "click",
-    () => {
-      deviceScreen.remove();
-
-      deviceScreen =
-        null;
-    }
-  );
-}
-
-
-/* ============================================================
-   GAME START / RESET
-   ============================================================ */
-
-function resetGameState() {
-  state.running =
-    true;
-
-  state.paused =
-    false;
-
-  state.dead =
-    false;
-
-  state.won =
-    false;
-
-  state.elapsed =
-    0;
-
-  state.setupTime =
-    CONFIG.objective.setupTime;
-
-  state.buttons = [
-    false,
-    false,
-    false
-  ];
-
-  state.keyFound =
-    false;
-
-  state.gateOpen =
-    false;
-
-  state.sanity =
-    100;
-
-  state.noise =
-    0;
-
-  state.sprinting =
-    false;
-
-  state.moving =
-    false;
-
-  state.hiding =
-    false;
-
-  state.hideTime =
-    0;
-
-  state.demonAlert =
-    false;
-
-  state.demonLastKnown =
-    null;
-
-  state.danger =
-    false;
-
-  state.interactionCooldown =
-    0;
-
-  state.lastTime =
-    performance.now();
-
-  playerVelocity.set(
-    0,
-    0,
-    0
-  );
-
-  if (player) {
-    player.position.copy(
-      playerSpawn
-    );
-  }
-
-  playerYaw =
-    0;
-
-  playerPitch =
-    0;
-
-  if (camera) {
-    camera.rotation.set(
-      0,
-      0,
-      0
-    );
-  }
-
-  if (player) {
-    player.rotation.set(
-      0,
-      0,
-      0
-    );
-  }
-
-  if (demon) {
-    demon.position.copy(
-      demonSpawn
-    );
-
-    demonVelocity.set(
-      0,
-      0,
-      0
-    );
-  }
-
-  for (
-    const item
-    of pickups
-  ) {
     if (
-      item.type === "key"
+        state.dead ||
+        state.won
     ) {
-      item.object.visible =
-        false;
-    }
-  }
-
-  for (
-    const item
-    of interactables
-  ) {
-    if (
-      item.type === "button"
-    ) {
-      item.button.material.color
-        .set(0x8e2525);
-
-      item.button.scale.y =
-        1;
-    }
-  }
-
-  if (
-    gateBars
-  ) {
-    gateBars.visible =
-      true;
-  }
-
-  state.notes = [];
-  state.notesFound = 0;
-
-  updateButtonUI();
-  updateNotesHUD();
-
-  setText(
-    "timer",
-    "03:00"
-  );
-
-  const sanity =
-    $("sanityFill");
-
-  if (sanity) {
-    sanity.style.width =
-      "100%";
-  }
-
-  const noise =
-    $("noiseFill");
-
-  if (noise) {
-    noise.style.width =
-      "0%";
-  }
-
-  hide(
-    "dangerWarning"
-  );
-
-  hide(
-    "pauseScreen"
-  );
-
-  hide(
-    "deathScreen"
-  );
-
-  hide(
-    "winScreen"
-  );
-}
-
-function startGame() {
-  initializeAudio();
-
-  if (
-    audioContext &&
-    audioContext.state ===
-      "suspended"
-  ) {
-    audioContext.resume();
-  }
-
-  initializeThree();
-
-  resetGameState();
-
-  hide(
-    "menuScreen"
-  );
-
-  hide(
-    "instructionsScreen"
-  );
-
-  hide(
-    "settingsScreen"
-  );
-
-  show(
-    "gameScreen"
-  );
-
-  if (
-    state.device ===
-    "mobile"
-  ) {
-    show(
-      "mobileControls"
-    );
-  } else {
-    hide(
-      "mobileControls"
-    );
-  }
-
-  setObjective(
-    "Find the three buttons."
-  );
-
-  startAmbientAudio();
-
-  requestAnimationFrame(
-    gameLoop
-  );
-}
-
-
-/* ============================================================
-   MOUSE LOOK
-   ============================================================ */
-
-function handleMouseMove(
-  event
-) {
-  if (
-    state.device !== "pc"
-  ) {
-    return;
-  }
-
-  if (
-    !state.running ||
-    state.paused ||
-    state.dead ||
-    state.won
-  ) {
-    return;
-  }
-
-  if (
-    !pointerLocked
-  ) {
-    return;
-  }
-
-  playerYaw -=
-    event.movementX *
-    CONFIG.player.mouseSensitivity;
-
-  playerPitch -=
-    event.movementY *
-    CONFIG.player.mouseSensitivity;
-
-  playerPitch =
-    clamp(
-      playerPitch,
-      -CONFIG.player.maxPitch,
-      CONFIG.player.maxPitch
-    );
-
-  player.rotation.y =
-    playerYaw;
-
-  camera.rotation.order =
-    "YXZ";
-
-  camera.rotation.x =
-    playerPitch;
-
-  camera.rotation.y =
-    0;
-}
-
-
-/* ============================================================
-   MOBILE CONTROLS
-   ============================================================ */
-
-function initializeMobileControls() {
-  const zone =
-    $("joystickZone");
-
-  const knob =
-    $("joystickKnob");
-
-  if (zone) {
-    zone.addEventListener(
-      "pointerdown",
-      (event) => {
-        if (
-          state.device !==
-          "mobile"
-        ) {
-          return;
-        }
-
-        joystick.active =
-          true;
-
-        joystick.pointerId =
-          event.pointerId;
-
-        zone.setPointerCapture(
-          event.pointerId
-        );
-
-        updateJoystick(
-          event,
-          zone,
-          knob
-        );
-      }
-    );
-
-    zone.addEventListener(
-      "pointermove",
-      (event) => {
-        if (
-          !joystick.active
-        ) {
-          return;
-        }
-
-        updateJoystick(
-          event,
-          zone,
-          knob
-        );
-      }
-    );
-
-    zone.addEventListener(
-      "pointerup",
-      resetJoystick
-    );
-
-    zone.addEventListener(
-      "pointercancel",
-      resetJoystick
-    );
-  }
-
-  const run =
-    $("mobileRun");
-
-  if (run) {
-    run.addEventListener(
-      "pointerdown",
-      () => {
-        mobileRunHeld =
-          true;
-      }
-    );
-
-    run.addEventListener(
-      "pointerup",
-      () => {
-        mobileRunHeld =
-          false;
-      }
-    );
-
-    run.addEventListener(
-      "pointercancel",
-      () => {
-        mobileRunHeld =
-          false;
-      }
-    );
-
-    run.addEventListener(
-      "pointerleave",
-      () => {
-        mobileRunHeld =
-          false;
-      }
-    );
-  }
-
-  const interact =
-    $("mobileInteract");
-
-  interact?.addEventListener(
-    "pointerdown",
-    () => {
-      tryInteract();
-    }
-  );
-
-  const flashlightButton =
-    $("mobileFlashlight");
-
-  flashlightButton?.addEventListener(
-    "pointerdown",
-    () => {
-      toggleFlashlight();
-    }
-  );
-
-  const lookZone =
-    $("lookZone");
-
-  if (lookZone) {
-    lookZone.addEventListener(
-      "pointerdown",
-      (event) => {
-        if (
-          state.device !==
-          "mobile"
-        ) {
-          return;
-        }
-
-        mobileLookActive =
-          true;
-
-        mobileLookX =
-          event.clientX;
-
-        mobileLookY =
-          event.clientY;
-
-        lookZone.setPointerCapture(
-          event.pointerId
-        );
-      }
-    );
-
-    lookZone.addEventListener(
-      "pointermove",
-      (event) => {
-        if (
-          !mobileLookActive
-        ) {
-          return;
-        }
-
-        const dx =
-          event.clientX -
-          mobileLookX;
-
-        const dy =
-          event.clientY -
-          mobileLookY;
-
-        mobileLookX =
-          event.clientX;
-
-        mobileLookY =
-          event.clientY;
-
-        playerYaw -=
-          dx *
-          CONFIG.player.touchSensitivity;
-
-        playerPitch -=
-          dy *
-          CONFIG.player.touchSensitivity;
-
-        playerPitch =
-          clamp(
-            playerPitch,
-            -CONFIG.player.maxPitch,
-            CONFIG.player.maxPitch
-          );
-
-        player.rotation.y =
-          playerYaw;
-
-        camera.rotation.order =
-          "YXZ";
-
-        camera.rotation.x =
-          playerPitch;
-      }
-    );
-
-    lookZone.addEventListener(
-      "pointerup",
-      () => {
-        mobileLookActive =
-          false;
-      }
-    );
-
-    lookZone.addEventListener(
-      "pointercancel",
-      () => {
-        mobileLookActive =
-          false;
-      }
-    );
-  }
-}
-
-function updateJoystick(
-  event,
-  zone,
-  knob
-) {
-  const rect =
-    zone.getBoundingClientRect();
-
-  const centerX =
-    rect.left +
-    rect.width / 2;
-
-  const centerY =
-    rect.top +
-    rect.height / 2;
-
-  let dx =
-    event.clientX -
-    centerX;
-
-  let dy =
-    event.clientY -
-    centerY;
-
-  const max =
-    Math.min(
-      rect.width,
-      rect.height
-    ) *
-    0.32;
-
-  const distance =
-    Math.hypot(
-      dx,
-      dy
-    );
-
-  if (
-    distance >
-    max
-  ) {
-    dx =
-      dx /
-      distance *
-      max;
-
-    dy =
-      dy /
-      distance *
-      max;
-  }
-
-  joystick.x =
-    dx / max;
-
-  joystick.y =
-    dy / max;
-
-  if (knob) {
-    knob.style.transform =
-      `translate(${dx}px, ${dy}px)`;
-  }
-}
-
-function resetJoystick() {
-  joystick.active =
-    false;
-
-  joystick.pointerId =
-    null;
-
-  joystick.x =
-    0;
-
-  joystick.y =
-    0;
-
-  const knob =
-    $("joystickKnob");
-
-  if (knob) {
-    knob.style.transform =
-      "translate(0, 0)";
-  }
-}
-
-
-/* ============================================================
-   FLASHLIGHT
-   ============================================================ */
-
-function toggleFlashlight() {
-  state.flashlight =
-    !state.flashlight;
-
-  if (flashlight) {
-    flashlight.visible =
-      state.flashlight;
-  }
-
-  createTone(
-    state.flashlight
-      ? 460
-      : 180,
-    0.07,
-    "square",
-    0.025
-  );
-}
-
-
-/* ============================================================
-   SETTINGS
-   ============================================================ */
-
-function saveSettings() {
-  try {
-    localStorage.setItem(
-      "the_seeker_settings",
-      JSON.stringify({
-        volume:
-          state.volume,
-
-        flashlight:
-          state.flashlight,
-
-        footsteps:
-          state.footsteps
-      })
-    );
-  } catch {}
-}
-
-function loadSettings() {
-  try {
-    const raw =
-      localStorage.getItem(
-        "the_seeker_settings"
-      );
-
-    if (!raw) {
-      return;
+        return;
     }
 
-    const saved =
-      JSON.parse(raw);
+    state.paused = false;
 
-    if (
-      typeof saved.volume ===
-      "number"
-    ) {
-      state.volume =
-        clamp(
-          saved.volume,
-          0,
-          1
-        );
+    hideElement(pauseScreen);
+
+    if (state.device === "pc") {
+        requestPointerLock();
     }
-
-    if (
-      typeof saved.flashlight ===
-      "boolean"
-    ) {
-      state.flashlight =
-        saved.flashlight;
-    }
-
-    if (
-      typeof saved.footsteps ===
-      "boolean"
-    ) {
-      state.footsteps =
-        saved.footsteps;
-    }
-
-    state.settingsLoaded =
-      true;
-  } catch {}
-}
-
-function syncSettingsUI() {
-  const volume =
-    $("volumeSetting");
-
-  if (volume) {
-    volume.value =
-      String(
-        Math.round(
-          state.volume * 100
-        )
-      );
-  }
-
-  const flashlightSetting =
-    $("flashlightSetting");
-
-  if (flashlightSetting) {
-    flashlightSetting.checked =
-      state.flashlight;
-  }
-
-  const footstepSetting =
-    $("footstepSetting");
-
-  if (footstepSetting) {
-    footstepSetting.checked =
-      state.footsteps;
-  }
-}
-
-
-/* ============================================================
-   NOTES SYSTEM
-   ============================================================ */
-
-function addNote(
-  text
-) {
-  state.notes.push({
-    id:
-      `note_${Date.now()}_${Math.random()}`,
-    text
-  });
-
-  state.notesFound =
-    state.notes.length;
-
-  updateNotesHUD();
 }
 
 function openNotesLog() {
-  const list =
-    $("notesLogList");
-
-  if (!list) {
-    return;
-  }
-
-  list.innerHTML = "";
-
-  if (
-    state.notes.length ===
-    0
-  ) {
-    const empty =
-      document.createElement(
-        "div"
-      );
-
-    empty.className =
-      "notes-log-empty";
-
-    empty.textContent =
-      "No notes found.";
-
-    list.appendChild(
-      empty
-    );
-  } else {
-    for (
-      const note
-      of state.notes
-    ) {
-      const item =
-        document.createElement(
-          "div"
-        );
-
-      item.className =
-        "note-entry";
-
-      item.textContent =
-        note.text;
-
-      list.appendChild(
-        item
-      );
-    }
-  }
-
-  show(
-    "notesLogScreen"
-  );
+    showElement(notesLogScreen);
+    renderNotesLog();
 }
 
-
-/* ============================================================
-   KEYBOARD EVENTS
-   ============================================================ */
-
-function initializeKeyboard() {
-  window.addEventListener(
-    "keydown",
-    (event) => {
-      keys[event.code] =
-        true;
-
-      if (
-        event.code ===
-        "Escape"
-      ) {
-        if (
-          state.running &&
-          !state.paused
-        ) {
-          pauseGame();
-        } else if (
-          state.paused
-        ) {
-          resumeGame();
-        }
-
-        return;
-      }
-
-      if (
-        event.code ===
-        "KeyE"
-      ) {
-        tryInteract();
-
-        return;
-      }
-
-      if (
-        event.code ===
-        "KeyF"
-      ) {
-        toggleFlashlight();
-
-        return;
-      }
-
-      if (
-        event.code ===
-        "KeyN"
-      ) {
-        openNotesLog();
-
-        return;
-      }
-
-      if (
-        event.code ===
-        "KeyH"
-      ) {
-        toggleHide();
-
-        return;
-      }
-
-      if (
-        [
-          "Space",
-          "ArrowUp",
-          "ArrowDown",
-          "ArrowLeft",
-          "ArrowRight"
-        ].includes(
-          event.code
-        )
-      ) {
-        event.preventDefault();
-      }
-    }
-  );
-
-  window.addEventListener(
-    "keyup",
-    (event) => {
-      keys[event.code] =
-        false;
-    }
-  );
+function closeNotesLog() {
+    hideElement(notesLogScreen);
 }
-
-
-/* ============================================================
-   HIDING SYSTEM
-   ============================================================ */
-
-function toggleHide() {
-  if (
-    !state.running ||
-    state.paused ||
-    state.dead ||
-    state.won
-  ) {
-    return;
-  }
-
-  state.hiding =
-    !state.hiding;
-
-  if (
-    state.hiding
-  ) {
-    state.hideTime =
-      0;
-
-    state.noise =
-      Math.max(
-        0,
-        state.noise -
-        35
-      );
-
-    setMessage(
-      "YOU ARE HIDING",
-      1200
-    );
-  } else {
-    setMessage(
-      "YOU LEFT HIDING",
-      1000
-    );
-  }
-}
-
-function updateHiding(dt) {
-  if (
-    !state.hiding
-  ) {
-    return;
-  }
-
-  state.hideTime +=
-    dt;
-
-  state.noise =
-    Math.max(
-      0,
-      state.noise -
-      18 * dt
-    );
-
-  if (
-    demon &&
-    player
-  ) {
-    const distance =
-      distance2D(
-        demon.position,
-        player.position
-      );
-
-    if (
-      distance >
-      28
-    ) {
-      state.demonAlert =
-        false;
-
-      state.demonLastKnown =
-        null;
-    }
-  }
-}
-
-
-/* ============================================================
-   INTERACTION PROMPT
-   ============================================================ */
-
-function updateInteractionPrompt() {
-  if (
-    !state.running ||
-    state.paused
-  ) {
-    return;
-  }
-
-  let closest = null;
-  let closestDistance =
-    Infinity;
-
-  for (
-    const item
-    of interactables
-  ) {
-    const distance =
-      distance2D(
-        player.position,
-        item.object.position
-      );
-
-    if (
-      distance <
-      item.range &&
-      distance <
-      closestDistance
-    ) {
-      closest =
-        item;
-
-      closestDistance =
-        distance;
-    }
-  }
-
-  for (
-    const pickup
-    of pickups
-  ) {
-    if (
-      !pickup.object.visible
-    ) {
-      continue;
-    }
-
-    const distance =
-      distance2D(
-        player.position,
-        pickup.object.position
-      );
-
-    if (
-      distance <
-      pickup.range &&
-      distance <
-      closestDistance
-    ) {
-      closest = pickup;
-
-      closestDistance =
-        distance;
-    }
-  }
-
-  if (!closest) {
-    return;
-  }
-
-  if (
-    closest.type ===
-    "button"
-  ) {
-    if (
-      state.buttons[
-        closest.index
-      ]
-    ) {
-      setMessage(
-        "BUTTON ACTIVE",
-        150
-      );
-    } else {
-      setMessage(
-        "PRESS E TO ACTIVATE",
-        150
-      );
-    }
-  }
-
-  if (
-    closest.type ===
-    "key"
-  ) {
-    setMessage(
-      "PRESS E TO TAKE KEY",
-      150
-    );
-  }
-
-  if (
-    closest.type ===
-    "gate"
-  ) {
-    if (
-      state.gateOpen
-    ) {
-      setMessage(
-        "EXIT THROUGH THE GATE",
-        150
-      );
-    } else {
-      setMessage(
-        "PRESS E TO OPEN",
-        150
-      );
-    }
-  }
-}
-
-
-/* ============================================================
-   INSTRUCTIONS / MENU
-   ============================================================ */
-
-function initializeMenu() {
-  $("playButton")?.addEventListener(
-    "click",
-    () => {
-      initializeAudio();
-      openDeviceSelector();
-    }
-  );
-
-  $("instructionsButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        hide("menuScreen");
-        show("instructionsScreen");
-      }
-    );
-
-  $("settingsButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        syncSettingsUI();
-        hide("menuScreen");
-        show("settingsScreen");
-      }
-    );
-
-  $("instructionsBack")
-    ?.addEventListener(
-      "click",
-      () => {
-        hide("instructionsScreen");
-        show("menuScreen");
-      }
-    );
-
-  $("settingsBack")
-    ?.addEventListener(
-      "click",
-      () => {
-        saveSettings();
-        hide("settingsScreen");
-        show("menuScreen");
-      }
-    );
-}
-
-
-/* ============================================================
-   GAME UI BUTTONS
-   ============================================================ */
-
-function initializeGameUI() {
-  $("resumeButton")
-    ?.addEventListener(
-      "click",
-      resumeGame
-    );
-
-  $("quitButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        location.reload();
-      }
-    );
-
-  $("retryButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        startGame();
-      }
-    );
-
-  $("deathMenuButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        location.reload();
-      }
-    );
-
-  $("winAgainButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        startGame();
-      }
-    );
-
-  $("winMenuButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        location.reload();
-      }
-    );
-
-  $("notesLogButton")
-    ?.addEventListener(
-      "click",
-      openNotesLog
-    );
-
-  $("notesLogBack")
-    ?.addEventListener(
-      "click",
-      () => {
-        hide(
-          "notesLogScreen"
-        );
-      }
-    );
-}
-
-
-/* ============================================================
-   SETTINGS UI
-   ============================================================ */
-
-function initializeSettings() {
-  const volume =
-    $("volumeSetting");
-
-  volume?.addEventListener(
-    "input",
-    (event) => {
-      state.volume =
-        clamp(
-          Number(
-            event.target.value
-          ) / 100,
-          0,
-          1
-        );
-
-      updateMasterVolume();
-      saveSettings();
-    }
-  );
-
-  const flashlightSetting =
-    $("flashlightSetting");
-
-  flashlightSetting?.addEventListener(
-    "change",
-    (event) => {
-      state.flashlight =
-        event.target.checked;
-
-      if (
-        flashlight
-      ) {
-        flashlight.visible =
-          state.flashlight;
-      }
-
-      saveSettings();
-    }
-  );
-
-  const footstepSetting =
-    $("footstepSetting");
-
-  footstepSetting?.addEventListener(
-    "change",
-    (event) => {
-      state.footsteps =
-        event.target.checked;
-
-      saveSettings();
-    }
-  );
-}
-
 
 /* ============================================================
    POINTER LOCK
    ============================================================ */
 
-function initializePointerLock() {
-  document.addEventListener(
-    "pointerlockchange",
-    () => {
-      pointerLocked =
-        document.pointerLockElement ===
-        renderer?.domElement;
+function requestPointerLock() {
+    if (
+        state.device !== "pc" ||
+        !renderer ||
+        !renderer.domElement
+    ) {
+        return;
     }
-  );
 
-  document.addEventListener(
-    "mousemove",
-    handleMouseMove
-  );
-
-  document.addEventListener(
-    "mousedown",
-    (event) => {
-      if (
-        event.button !== 0
-      ) {
-        return;
-      }
-
-      if (
-        state.device !==
-        "pc"
-      ) {
-        return;
-      }
-
-      if (
-        !state.running ||
-        state.paused
-      ) {
-        return;
-      }
-
-      if (
-        renderer &&
-        !pointerLocked
-      ) {
+    if (
+        document.pointerLockElement !==
         renderer.domElement
-          .requestPointerLock?.();
-      }
+    ) {
+        renderer.domElement.requestPointerLock?.();
     }
-  );
 }
 
+function releasePointerLock() {
+    if (
+        document.pointerLockElement
+    ) {
+        document.exitPointerLock?.();
+    }
+}
+
+/* ============================================================
+   MOUSE LOOK
+   ============================================================ */
+
+function handleMouseMove(event) {
+    if (
+        !state.running ||
+        state.paused ||
+        state.device !== "pc" ||
+        !pointerLocked
+    ) {
+        return;
+    }
+
+    yaw -=
+        event.movementX *
+        mouse.sensitivity;
+
+    pitch -=
+        event.movementY *
+        mouse.sensitivity;
+
+    pitch = clamp(
+        pitch,
+        -Math.PI / 2 + 0.08,
+        Math.PI / 2 - 0.08
+    );
+
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+}
+
+/* ============================================================
+   MOBILE LOOK
+   ============================================================ */
+
+function setupMobileLook() {
+    if (!lookZone) {
+        return;
+    }
+
+    lookZone.addEventListener(
+        "pointerdown",
+        (event) => {
+            if (state.device !== "mobile") {
+                return;
+            }
+
+            lookTouch.active = true;
+            lookTouch.pointerId =
+                event.pointerId;
+
+            lookTouch.lastX =
+                event.clientX;
+
+            lookTouch.lastY =
+                event.clientY;
+
+            lookZone.setPointerCapture?.(
+                event.pointerId
+            );
+        }
+    );
+
+    lookZone.addEventListener(
+        "pointermove",
+        (event) => {
+            if (
+                !lookTouch.active ||
+                lookTouch.pointerId !==
+                    event.pointerId
+            ) {
+                return;
+            }
+
+            const dx =
+                event.clientX -
+                lookTouch.lastX;
+
+            const dy =
+                event.clientY -
+                lookTouch.lastY;
+
+            lookTouch.lastX =
+                event.clientX;
+
+            lookTouch.lastY =
+                event.clientY;
+
+            yaw -= dx * 0.006;
+            pitch -= dy * 0.006;
+
+            pitch = clamp(
+                pitch,
+                -Math.PI / 2 + 0.08,
+                Math.PI / 2 - 0.08
+            );
+
+            camera.rotation.y = yaw;
+            camera.rotation.x = pitch;
+        }
+    );
+
+    const endLook = () => {
+        lookTouch.active = false;
+        lookTouch.pointerId = null;
+    };
+
+    lookZone.addEventListener(
+        "pointerup",
+        endLook
+    );
+
+    lookZone.addEventListener(
+        "pointercancel",
+        endLook
+    );
+}
+
+/* ============================================================
+   MOBILE JOYSTICK
+   ============================================================ */
+
+function setupJoystick() {
+    if (!joystickZone) {
+        return;
+    }
+
+    joystickZone.addEventListener(
+        "pointerdown",
+        (event) => {
+            if (state.device !== "mobile") {
+                return;
+            }
+
+            joystick.active = true;
+            joystick.pointerId =
+                event.pointerId;
+
+            const rect =
+                joystickZone.getBoundingClientRect();
+
+            joystick.startX =
+                rect.left +
+                rect.width / 2;
+
+            joystick.startY =
+                rect.top +
+                rect.height / 2;
+
+            updateJoystick(
+                event.clientX,
+                event.clientY
+            );
+
+            joystickZone.setPointerCapture?.(
+                event.pointerId
+            );
+        }
+    );
+
+    joystickZone.addEventListener(
+        "pointermove",
+        (event) => {
+            if (
+                !joystick.active ||
+                joystick.pointerId !==
+                    event.pointerId
+            ) {
+                return;
+            }
+
+            updateJoystick(
+                event.clientX,
+                event.clientY
+            );
+        }
+    );
+
+    const endJoystick = () => {
+        joystick.active = false;
+        joystick.pointerId = null;
+        joystick.x = 0;
+        joystick.y = 0;
+
+        if (joystickKnob) {
+            joystickKnob.style.transform =
+                "translate(-50%, -50%)";
+        }
+    };
+
+    joystickZone.addEventListener(
+        "pointerup",
+        endJoystick
+    );
+
+    joystickZone.addEventListener(
+        "pointercancel",
+        endJoystick
+    );
+}
+
+function updateJoystick(clientX, clientY) {
+    let dx =
+        clientX -
+        joystick.startX;
+
+    let dy =
+        clientY -
+        joystick.startY;
+
+    const distance =
+        Math.sqrt(
+            dx * dx +
+            dy * dy
+        );
+
+    if (
+        distance >
+        joystick.maxDistance
+    ) {
+        const scale =
+            joystick.maxDistance /
+            distance;
+
+        dx *= scale;
+        dy *= scale;
+    }
+
+    joystick.x =
+        clamp(
+            dx /
+                joystick.maxDistance,
+            -1,
+            1
+        );
+
+    joystick.y =
+        clamp(
+            -dy /
+                joystick.maxDistance,
+            -1,
+            1
+        );
+
+    if (joystickKnob) {
+        joystickKnob.style.transform =
+            `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    }
+}
+
+/* ============================================================
+   INPUT
+   ============================================================ */
+
+function setupKeyboard() {
+    window.addEventListener(
+        "keydown",
+        (event) => {
+            keys.add(event.code);
+
+            if (
+                event.code === "KeyE" ||
+                event.code === "Enter"
+            ) {
+                interact();
+            }
+
+            if (
+                event.code === "KeyF"
+            ) {
+                toggleFlashlight();
+            }
+
+            if (
+                event.code === "KeyH"
+            ) {
+                startHideMode();
+            }
+
+            if (
+                event.code === "Escape"
+            ) {
+                if (
+                    state.running &&
+                    !state.paused
+                ) {
+                    pauseGame();
+                } else if (
+                    state.paused
+                ) {
+                    resumeGame();
+                }
+            }
+
+            if (
+                event.code === "KeyN"
+            ) {
+                if (state.running) {
+                    openNotesLog();
+                }
+            }
+        }
+    );
+
+    window.addEventListener(
+        "keyup",
+        (event) => {
+            keys.delete(
+                event.code
+            );
+        }
+    );
+
+    document.addEventListener(
+        "mousemove",
+        handleMouseMove
+    );
+
+    document.addEventListener(
+        "pointerlockchange",
+        () => {
+            pointerLocked =
+                document.pointerLockElement ===
+                renderer?.domElement;
+        }
+    );
+}
+
+/* ============================================================
+   MOBILE BUTTONS
+   ============================================================ */
+
+function setupMobileButtons() {
+    mobileRun?.addEventListener(
+        "pointerdown",
+        () => {
+            state.mobileRunning = true;
+        }
+    );
+
+    mobileRun?.addEventListener(
+        "pointerup",
+        () => {
+            state.mobileRunning = false;
+        }
+    );
+
+    mobileRun?.addEventListener(
+        "pointercancel",
+        () => {
+            state.mobileRunning = false;
+        }
+    );
+
+    mobileInteract?.addEventListener(
+        "click",
+        () => {
+            interact();
+        }
+    );
+
+    mobileFlashlight?.addEventListener(
+        "click",
+        () => {
+            toggleFlashlight();
+        }
+    );
+}
+
+/* ============================================================
+   SCREEN MANAGEMENT
+   ============================================================ */
+
+function showMenu() {
+    state.running = false;
+    state.paused = false;
+    state.dead = false;
+    state.won = false;
+
+    showElement(menuScreen);
+
+    hideElement(instructionsScreen);
+    hideElement(settingsScreen);
+    hideElement(gameScreen);
+    hideElement(pauseScreen);
+    hideElement(notesLogScreen);
+    hideElement(deathScreen);
+    hideElement(winScreen);
+
+    releasePointerLock();
+}
+
+function showInstructions() {
+    hideElement(menuScreen);
+    showElement(instructionsScreen);
+}
+
+function showSettings() {
+    hideElement(menuScreen);
+    showElement(settingsScreen);
+}
+
+function prepareGameScreen() {
+    hideElement(menuScreen);
+    hideElement(instructionsScreen);
+    hideElement(settingsScreen);
+
+    showElement(gameScreen);
+
+    if (state.device === "mobile") {
+        showElement(mobileControls);
+    } else {
+        hideElement(mobileControls);
+    }
+}
+
+/* ============================================================
+   GAME RESET
+   ============================================================ */
+
+function resetGameState() {
+    state.running = false;
+    state.paused = false;
+    state.dead = false;
+    state.won = false;
+
+    state.elapsed = 0;
+
+    state.preparationRemaining =
+        GAME_CONFIG.game.preparationTime;
+
+    state.sanity =
+        GAME_CONFIG.game.startingSanity;
+
+    state.noise = 0;
+
+    state.keyCollected = false;
+    state.gateOpen = false;
+
+    state.notes = [];
+
+    state.hideMode = false;
+    state.hideRemaining = 0;
+
+    state.seekerActive = false;
+    state.seekerState = "waiting";
+
+    state.footstepTimer = 0;
+
+    state.buttons.forEach(
+        (button) => {
+            button.pressed = false;
+        }
+    );
+
+    state.interactionTarget = null;
+
+    seekerAI.pathTimer = 0;
+    seekerAI.searchTimer = 0;
+    seekerAI.investigateTimer = 0;
+    seekerAI.hearingCooldown = 0;
+
+    if (keyObject) {
+        keyObject.visible = false;
+    }
+
+    if (seeker) {
+        seeker.visible = false;
+    }
+
+    if (gate) {
+        gate.children[0].position.x = -2.5;
+        gate.children[1].position.x = 2.5;
+    }
+
+    if (gateLight) {
+        gateLight.color.setHex(
+            GAME_CONFIG.colors.red
+        );
+
+        gateLight.intensity = 1.2;
+    }
+
+    removeCollisionByName(
+        "exit-gate"
+    );
+
+    addCollisionBox(
+        0,
+        2.75,
+        -87,
+        5.5,
+        5.5,
+        1,
+        {
+            name: "exit-gate"
+        }
+    );
+
+    interactables.forEach(
+        (item) => {
+            item.used = false;
+            item.object.visible = true;
+        }
+    );
+
+    updateButtonUI();
+
+    if (notesCountElement) {
+        notesCountElement.textContent =
+            "0/3";
+    }
+
+    if (sanityFill) {
+        sanityFill.style.width =
+            "100%";
+    }
+
+    if (noiseContainer) {
+        noiseContainer.style.width =
+            "0%";
+    }
+
+    hideElement(interactionElement);
+    hideElement(hideTimer);
+    hideElement(dangerWarning);
+    hideElement(noteToast);
+    hideElement(screamOverlay);
+
+    resetPlayer();
+
+    renderNotesLog();
+}
+
+/* ============================================================
+   START GAME
+   ============================================================ */
+
+function startGame() {
+    if (!renderer) {
+        initializeGame();
+    }
+
+    resumeAudio();
+
+    resetGameState();
+
+    prepareGameScreen();
+
+    state.running = true;
+
+    updateObjective();
+
+    updateTimerUI();
+
+    if (state.device === "pc") {
+        setTimeout(() => {
+            requestPointerLock();
+        }, 100);
+    }
+
+    if (state.device === "mobile") {
+        showToast(
+            "Touch controls enabled."
+        );
+    }
+
+    playTone(
+        180,
+        0.2,
+        "sine"
+    );
+}
+
+/* ============================================================
+   QUIT
+   ============================================================ */
+
+function quitToMenu() {
+    state.running = false;
+
+    releasePointerLock();
+
+    showMenu();
+}
+
+/* ============================================================
+   WIN CHECK
+   ============================================================ */
+
+function updateWinCheck() {
+    if (
+        !state.gateOpen ||
+        !state.keyCollected
+    ) {
+        return;
+    }
+
+    const distance =
+        distanceXZ(
+            camera.position,
+            new THREE.Vector3(
+                0,
+                0,
+                -96
+            )
+        );
+
+    if (distance < 5) {
+        triggerWin();
+    }
+}
+
+/* ============================================================
+   PREPARATION TIMER
+   ============================================================ */
+
+function updatePreparationTimer(delta) {
+    if (
+        !state.running ||
+        state.seekerActive
+    ) {
+        return;
+    }
+
+    state.preparationRemaining -=
+        delta;
+
+    if (
+        state.preparationRemaining <= 0
+    ) {
+        state.preparationRemaining = 0;
+
+        activateSeeker();
+    }
+}
+
+/* ============================================================
+   GAME TIMER
+   ============================================================ */
+
+function updateGameTimer(delta) {
+    if (
+        !state.running ||
+        state.paused ||
+        state.dead ||
+        state.won
+    ) {
+        return;
+    }
+
+    if (state.seekerActive) {
+        state.elapsed += delta;
+    }
+
+    updatePreparationTimer(delta);
+    updateTimerUI();
+}
+
+/* ============================================================
+   WORLD ANIMATION
+   ============================================================ */
+
+function animateWorld(delta) {
+    const time =
+        performance.now() * 0.001;
+
+    for (const child of effectGroup.children) {
+        if (
+            child.userData &&
+            child.userData.base
+        ) {
+            child.position.y =
+                child.userData.base.y +
+                Math.sin(
+                    time * 2 +
+                    child.userData.phase
+                ) *
+                0.12;
+        }
+    }
+
+    if (keyObject?.visible) {
+        keyObject.rotation.y +=
+            delta * 1.7;
+
+        keyObject.rotation.z =
+            Math.sin(time * 2) *
+            0.08;
+    }
+}
+
+/* ============================================================
+   MINIMAP
+   ============================================================ */
+
+let minimapCanvas = null;
+let minimapContext = null;
+
+function createMinimap() {
+    const existing =
+        document.getElementById(
+            "seekerMinimap"
+        );
+
+    if (existing) {
+        minimapCanvas = existing.querySelector(
+            "canvas"
+        );
+
+        minimapContext =
+            minimapCanvas?.getContext(
+                "2d"
+            );
+
+        return;
+    }
+
+    const container =
+        document.createElement("div");
+
+    container.id =
+        "seekerMinimap";
+
+    container.innerHTML = `
+        <div class="minimap-title">
+            MAP
+        </div>
+
+        <canvas
+            width="220"
+            height="220"
+            aria-label="Game minimap">
+        </canvas>
+
+        <div class="minimap-legend">
+            <span>
+                <i class="player-dot"></i>
+                YOU
+            </span>
+            <span>
+                <i class="seeker-dot"></i>
+                SEEKER
+            </span>
+        </div>
+    `;
+
+    document.body.appendChild(
+        container
+    );
+
+    minimapCanvas =
+        container.querySelector(
+            "canvas"
+        );
+
+    minimapContext =
+        minimapCanvas.getContext(
+            "2d"
+        );
+}
+
+function worldToMap(x, z) {
+    const size =
+        GAME_CONFIG.world.floorSize;
+
+    const width =
+        minimapCanvas.width;
+
+    const height =
+        minimapCanvas.height;
+
+    return {
+        x:
+            ((x + size / 2) / size) *
+            width,
+
+        y:
+            ((z + size / 2) / size) *
+            height
+    };
+}
+
+function drawArrow(
+    context,
+    x,
+    y,
+    angle,
+    color,
+    size
+) {
+    context.save();
+
+    context.translate(
+        x,
+        y
+    );
+
+    context.rotate(
+        angle
+    );
+
+    context.beginPath();
+
+    context.moveTo(
+        0,
+        -size
+    );
+
+    context.lineTo(
+        size * 0.7,
+        size
+    );
+
+    context.lineTo(
+        0,
+        size * 0.45
+    );
+
+    context.lineTo(
+        -size * 0.7,
+        size
+    );
+
+    context.closePath();
+
+    context.fillStyle =
+        color;
+
+    context.fill();
+
+    context.restore();
+}
+
+function drawMinimap() {
+    if (
+        !minimapContext ||
+        !minimapCanvas ||
+        !camera
+    ) {
+        return;
+    }
+
+    const context =
+        minimapContext;
+
+    const width =
+        minimapCanvas.width;
+
+    const height =
+        minimapCanvas.height;
+
+    context.clearRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+    context.fillStyle =
+        "#050505";
+
+    context.fillRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+    /*
+       House outline.
+    */
+
+    context.strokeStyle =
+        "#383838";
+
+    context.lineWidth = 2;
+
+    context.strokeRect(
+        4,
+        4,
+        width - 8,
+        height - 8
+    );
+
+    /*
+       Interior wall representation.
+    */
+
+    const drawWallLine = (
+        x1,
+        z1,
+        x2,
+        z2
+    ) => {
+        const a =
+            worldToMap(
+                x1,
+                z1
+            );
+
+        const b =
+            worldToMap(
+                x2,
+                z2
+            );
+
+        context.beginPath();
+
+        context.moveTo(
+            a.x,
+            a.y
+        );
+
+        context.lineTo(
+            b.x,
+            b.y
+        );
+
+        context.stroke();
+    };
+
+    context.strokeStyle =
+        "#242424";
+
+    context.lineWidth = 2;
+
+    drawWallLine(
+        -30,
+        -80,
+        -30,
+        -32
+    );
+
+    drawWallLine(
+        30,
+        -80,
+        30,
+        -32
+    );
+
+    drawWallLine(
+        -30,
+        32,
+        -30,
+        80
+    );
+
+    drawWallLine(
+        30,
+        32,
+        30,
+        80
+    );
+
+    drawWallLine(
+        -80,
+        -18,
+        -30,
+        -18
+    );
+
+    drawWallLine(
+        30,
+        -18,
+        80,
+        -18
+    );
+
+    drawWallLine(
+        -80,
+        18,
+        -30,
+        18
+    );
+
+    drawWallLine(
+        30,
+        18,
+        80,
+        18
+    );
+
+    /*
+       Buttons.
+    */
+
+    state.buttons.forEach(
+        (button) => {
+            const p =
+                worldToMap(
+                    button.position.x,
+                    button.position.z
+                );
+
+            context.beginPath();
+
+            context.arc(
+                p.x,
+                p.y,
+                4,
+                0,
+                Math.PI * 2
+            );
+
+            context.fillStyle =
+                button.pressed
+                    ? "#2a8a4a"
+                    : "#b33030";
+
+            context.fill();
+        }
+    );
+
+    /*
+       Key.
+    */
+
+    if (
+        keyObject &&
+        keyObject.visible
+    ) {
+        const p =
+            worldToMap(
+                keyObject.position.x,
+                keyObject.position.z
+            );
+
+        context.beginPath();
+
+        context.arc(
+            p.x,
+            p.y,
+            4,
+            0,
+            Math.PI * 2
+        );
+
+        context.fillStyle =
+            "#c9a227";
+
+        context.fill();
+    }
+
+    /*
+       Exit.
+    */
+
+    const exit =
+        worldToMap(
+            0,
+            -87
+        );
+
+    context.fillStyle =
+        state.gateOpen
+            ? "#2a8a4a"
+            : "#b33030";
+
+    context.fillRect(
+        exit.x - 7,
+        exit.y - 3,
+        14,
+        6
+    );
+
+    /*
+       Seeker.
+    */
+
+    if (
+        seeker &&
+        state.seekerActive
+    ) {
+        const p =
+            worldToMap(
+                seeker.position.x,
+                seeker.position.z
+            );
+
+        drawArrow(
+            context,
+            p.x,
+            p.y,
+            seeker.rotation.y,
+            "#d52f2f",
+            7
+        );
+    }
+
+    /*
+       Player.
+    */
+
+    const playerMap =
+        worldToMap(
+            camera.position.x,
+            camera.position.z
+        );
+
+    drawArrow(
+        context,
+        playerMap.x,
+        playerMap.y,
+        yaw,
+        "#ffffff",
+        7
+    );
+}
 
 /* ============================================================
    RESIZE
    ============================================================ */
 
-function resizeRenderer() {
-  if (
-    !renderer ||
-    !camera
-  ) {
-    return;
-  }
-
-  camera.aspect =
-    window.innerWidth /
-    window.innerHeight;
-
-  camera.updateProjectionMatrix();
-
-  renderer.setSize(
-    window.innerWidth,
-    window.innerHeight
-  );
-}
-
-
-/* ============================================================
-   GAME LOOP
-   ============================================================ */
-
-function gameLoop(
-  timestamp
-) {
-  if (
-    !state.running &&
-    !state.paused
-  ) {
-    return;
-  }
-
-  requestAnimationFrame(
-    gameLoop
-  );
-
-  const delta =
-    Math.min(
-      0.05,
-      (
-        timestamp -
-        state.lastTime
-      ) / 1000
-    );
-
-  state.lastTime =
-    timestamp;
-
-  if (
-    state.paused
-  ) {
-    if (
-      renderer &&
-      scene &&
-      camera
-    ) {
-      renderer.render(
-        scene,
-        camera
-      );
+function handleResize() {
+    if (!camera || !renderer) {
+        return;
     }
 
-    return;
-  }
+    camera.aspect =
+        window.innerWidth /
+        window.innerHeight;
 
-  updatePlayer(
-    delta
-  );
+    camera.updateProjectionMatrix();
 
-  updateDemon(
-    delta
-  );
-
-  updateHiding(
-    delta
-  );
-
-  updateHUD(
-    delta
-  );
-
-  updateInteractionPrompt();
-
-  updateMinimap();
-
-  updateFlashlight();
-
-  if (
-    renderer &&
-    scene &&
-    camera
-  ) {
-    renderer.render(
-      scene,
-      camera
+    renderer.setSize(
+        window.innerWidth,
+        window.innerHeight,
+        false
     );
-  }
+
+    renderer.setPixelRatio(
+        Math.min(
+            window.devicePixelRatio || 1,
+            GAME_CONFIG.graphics.pixelRatioLimit
+        )
+    );
 }
 
-
 /* ============================================================
-   FLASHLIGHT UPDATE
+   SETTINGS
    ============================================================ */
 
-function updateFlashlight() {
-  if (
-    !flashlight ||
-    !camera
-  ) {
-    return;
-  }
+function setupSettings() {
+    $("flashlightSetting")?.addEventListener(
+        "click",
+        () => {
+            state.flashlightEnabled =
+                !state.flashlightEnabled;
 
-  flashlight.visible =
-    state.flashlight;
+            updateFlashlight();
+        }
+    );
 
-  flashlight.intensity =
-    state.flashlight
-      ? 3.2
-      : 0;
+    $("footstepSetting")?.addEventListener(
+        "click",
+        () => {
+            state.footstepsEnabled =
+                !state.footstepsEnabled;
+        }
+    );
 
-  if (
-    state.sprinting
-  ) {
-    flashlight.intensity =
-      state.flashlight
-        ? 2.85
-        : 0;
-  }
+    $("volumeSetting")?.addEventListener(
+        "input",
+        (event) => {
+            state.volume =
+                clamp(
+                    Number(
+                        event.target.value
+                    ) || 0,
+                    0,
+                    1
+                );
+
+            if (masterGain) {
+                masterGain.gain.value =
+                    state.volume;
+            }
+        }
+    );
 }
 
-
 /* ============================================================
-   LOAD ERROR WATCHDOG
+   MENU EVENTS
    ============================================================ */
 
-function showLoadError(
-  message
-) {
-  const box =
-    $("loadError");
-
-  if (!box) {
-    return;
-  }
-
-  const text =
-    qs(
-      ".box",
-      box
+function setupMenuEvents() {
+    playButton?.addEventListener(
+        "click",
+        () => {
+            resumeAudio();
+            createDeviceSelection();
+        }
     );
 
-  if (text) {
-    text.textContent =
-      message;
-  }
+    instructionsButton?.addEventListener(
+        "click",
+        () => {
+            showInstructions();
+        }
+    );
 
-  show(
-    box
-  );
+    settingsButton?.addEventListener(
+        "click",
+        () => {
+            showSettings();
+        }
+    );
+
+    instructionsBack?.addEventListener(
+        "click",
+        () => {
+            showMenu();
+        }
+    );
+
+    settingsBack?.addEventListener(
+        "click",
+        () => {
+            showMenu();
+        }
+    );
+
+    resumeButton?.addEventListener(
+        "click",
+        () => {
+            resumeGame();
+        }
+    );
+
+    notesLogButton?.addEventListener(
+        "click",
+        () => {
+            openNotesLog();
+        }
+    );
+
+    quitButton?.addEventListener(
+        "click",
+        () => {
+            quitToMenu();
+        }
+    );
+
+    notesLogBack?.addEventListener(
+        "click",
+        () => {
+            closeNotesLog();
+        }
+    );
+
+    retryButton?.addEventListener(
+        "click",
+        () => {
+            hideElement(deathScreen);
+            startGame();
+        }
+    );
+
+    deathMenuButton?.addEventListener(
+        "click",
+        () => {
+            showMenu();
+        }
+    );
+
+    winAgainButton?.addEventListener(
+        "click",
+        () => {
+            hideElement(winScreen);
+            startGame();
+        }
+    );
+
+    winMenuButton?.addEventListener(
+        "click",
+        () => {
+            showMenu();
+        }
+    );
 }
 
-window.addEventListener(
-  "error",
-  (event) => {
-    if (
-      event.error
-    ) {
-      console.error(
-        "[THE SEEKER]",
-        event.error
-      );
-    }
-  }
-);
+/* ============================================================
+   WORLD BUILD
+   ============================================================ */
 
-window.addEventListener(
-  "unhandledrejection",
-  (event) => {
-    console.error(
-      "[THE SEEKER]",
-      event.reason
-    );
-  }
-);
+function buildWorld() {
+    createFloor();
 
+    buildOuterWalls();
+
+    buildMainRooms();
+
+    createFurniture();
+
+    createWindows();
+
+    createHouseLights();
+
+    createGate();
+
+    createButtons();
+
+    createNotes();
+
+    createSeeker();
+
+    createKey();
+
+    createMinimap();
+}
 
 /* ============================================================
-   INITIALIZATION
+   INITIALIZE
    ============================================================ */
 
 function initializeGame() {
-  try {
-    loadSettings();
+    if (state.initialized) {
+        return;
+    }
 
-    initializeMenu();
+    try {
+        createRenderer();
+        createScene();
+        createCamera();
+        createLighting();
 
-    initializeGameUI();
+        buildWorld();
 
-    initializeSettings();
+        setupKeyboard();
+        setupJoystick();
+        setupMobileLook();
+        setupMobileButtons();
 
-    initializeKeyboard();
+        setupMenuEvents();
+        setupSettings();
 
-    initializeMobileControls();
+        window.addEventListener(
+            "resize",
+            handleResize
+        );
 
-    initializePointerLock();
+        resetGameState();
 
-    syncSettingsUI();
+        state.initialized = true;
 
-    setText(
-      "timer",
-      "03:00"
-    );
+        console.log(
+            "[THE SEEKER] Game initialized successfully."
+        );
 
-    setText(
-      "notesCount",
-      "0"
-    );
+        console.log(
+            "[THE SEEKER] Device:",
+            state.device
+        );
 
-    setObjective(
-      "Find the three buttons."
-    );
-  } catch (error) {
-    console.error(
-      "[THE SEEKER] Initialization error:",
-      error
-    );
+        requestAnimationFrame(
+            gameLoop
+        );
+    } catch (error) {
+        console.error(
+            "[THE SEEKER] Initialization error:",
+            error
+        );
 
-    showLoadError(
-      "The game could not initialize. Check the browser console for details."
-    );
-  }
+        showInitializationError(
+            error
+        );
+    }
 }
 
-
 /* ============================================================
-   START
+   INITIALIZATION ERROR
    ============================================================ */
 
-if (
-  document.readyState ===
-  "loading"
-) {
-  document.addEventListener(
-    "DOMContentLoaded",
-    initializeGame,
-    {
-      once: true
+function showInitializationError(error) {
+    const loadError =
+        $("loadError");
+
+    if (!loadError) {
+        return;
     }
-  );
-} else {
-  initializeGame();
+
+    const box =
+        loadError.querySelector(
+            ".box"
+        );
+
+    if (box) {
+        box.innerHTML = `
+            <strong>
+                The game could not initialize.
+            </strong>
+            <br>
+            <span>
+                ${escapeHTML(
+                    error?.message ||
+                    "Unknown error."
+                )}
+            </span>
+            <br><br>
+            <small>
+                Check the browser console for details.
+            </small>
+        `;
+    }
+
+    hideElement(menuScreen);
+    showElement(loadError);
 }
 
-
 /* ============================================================
-   EXTENDED GAME DATA
-   These definitions provide a clean foundation for expanding
-   the game without changing the main gameplay architecture.
+   MAIN LOOP
    ============================================================ */
 
-const SEEKER_WORLD_DATA = {
-  name: "The Seeker",
+function gameLoop(now) {
+    requestAnimationFrame(
+        gameLoop
+    );
 
-  developer:
-    "BlackHollow Games",
+    const rawDelta =
+        (now - state.lastFrame) /
+        1000;
 
-  creator:
-    "Stive Pierre",
+    state.lastFrame = now;
 
-  version:
-    "1.0.0",
+    const delta =
+        clamp(
+            rawDelta,
+            0,
+            0.05
+        );
 
-  world: {
-    sizeX: 150,
-    sizeZ: 150,
+    state.fps =
+        lerp(
+            state.fps,
+            1 / Math.max(delta, 0.001),
+            0.08
+        );
 
-    playerSpawn: {
-      x: 0,
-      y: 1.65,
-      z: 62
-    },
+    if (
+        renderer &&
+        scene &&
+        camera
+    ) {
+        if (
+            state.running &&
+            !state.paused &&
+            !state.dead &&
+            !state.won
+        ) {
+            updateGameTimer(delta);
+            updatePlayer(delta);
+            updateSeeker(delta);
+            updateSanity(delta);
+            updateHideMode(delta);
+            updateInteraction();
+            updateDangerUI();
+            updateWinCheck();
+        }
 
-    seekerSpawn: {
-      x: -48,
-      y: 0,
-      z: 48
-    },
+        updateFlashlight();
+        animateWorld(delta);
+        drawMinimap();
 
-    gatePosition: {
-      x: 0,
-      y: 3.5,
-      z: -68
+        renderer.render(
+            scene,
+            camera
+        );
     }
-  },
+}
 
-  objectives: [
-    {
-      id: "button_1",
-      name: "Button One",
-      type: "button"
-    },
+/* ============================================================
+   EXTRA ENVIRONMENT DETAILS
+   ============================================================ */
 
-    {
-      id: "button_2",
-      name: "Button Two",
-      type: "button"
-    },
+function addWallDecorations() {
+    const signs = [
+        {
+            x: -88.4,
+            y: 3.3,
+            z: -60,
+            rotation: Math.PI / 2,
+            text: "WEST"
+        },
+        {
+            x: 88.4,
+            y: 3.3,
+            z: 60,
+            rotation: -Math.PI / 2,
+            text: "EAST"
+        }
+    ];
 
-    {
-      id: "button_3",
-      name: "Button Three",
-      type: "button"
-    },
+    signs.forEach((sign) => {
+        const panel =
+            new THREE.Mesh(
+                new THREE.BoxGeometry(
+                    2.5,
+                    0.8,
+                    0.1
+                ),
+                new THREE.MeshStandardMaterial({
+                    color: 0x151515,
+                    roughness: 0.9
+                })
+            );
 
-    {
-      id: "key",
-      name: "Gate Key",
-      type: "key"
-    },
+        panel.position.set(
+            sign.x,
+            sign.y,
+            sign.z
+        );
 
-    {
-      id: "gate",
-      name: "Escape Gate",
-      type: "gate"
+        panel.rotation.y =
+            sign.rotation;
+
+        environmentGroup.add(panel);
+    });
+}
+
+/* ============================================================
+   DYNAMIC ATMOSPHERE
+   ============================================================ */
+
+let atmosphereTimer = 0;
+
+function updateAtmosphere(delta) {
+    atmosphereTimer += delta;
+
+    if (
+        atmosphereTimer <
+        4
+    ) {
+        return;
     }
-  ],
 
-  controls: {
-    pc: {
-      forward: "W",
-      backward: "S",
-      left: "A",
-      right: "D",
-      sprint: "SHIFT",
-      interact: "E",
-      flashlight: "F",
-      hide: "H",
-      notes: "N",
-      pause: "ESC"
-    },
+    atmosphereTimer = 0;
 
-    mobile: {
-      movement:
-        "virtual joystick",
-
-      look:
-        "right-side drag",
-
-      sprint:
-        "run button",
-
-      interact:
-        "interaction button",
-
-      flashlight:
-        "flashlight button"
+    if (
+        !state.running ||
+        state.paused ||
+        state.dead ||
+        state.won
+    ) {
+        return;
     }
-  }
+
+    const chance =
+        Math.random();
+
+    if (
+        chance < 0.25
+    ) {
+        flickerLights();
+    }
+
+    if (
+        chance < 0.08 &&
+        state.seekerActive
+    ) {
+        createDangerPulse();
+    }
+}
+
+function flickerLights() {
+    environmentGroup.traverse(
+        (object) => {
+            if (
+                object.isPointLight &&
+                Math.random() < 0.25
+            ) {
+                const original =
+                    object.intensity;
+
+                object.intensity *=
+                    random(
+                        0.2,
+                        0.75
+                    );
+
+                setTimeout(() => {
+                    object.intensity =
+                        original;
+                }, randomInt(50, 180));
+            }
+        }
+    );
+}
+
+/* ============================================================
+   HIDDEN SECONDARY SYSTEM
+   ============================================================ */
+
+const worldSystems = {
+    footprints: [],
+    particles: [],
+    doors: [],
+    lights: [],
+    ambientEvents: [],
+    triggers: []
 };
 
+function registerWorldTrigger(
+    name,
+    position,
+    radius,
+    callback
+) {
+    worldSystems.triggers.push({
+        name,
+        position:
+            position.clone(),
+        radius,
+        callback,
+        fired: false
+    });
+}
+
+function updateWorldTriggers() {
+    for (
+        const trigger
+        of worldSystems.triggers
+    ) {
+        if (
+            trigger.fired ||
+            !camera
+        ) {
+            continue;
+        }
+
+        const distance =
+            distanceXZ(
+                camera.position,
+                trigger.position
+            );
+
+        if (
+            distance <=
+            trigger.radius
+        ) {
+            trigger.fired = true;
+
+            try {
+                trigger.callback();
+            } catch (error) {
+                console.warn(
+                    "[THE SEEKER] Trigger error:",
+                    error
+                );
+            }
+        }
+    }
+}
 
 /* ============================================================
-   DEBUG API
+   EXTRA INTERACTION: EXIT
    ============================================================ */
 
-window.TheSeeker =
-  {
-    state,
-
-    config:
-      CONFIG,
-
-    world:
-      SEEKER_WORLD_DATA,
-
-    start:
-      startGame,
-
-    pause:
-      pauseGame,
-
-    resume:
-      resumeGame,
-
-    interact:
-      tryInteract,
-
-    flashlight:
-      toggleFlashlight,
-
-    addNote,
-
-    getPlayer() {
-      return player;
-    },
-
-    getSeeker() {
-      return demon;
-    },
-
-    getScene() {
-      return scene;
-    }
-  };
-
+function registerExitInteraction() {
+    interactables.push({
+        type: "gate",
+        object: gate,
+        position: new THREE.Vector3(
+            0,
+            0,
+            -87
+        ),
+        label: "Exit Gate",
+        used: false
+    });
+}
 
 /* ============================================================
-   FINAL SAFETY INITIALIZATION
+   OVERRIDE INTERACTION TARGET FOR GATE
+   ============================================================ */
+
+function findGateTarget() {
+    if (
+        !gate ||
+        state.gateOpen
+    ) {
+        return null;
+    }
+
+    const gatePosition =
+        new THREE.Vector3(
+            0,
+            0,
+            -87
+        );
+
+    const distance =
+        distanceXZ(
+            camera.position,
+            gatePosition
+        );
+
+    if (
+        distance >
+        GAME_CONFIG.game.interactionDistance
+    ) {
+        return null;
+    }
+
+    return {
+        type: "gate",
+        object: gate,
+        position: gatePosition,
+        label: "Exit Gate",
+        used: false
+    };
+}
+
+/* ============================================================
+   INTERACTION PATCH
+   ============================================================ */
+
+const originalFindInteractionTarget =
+    findInteractionTarget;
+
+function findInteractionTargetExtended() {
+    const normalTarget =
+        originalFindInteractionTarget();
+
+    if (normalTarget) {
+        return normalTarget;
+    }
+
+    return findGateTarget();
+}
+
+/* ============================================================
+   GAME STATE API
+   ============================================================ */
+
+window.TheSeeker = {
+    state,
+
+    start() {
+        startGame();
+    },
+
+    pause() {
+        pauseGame();
+    },
+
+    resume() {
+        resumeGame();
+    },
+
+    quit() {
+        quitToMenu();
+    },
+
+    interact() {
+        interact();
+    },
+
+    toggleFlashlight() {
+        toggleFlashlight();
+    },
+
+    activateButton(id) {
+        activateButton(
+            Number(id)
+        );
+    },
+
+    collectKey() {
+        collectKey();
+    },
+
+    openGate() {
+        if (
+            state.keyCollected
+        ) {
+            openGate();
+        }
+    },
+
+    getPlayerPosition() {
+        return camera
+            ? camera.position.clone()
+            : null;
+    },
+
+    getSeekerPosition() {
+        return seeker
+            ? seeker.position.clone()
+            : null;
+    }
+};
+
+/* ============================================================
+   SAFE INITIALIZATION
    ============================================================ */
 
 window.addEventListener(
-  "beforeunload",
-  () => {
-    saveSettings();
-
-    try {
-      stopAmbientAudio();
-    } catch {}
-  }
+    "error",
+    (event) => {
+        if (
+            event?.error &&
+            String(
+                event.error.message || ""
+            ).includes(
+                "setObjective"
+            )
+        ) {
+            console.error(
+                "[THE SEEKER] Objective system recovered."
+            );
+        }
+    }
 );
+
+/* ============================================================
+   PATCH GLOBAL INTERACTION FUNCTION
+   ============================================================ */
+
+function refreshInteractionTarget() {
+    const target =
+        findInteractionTargetExtended();
+
+    state.interactionTarget =
+        target;
+
+    if (!interactionElement) {
+        return;
+    }
+
+    if (!target) {
+        hideElement(
+            interactionElement
+        );
+
+        return;
+    }
+
+    showElement(
+        interactionElement
+    );
+
+    let text =
+        "INTERACT";
+
+    if (
+        target.type ===
+        "button"
+    ) {
+        text =
+            `PRESS BUTTON ${target.id}`;
+    }
+
+    if (
+        target.type ===
+        "key"
+    ) {
+        text =
+            "PICK UP KEY";
+    }
+
+    if (
+        target.type ===
+        "note"
+    ) {
+        text =
+            "READ NOTE";
+    }
+
+    if (
+        target.type ===
+        "gate"
+    ) {
+        text =
+            state.keyCollected
+                ? "OPEN GATE"
+                : "GATE LOCKED";
+    }
+
+    setText(
+        interactionText,
+        text
+    );
+}
+
+/* ============================================================
+   REPLACE INTERACTION UPDATE BEHAVIOR
+   ============================================================ */
+
+const originalUpdateInteraction =
+    updateInteraction;
+
+function updateInteractionExtended() {
+    refreshInteractionTarget();
+}
+
+/* ============================================================
+   FINAL LOOP SYSTEM HOOKS
+   ============================================================ */
+
+const originalGameLoopSystems =
+    {
+        atmosphere: updateAtmosphere,
+        triggers: updateWorldTriggers,
+        interaction: updateInteractionExtended
+    };
+
+/* ============================================================
+   DEBUG UTILITIES
+   ============================================================ */
+
+window.TheSeekerDebug = {
+    getState() {
+        return {
+            ...state,
+            playerPosition:
+                camera
+                    ? camera.position.toArray()
+                    : null,
+            seekerPosition:
+                seeker
+                    ? seeker.position.toArray()
+                    : null
+        };
+    },
+
+    activateSeeker() {
+        activateSeeker();
+    },
+
+    setSanity(value) {
+        state.sanity =
+            clamp(
+                Number(value),
+                0,
+                100
+            );
+    },
+
+    setNoise(value) {
+        state.noise =
+            clamp(
+                Number(value),
+                0,
+                100
+            );
+    },
+
+    setObjective(text) {
+        setObjective(text);
+    }
+};
+
+/* ============================================================
+   STARTUP
+   ============================================================ */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+        initializeGame();
+    }
+);
+
+if (
+    document.readyState ===
+    "interactive" ||
+    document.readyState ===
+    "complete"
+) {
+    initializeGame();
+}
+
+/* ============================================================
+   FINAL SAFETY FALLBACK
+   ============================================================ */
+
+if (
+    typeof window.setObjective !==
+    "function"
+) {
+    window.setObjective =
+        setObjective;
+}
+
+/* ============================================================
+   END OF THE SEEKER GAME ENGINE
+   ============================================================ */
