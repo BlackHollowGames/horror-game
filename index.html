@@ -1,159 +1,2285 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>THE SEEKER</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+  >
+
+  <meta name="theme-color" content="#050607">
+  <meta name="color-scheme" content="dark">
+
+  <title>THE SEEKER</title>
+
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-<!-- Diagnostic banner: shown only if the module script fails to boot (e.g. opened via file://) -->
-<div id="loadError" class="hidden">
-  <div class="box">
-    <h2>Game failed to load</h2>
-    <p>The 3D engine script didn't start. This almost always means the page was opened directly as a local file (<code>file://...</code>), and the browser blocked the <code>import</code> statements for security reasons.</p>
-    <p>Fix: serve the file over a local server instead of double‑clicking it. For example, from the folder containing this file run <code>npx serve</code> or <code>python3 -m http.server</code>, then open the <code>http://localhost</code> link it gives you. Or host it on GitHub Pages / Netlify.</p>
-    <p>If you already did that and still see this, open your browser's dev console (F12) for the real error.</p>
-  </div>
-</div>
+  <!-- =========================================================
+       THE SEEKER
+       BLACKHOLLOW GAMES
+       INDEX.HTML
+       ========================================================= -->
 
-<main id="menuScreen" class="screen">
-  <div class="menu-background"></div>
-  <div class="menu-layout">
-    <div class="menu-left">
-      <div class="small-title">BLACKHOLLOW GAMES</div>
-      <h1>THE<strong>SEEKER</strong></h1>
-      <div class="menu-line"></div>
-      <p class="menu-subtitle">IT CAN HEAR YOU.</p>
-      <div class="menu-buttons">
-        <button id="playButton">PLAY</button>
-        <button id="instructionsButton">HOW TO PLAY</button>
-        <button id="settingsButton">SETTINGS</button>
+
+  <!-- =========================================================
+       GLOBAL LOADING / ERROR SCREEN
+       ========================================================= -->
+
+  <div id="loadError" class="hidden" aria-hidden="true">
+
+    <div class="box">
+
+      <div class="error-code">
+        ERROR // 001
       </div>
-      <div class="menu-version">THE SEEKER // EARLY BUILD // Early access v0.04</div>
-    </div>
-    <div class="menu-right">
-      <div class="menu-preview-box">
-        <div class="preview-label">GAMEPLAY</div>
-        <div class="preview-placeholder" id="previewPlaceholder"><span>ANIMATION COMING SOON</span></div>
-      </div>
-      <div class="credits-box">
-        <div class="credits-title">CREDITS</div>
-        <div class="credits-list">
-          <div class="credit-row"><span class="credit-role">Creator</span><span class="credit-name">Stive Pierre</span></div>
-          <div class="credit-row"><span class="credit-role">Studio</span><span class="credit-name">BlackHollow Games</span></div>
-          <div class="credit-row"><span class="credit-role">Engine</span><span class="credit-name">Three.js</span></div>
-          <div class="credit-row"><span class="credit-role">Audio</span><span class="credit-name">Custom SFX</span></div>
+
+      <h2>
+        GAME FAILED TO LOAD
+      </h2>
+
+      <p>
+        The 3D game engine did not start correctly.
+      </p>
+
+      <p>
+        If you opened this project directly from your computer using
+        <code>file://</code>, your browser may block the module imports.
+      </p>
+
+      <div class="error-section">
+
+        <div class="error-label">
+          LOCAL SERVER
         </div>
-        <div class="credits-footer">© 2026 BLACKHOLLOW GAMES</div>
+
+        <p>
+          Run the game through a local server instead of opening the HTML
+          file directly.
+        </p>
+
+        <code>
+          python3 -m http.server
+        </code>
+
       </div>
-    </div>
-  </div>
-</main>
 
-<section id="instructionsScreen" class="screen hidden">
-  <div class="panel">
-    <div class="panel-title">HOW TO PLAY</div>
-    <div class="instruction-grid">
-      <div><span>W A S D / JOYSTICK</span><p>Move around the house.</p></div>
-      <div><span>MOUSE / TOUCH</span><p>Look around.</p></div>
-      <div><span>SHIFT / RUN BTN</span><p>Run faster, but make more noise.</p></div>
-      <div><span>E / INTERACT</span><p>Buttons, keys, gates and hide in closets.</p></div>
-      <div><span>F / FLASHLIGHT</span><p>Toggle your flashlight.</p></div>
-      <div><span>OBJECTIVE</span><p>Find all 3 buttons, get the key and escape. Hide when it hears you.</p></div>
-      <div><span>NOTES</span><p>Scattered pages tell you what happened here. Not all of them are where you'd expect.</p></div>
-    </div>
-    <div class="danger-box">
-      <strong>WARNING</strong><br>
-      The Seeker reacts to sound. Running creates more noise. Pressing a button makes it scream — you have 10 seconds to hide. Low sanity will kill you. Not every button does what it says.
-    </div>
-    <button id="instructionsBack">BACK</button>
-  </div>
-</section>
+      <div class="error-section">
 
-<section id="settingsScreen" class="screen hidden">
-  <div class="panel">
-    <div class="panel-title">SETTINGS</div>
-    <label class="setting-row"><span>FLASHLIGHT</span><input id="flashlightSetting" type="checkbox" checked></label>
-    <label class="setting-row"><span>FOOTSTEP AUDIO</span><input id="footstepSetting" type="checkbox" checked></label>
-    <label class="setting-row"><span>MASTER VOLUME</span><input id="volumeSetting" type="range" min="0" max="100" value="45"></label>
-    <button id="settingsBack">BACK</button>
-  </div>
-</section>
+        <div class="error-label">
+          OR
+        </div>
 
-<main id="gameScreen" class="hidden">
-  <div id="gameCanvas"></div>
-  <div id="hud">
-    <div class="hud-top">
-      <div class="objective-box"><div class="hud-label">OBJECTIVE</div><div id="objective">FIND THE 3 BUTTONS</div></div>
-      <div class="notes-box"><div class="hud-label">NOTES</div><div id="notesCount">0 / 6</div></div>
-      <div class="timer-box"><div class="hud-label">TIME</div><div id="timer">02:40</div></div>
+        <p>
+          Use another local development server such as
+          <code>npx serve</code>.
+        </p>
+
+      </div>
+
+      <div class="error-section">
+
+        <div class="error-label">
+          DEBUG
+        </div>
+
+        <p>
+          If the game is already running through a server, open the browser
+          developer console and check the first error.
+        </p>
+
+      </div>
+
     </div>
-    <div class="button-status">
-      <div id="button1" class="button-state"><i></i> BUTTON 1</div>
-      <div id="button2" class="button-state"><i></i> BUTTON 2</div>
-      <div id="button3" class="button-state"><i></i> BUTTON 3</div>
-    </div>
-    <div class="sanity-container"><div class="sanity-title">SANITY</div><div class="sanity-bar"><div id="sanityFill"></div></div></div>
-    <div id="crosshair">+</div>
-    <div id="interaction"><span id="interactionText"></span></div>
-    <div class="noise-container"><div class="noise-title">NOISE</div><div class="noise-bar"><div id="noiseFill"></div></div></div>
-    <div id="hideTimer" class="hide-timer hidden"><div class="hide-timer-label">HIDE</div><div id="hideTimerValue">10</div></div>
-    <div id="dangerWarning">IT HEARD YOU</div>
-    <div id="noteToast" class="note-toast hidden"><div class="note-toast-label">NOTE FOUND</div><div id="noteToastText"></div></div>
-    <div id="screamOverlay" class="scream-overlay"></div>
-    <div class="controls"><span>WASD</span> MOVE <span>SHIFT</span> RUN <span>E</span> INTERACT <span>F</span> FLASHLIGHT</div>
+
   </div>
 
-  <div id="mobileControls" class="mobile-controls hidden">
-    <div id="joystickZone" class="joystick-zone"><div id="joystickBase" class="joystick-base"><div id="joystickKnob" class="joystick-knob"></div></div></div>
-    <div class="mobile-actions">
-      <button id="mobileRun" class="mobile-btn mobile-run">RUN</button>
-      <button id="mobileInteract" class="mobile-btn mobile-interact">E</button>
-      <button id="mobileFlashlight" class="mobile-btn mobile-flash">F</button>
-    </div>
-    <div id="lookZone" class="look-zone"></div>
-  </div>
 
-  <div id="pauseScreen" class="overlay hidden">
-    <div class="pause-panel"><div class="pause-title">PAUSED</div><button id="resumeButton">RESUME</button><button id="notesLogButton">VIEW NOTES</button><button id="quitButton">QUIT TO MENU</button></div>
-  </div>
-  <div id="notesLogScreen" class="overlay hidden">
-    <div class="notes-log-panel">
-      <div class="pause-title">NOTES</div>
-      <div id="notesLogList" class="notes-log-list"><p class="notes-log-empty">No notes found yet. They're hidden around the house.</p></div>
-      <button id="notesLogBack">BACK</button>
-    </div>
-  </div>
-  <div id="deathScreen" class="overlay hidden">
-    <div class="death-panel"><div class="death-title">YOU WERE FOUND</div><p id="deathReason">THE SEEKER FOUND YOU.</p><button id="retryButton">TRY AGAIN</button><button id="deathMenuButton">MAIN MENU</button></div>
-  </div>
-  <div id="winScreen" class="overlay hidden">
-    <div class="win-panel"><div class="win-title" id="winTitle">YOU ESCAPED</div><p id="winText">The gate opened.<br>You made it out.</p><button id="winAgainButton">PLAY AGAIN</button><button id="winMenuButton">MAIN MENU</button></div>
-  </div>
-</main>
+  <!-- =========================================================
+       MAIN MENU
+       ========================================================= -->
 
-<!-- Fallback watchdog: classic (non-module) script always runs, even if game.js is blocked -->
-<script>
-  window.addEventListener('DOMContentLoaded', function () {
-    setTimeout(function () {
-      if (!window.__seekerBooted) {
-        var el = document.getElementById('loadError');
-        if (el) el.classList.remove('hidden');
+  <main
+    id="menuScreen"
+    class="screen"
+    aria-label="The Seeker main menu"
+  >
+
+    <div
+      class="menu-background"
+      aria-hidden="true"
+    ></div>
+
+
+    <div class="menu-noise" aria-hidden="true"></div>
+
+
+    <div class="menu-vignette" aria-hidden="true"></div>
+
+
+    <div class="menu-layout">
+
+
+      <!-- =====================================================
+           MENU LEFT
+           ===================================================== -->
+
+      <section class="menu-left">
+
+        <div class="small-title">
+          BLACKHOLLOW GAMES
+        </div>
+
+
+        <div class="game-series">
+          BLACKHOLLOW // HORROR PROJECT
+        </div>
+
+
+        <h1 class="game-title">
+          THE
+          <strong>SEEKER</strong>
+        </h1>
+
+
+        <div class="menu-line"></div>
+
+
+        <p class="menu-subtitle">
+          IT CAN HEAR YOU.
+        </p>
+
+
+        <p class="menu-description">
+          Something is inside the house.
+          <br>
+          It doesn't need to see you to find you.
+        </p>
+
+
+        <!-- ===================================================
+             MAIN MENU BUTTONS
+             =================================================== -->
+
+        <div class="menu-buttons">
+
+          <button
+            id="playButton"
+            class="menu-button menu-button-primary"
+            type="button"
+          >
+            <span class="button-index">
+              01
+            </span>
+
+            <span class="button-text">
+              PLAY
+            </span>
+
+            <span class="button-arrow">
+              →
+            </span>
+          </button>
+
+
+          <button
+            id="instructionsButton"
+            class="menu-button"
+            type="button"
+          >
+            <span class="button-index">
+              02
+            </span>
+
+            <span class="button-text">
+              HOW TO PLAY
+            </span>
+
+            <span class="button-arrow">
+              →
+            </span>
+          </button>
+
+
+          <button
+            id="settingsButton"
+            class="menu-button"
+            type="button"
+          >
+            <span class="button-index">
+              03
+            </span>
+
+            <span class="button-text">
+              SETTINGS
+            </span>
+
+            <span class="button-arrow">
+              →
+            </span>
+          </button>
+
+        </div>
+
+
+        <!-- ===================================================
+             MENU STATUS
+             =================================================== -->
+
+        <div class="menu-status">
+
+          <span class="status-dot"></span>
+
+          <span>
+            BUILD STATUS:
+          </span>
+
+          <strong>
+            EARLY ACCESS
+          </strong>
+
+        </div>
+
+
+        <div class="menu-version">
+          THE SEEKER // EARLY BUILD // v0.04
+        </div>
+
+      </section>
+
+
+      <!-- =====================================================
+           MENU RIGHT
+           ===================================================== -->
+
+      <section class="menu-right">
+
+
+        <!-- ===================================================
+             GAMEPLAY PREVIEW
+             =================================================== -->
+
+        <div class="menu-preview-box">
+
+          <div class="preview-header">
+
+            <span class="preview-label">
+              GAMEPLAY
+            </span>
+
+            <span class="preview-code">
+              CAMERA // 001
+            </span>
+
+          </div>
+
+
+          <div
+            id="previewPlaceholder"
+            class="preview-placeholder"
+          >
+
+            <div class="preview-grid"></div>
+
+            <div class="preview-crosshair">
+              +
+            </div>
+
+            <div class="preview-text">
+              <span>
+                GAMEPLAY
+              </span>
+
+              <strong>
+                ANIMATION COMING SOON
+              </strong>
+            </div>
+
+          </div>
+
+
+          <div class="preview-footer">
+
+            <span>
+              HOUSE // NIGHT
+            </span>
+
+            <span>
+              SIGNAL: UNKNOWN
+            </span>
+
+          </div>
+
+        </div>
+
+
+        <!-- ===================================================
+             GAME INFO
+             =================================================== -->
+
+        <div class="menu-info-grid">
+
+          <div class="menu-info-card">
+
+            <div class="info-card-label">
+              OBJECTIVE
+            </div>
+
+            <div class="info-card-value">
+              ESCAPE
+            </div>
+
+            <p>
+              Find three hidden buttons,
+              obtain the key, and escape the house.
+            </p>
+
+          </div>
+
+
+          <div class="menu-info-card">
+
+            <div class="info-card-label">
+              THREAT
+            </div>
+
+            <div class="info-card-value">
+              THE SEEKER
+            </div>
+
+            <p>
+              It reacts to sound.
+              Running can give away your position.
+            </p>
+
+          </div>
+
+
+          <div class="menu-info-card">
+
+            <div class="info-card-label">
+              MAP
+            </div>
+
+            <div class="info-card-value">
+              LARGE HOUSE
+            </div>
+
+            <p>
+              A much larger environment with
+              multiple rooms and hiding areas.
+            </p>
+
+          </div>
+
+
+          <div class="menu-info-card">
+
+            <div class="info-card-label">
+              DEVICES
+            </div>
+
+            <div class="info-card-value">
+              PC / MOBILE
+            </div>
+
+            <p>
+              Choose your control layout before
+              entering the game.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <!-- ===================================================
+             CREDITS
+             =================================================== -->
+
+        <div class="credits-box">
+
+          <div class="credits-title">
+            CREDITS
+          </div>
+
+
+          <div class="credits-list">
+
+            <div class="credit-row">
+
+              <span class="credit-role">
+                CREATOR
+              </span>
+
+              <span class="credit-name">
+                Stive Pierre
+              </span>
+
+            </div>
+
+
+            <div class="credit-row">
+
+              <span class="credit-role">
+                STUDIO
+              </span>
+
+              <span class="credit-name">
+                BlackHollow Games
+              </span>
+
+            </div>
+
+
+            <div class="credit-row">
+
+              <span class="credit-role">
+                ENGINE
+              </span>
+
+              <span class="credit-name">
+                Three.js
+              </span>
+
+            </div>
+
+
+            <div class="credit-row">
+
+              <span class="credit-role">
+                AUDIO
+              </span>
+
+              <span class="credit-name">
+                Custom SFX
+              </span>
+
+            </div>
+
+          </div>
+
+
+          <div class="credits-footer">
+            © 2026 BLACKHOLLOW GAMES
+          </div>
+
+        </div>
+
+      </section>
+
+    </div>
+
+
+    <!-- =======================================================
+         MENU FOOTER
+         ======================================================= -->
+
+    <footer class="main-menu-footer">
+
+      <span>
+        BLACKHOLLOW GAMES
+      </span>
+
+      <span>
+        //
+      </span>
+
+      <span>
+        THE SEEKER
+      </span>
+
+      <span>
+        //
+      </span>
+
+      <span>
+        v0.04
+      </span>
+
+    </footer>
+
+  </main>
+
+
+  <!-- =========================================================
+       DEVICE SELECTION
+       ========================================================= -->
+
+  <section
+    id="deviceScreen"
+    class="screen hidden"
+    aria-label="Choose your device"
+  >
+
+    <div class="device-background"></div>
+
+    <div class="device-vignette"></div>
+
+
+    <div class="device-panel">
+
+
+      <div class="device-topline">
+
+        <span>
+          THE SEEKER
+        </span>
+
+        <span>
+          SYSTEM // INPUT
+        </span>
+
+      </div>
+
+
+      <div class="device-heading">
+
+        <div class="device-eyebrow">
+          BEFORE ENTERING
+        </div>
+
+        <h2>
+          CHOOSE YOUR DEVICE
+        </h2>
+
+        <p>
+          Select the controls you will use to play.
+        </p>
+
+      </div>
+
+
+      <div class="device-options">
+
+
+        <!-- ===================================================
+             PC OPTION
+             =================================================== -->
+
+        <button
+          id="pcButton"
+          class="device-option"
+          type="button"
+          data-device="pc"
+          aria-label="Play on PC"
+        >
+
+          <div class="device-option-number">
+            01
+          </div>
+
+
+          <div class="device-icon pc-icon">
+
+            <div class="monitor-screen"></div>
+
+            <div class="monitor-stand"></div>
+
+            <div class="monitor-base"></div>
+
+          </div>
+
+
+          <div class="device-option-content">
+
+            <div class="device-option-title">
+              PC
+            </div>
+
+            <div class="device-option-subtitle">
+              KEYBOARD + MOUSE
+            </div>
+
+            <p>
+              WASD to move.
+              Mouse to look.
+              Shift to run.
+              E to interact.
+            </p>
+
+          </div>
+
+
+          <div class="device-option-arrow">
+            →
+          </div>
+
+        </button>
+
+
+        <!-- ===================================================
+             MOBILE OPTION
+             =================================================== -->
+
+        <button
+          id="mobileButton"
+          class="device-option"
+          type="button"
+          data-device="mobile"
+          aria-label="Play on mobile"
+        >
+
+          <div class="device-option-number">
+            02
+          </div>
+
+
+          <div class="device-icon phone-icon">
+
+            <div class="phone-body">
+
+              <div class="phone-screen"></div>
+
+              <div class="phone-camera"></div>
+
+              <div class="phone-home"></div>
+
+            </div>
+
+          </div>
+
+
+          <div class="device-option-content">
+
+            <div class="device-option-title">
+              MOBILE
+            </div>
+
+            <div class="device-option-subtitle">
+              TOUCH CONTROLS
+            </div>
+
+            <p>
+              Virtual joystick to move.
+              Touch the screen to look.
+              Touch buttons to interact.
+            </p>
+
+          </div>
+
+
+          <div class="device-option-arrow">
+            →
+          </div>
+
+        </button>
+
+      </div>
+
+
+      <div class="device-warning">
+
+        <span class="warning-symbol">
+          !
+        </span>
+
+        <div>
+
+          <strong>
+            CHOOSE CAREFULLY
+          </strong>
+
+          <p>
+            The game will load the control layout
+            for the device you select.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <button
+        id="deviceBackButton"
+        class="back-button"
+        type="button"
+      >
+        ← BACK
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- =========================================================
+       HOW TO PLAY
+       ========================================================= -->
+
+  <section
+    id="instructionsScreen"
+    class="screen hidden"
+    aria-label="How to play"
+  >
+
+    <div class="panel">
+
+
+      <div class="panel-topline">
+
+        <span>
+          THE SEEKER
+        </span>
+
+        <span>
+          GUIDE // 001
+        </span>
+
+      </div>
+
+
+      <div class="panel-title">
+        HOW TO PLAY
+      </div>
+
+
+      <p class="panel-intro">
+        You are trapped inside a large abandoned house.
+        Three buttons are hidden somewhere inside.
+        Find them, retrieve the key, and reach the gate.
+      </p>
+
+
+      <div class="instruction-grid">
+
+
+        <div class="instruction-card">
+
+          <div class="instruction-number">
+            01
+          </div>
+
+          <span>
+            W A S D
+          </span>
+
+          <p>
+            Move around the house on PC.
+          </p>
+
+        </div>
+
+
+        <div class="instruction-card">
+
+          <div class="instruction-number">
+            02
+          </div>
+
+          <span>
+            JOYSTICK
+          </span>
+
+          <p>
+            Move around the house on mobile.
+          </p>
+
+        </div>
+
+
+        <div class="instruction-card">
+
+          <div class="instruction-number">
+            03
+          </div>
+
+          <span>
+            MOUSE / TOUCH
+          </span>
+
+          <p>
+            Look around the environment.
+          </p>
+
+        </div>
+
+
+        <div class="instruction-card">
+
+          <div class="instruction-number">
+            04
+          </div>
+
+          <span>
+            SHIFT / RUN
+          </span>
+
+          <p>
+            Run faster, but create more noise.
+          </p>
+
+        </div>
+
+
+        <div class="instruction-card">
+
+          <div class="instruction-number">
+            05
+          </div>
+
+          <span>
+            E / INTERACT
+          </span>
+
+          <p>
+            Activate buttons, pick up items,
+            open gates, and interact with objects.
+          </p>
+
+        </div>
+
+
+        <div class="instruction-card">
+
+          <div class="instruction-number">
+            06
+          </div>
+
+          <span>
+            F / FLASHLIGHT
+          </span>
+
+          <p>
+            Toggle your flashlight.
+            Darkness can hide important things.
+          </p>
+
+        </div>
+
+
+        <div class="instruction-card">
+
+          <div class="instruction-number">
+            07
+          </div>
+
+          <span>
+            HIDE
+          </span>
+
+          <p>
+            Use hiding locations when the Seeker
+            is close.
+          </p>
+
+        </div>
+
+
+        <div class="instruction-card">
+
+          <div class="instruction-number">
+            08
+          </div>
+
+          <span>
+            MAP
+          </span>
+
+          <p>
+            The map in the top-left shows the
+            player and the Seeker.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <!-- =====================================================
+           OBJECTIVE
+           ===================================================== -->
+
+      <div class="objective-guide">
+
+        <div class="guide-heading">
+          OBJECTIVE
+        </div>
+
+
+        <div class="guide-steps">
+
+
+          <div class="guide-step">
+
+            <div class="guide-step-number">
+              1
+            </div>
+
+            <div>
+              <strong>
+                FIND BUTTON 1
+              </strong>
+
+              <p>
+                Search the first section of the house.
+              </p>
+            </div>
+
+          </div>
+
+
+          <div class="guide-step">
+
+            <div class="guide-step-number">
+              2
+            </div>
+
+            <div>
+              <strong>
+                FIND BUTTON 2
+              </strong>
+
+              <p>
+                Explore deeper into the building.
+              </p>
+            </div>
+
+          </div>
+
+
+          <div class="guide-step">
+
+            <div class="guide-step-number">
+              3
+            </div>
+
+            <div>
+              <strong>
+                FIND BUTTON 3
+              </strong>
+
+              <p>
+                The final button may be far from
+                the starting area.
+              </p>
+            </div>
+
+          </div>
+
+
+          <div class="guide-step">
+
+            <div class="guide-step-number">
+              4
+            </div>
+
+            <div>
+              <strong>
+                GET THE KEY
+              </strong>
+
+              <p>
+                Once all three buttons are activated,
+                find the key.
+              </p>
+            </div>
+
+          </div>
+
+
+          <div class="guide-step">
+
+            <div class="guide-step-number">
+              5
+            </div>
+
+            <div>
+              <strong>
+                ESCAPE
+              </strong>
+
+              <p>
+                Take the key to the locked gate
+                and get outside.
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- =====================================================
+           DANGER BOX
+           ===================================================== -->
+
+      <div class="danger-box">
+
+        <div class="danger-heading">
+          WARNING
+        </div>
+
+        <p>
+          The Seeker reacts to sound.
+          Running creates more noise.
+          Interacting with certain objects may also
+          attract it.
+        </p>
+
+        <p>
+          Activating a button can trigger a loud signal.
+          Be prepared to move or hide.
+        </p>
+
+      </div>
+
+
+      <button
+        id="instructionsBack"
+        class="panel-back"
+        type="button"
+      >
+        ← BACK
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- =========================================================
+       SETTINGS
+       ========================================================= -->
+
+  <section
+    id="settingsScreen"
+    class="screen hidden"
+    aria-label="Settings"
+  >
+
+    <div class="panel">
+
+
+      <div class="panel-topline">
+
+        <span>
+          THE SEEKER
+        </span>
+
+        <span>
+          SYSTEM // SETTINGS
+        </span>
+
+      </div>
+
+
+      <div class="panel-title">
+        SETTINGS
+      </div>
+
+
+      <div class="settings-list">
+
+
+        <label class="setting-row">
+
+          <div>
+
+            <span class="setting-name">
+              FLASHLIGHT
+            </span>
+
+            <small>
+              Enable your flashlight.
+            </small>
+
+          </div>
+
+          <input
+            id="flashlightSetting"
+            type="checkbox"
+            checked
+          >
+
+        </label>
+
+
+        <label class="setting-row">
+
+          <div>
+
+            <span class="setting-name">
+              FOOTSTEP AUDIO
+            </span>
+
+            <small>
+              Play movement and footstep sounds.
+            </small>
+
+          </div>
+
+          <input
+            id="footstepSetting"
+            type="checkbox"
+            checked
+          >
+
+        </label>
+
+
+        <label class="setting-row">
+
+          <div>
+
+            <span class="setting-name">
+              MASTER VOLUME
+            </span>
+
+            <small>
+              Adjust the overall game volume.
+            </small>
+
+          </div>
+
+          <input
+            id="volumeSetting"
+            type="range"
+            min="0"
+            max="100"
+            value="45"
+          >
+
+        </label>
+
+
+        <label class="setting-row">
+
+          <div>
+
+            <span class="setting-name">
+              REDUCED MOTION
+            </span>
+
+            <small>
+              Reduce interface animations.
+            </small>
+
+          </div>
+
+          <input
+            id="reducedMotionSetting"
+            type="checkbox"
+          >
+
+        </label>
+
+
+      </div>
+
+
+      <button
+        id="settingsBack"
+        class="panel-back"
+        type="button"
+      >
+        ← BACK
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- =========================================================
+       GAME SCREEN
+       ========================================================= -->
+
+  <main
+    id="gameScreen"
+    class="hidden"
+    aria-label="The Seeker gameplay"
+  >
+
+
+    <!-- =======================================================
+         3D GAME WORLD
+         ======================================================= -->
+
+    <div
+      id="gameCanvas"
+      aria-hidden="true"
+    ></div>
+
+
+    <!-- =======================================================
+         GAME HUD
+         ======================================================= -->
+
+    <div
+      id="hud"
+      class="game-hud"
+    >
+
+
+      <!-- =====================================================
+           TOP HUD
+           ===================================================== -->
+
+      <div class="hud-top">
+
+
+        <!-- ===================================================
+             MINI MAP
+             =================================================== -->
+
+        <div
+          id="miniMap"
+          class="mini-map"
+          aria-label="Game map"
+        >
+
+          <div class="map-header">
+
+            <span>
+              MAP
+            </span>
+
+            <span id="mapStatus">
+              LIVE
+            </span>
+
+          </div>
+
+
+          <div
+            id="mapCanvas"
+            class="map-canvas"
+          >
+
+            <div class="map-grid"></div>
+
+
+            <!-- ===============================================
+                 MAP BUILDING
+                 =============================================== -->
+
+            <div
+              id="mapHouse"
+              class="map-house"
+            >
+
+              <div class="map-room map-room-01"></div>
+
+              <div class="map-room map-room-02"></div>
+
+              <div class="map-room map-room-03"></div>
+
+              <div class="map-room map-room-04"></div>
+
+              <div class="map-room map-room-05"></div>
+
+              <div class="map-room map-room-06"></div>
+
+              <div class="map-room map-room-07"></div>
+
+              <div class="map-room map-room-08"></div>
+
+              <div class="map-room map-room-09"></div>
+
+              <div class="map-room map-room-10"></div>
+
+              <div class="map-room map-room-11"></div>
+
+              <div class="map-room map-room-12"></div>
+
+            </div>
+
+
+            <!-- ===============================================
+                 MAP GATE
+                 =============================================== -->
+
+            <div
+              id="mapGate"
+              class="map-gate"
+              aria-label="Gate"
+            ></div>
+
+
+            <!-- ===============================================
+                 PLAYER ARROW
+                 =============================================== -->
+
+            <div
+              id="playerMapArrow"
+              class="map-arrow map-player"
+              aria-label="Your location"
+            >
+
+              <span></span>
+
+            </div>
+
+
+            <!-- ===============================================
+                 DEMON ARROW
+                 =============================================== -->
+
+            <div
+              id="demonMapArrow"
+              class="map-arrow map-demon"
+              aria-label="Demon location"
+            >
+
+              <span></span>
+
+            </div>
+
+
+            <!-- ===============================================
+                 BUTTON MARKERS
+                 =============================================== -->
+
+            <div
+              id="mapButton1"
+              class="map-marker map-button-marker"
+              aria-label="Button 1"
+            >
+              1
+            </div>
+
+
+            <div
+              id="mapButton2"
+              class="map-marker map-button-marker"
+              aria-label="Button 2"
+            >
+              2
+            </div>
+
+
+            <div
+              id="mapButton3"
+              class="map-marker map-button-marker"
+              aria-label="Button 3"
+            >
+              3
+            </div>
+
+
+            <!-- ===============================================
+                 KEY MARKER
+                 =============================================== -->
+
+            <div
+              id="mapKey"
+              class="map-marker map-key-marker"
+              aria-label="Key"
+            >
+              K
+            </div>
+
+
+            <!-- ===============================================
+                 MAP LEGEND
+                 =============================================== -->
+
+            <div class="map-legend">
+
+              <div>
+                <i class="legend-player"></i>
+                YOU
+              </div>
+
+              <div>
+                <i class="legend-demon"></i>
+                SEEKER
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- ===================================================
+             OBJECTIVE BOX
+             =================================================== -->
+
+        <div class="objective-box">
+
+          <div class="hud-label">
+            OBJECTIVE
+          </div>
+
+          <div
+            id="objective"
+            class="hud-value"
+          >
+            FIND THE 3 BUTTONS
+          </div>
+
+        </div>
+
+
+        <!-- ===================================================
+             NOTES
+             =================================================== -->
+
+        <div class="notes-box">
+
+          <div class="hud-label">
+            NOTES
+          </div>
+
+          <div
+            id="notesCount"
+            class="hud-value"
+          >
+            0 / 6
+          </div>
+
+        </div>
+
+
+        <!-- ===================================================
+             TIMER
+             =================================================== -->
+
+        <div class="timer-box">
+
+          <div class="hud-label">
+            TIME
+          </div>
+
+          <div
+            id="timer"
+            class="hud-value"
+          >
+            02:40
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- =====================================================
+           BUTTON STATUS
+           ===================================================== -->
+
+      <div
+        id="buttonStatus"
+        class="button-status"
+      >
+
+
+        <div
+          id="button1"
+          class="button-state"
+        >
+
+          <i></i>
+
+          <span>
+            BUTTON 1
+          </span>
+
+        </div>
+
+
+        <div
+          id="button2"
+          class="button-state"
+        >
+
+          <i></i>
+
+          <span>
+            BUTTON 2
+          </span>
+
+        </div>
+
+
+        <div
+          id="button3"
+          class="button-state"
+        >
+
+          <i></i>
+
+          <span>
+            BUTTON 3
+          </span>
+
+        </div>
+
+
+      </div>
+
+
+      <!-- =====================================================
+           SANITY
+           ===================================================== -->
+
+      <div class="sanity-container">
+
+        <div class="sanity-title">
+          SANITY
+        </div>
+
+        <div class="sanity-bar">
+
+          <div
+            id="sanityFill"
+            class="sanity-fill"
+          ></div>
+
+        </div>
+
+      </div>
+
+
+      <!-- =====================================================
+           CROSSHAIR
+           ===================================================== -->
+
+      <div
+        id="crosshair"
+        aria-hidden="true"
+      >
+        +
+      </div>
+
+
+      <!-- =====================================================
+           INTERACTION
+           ===================================================== -->
+
+      <div
+        id="interaction"
+        class="interaction"
+        aria-live="polite"
+      >
+
+        <span id="interactionText"></span>
+
+      </div>
+
+
+      <!-- =====================================================
+           NOISE
+           ===================================================== -->
+
+      <div class="noise-container">
+
+        <div class="noise-title">
+          NOISE
+        </div>
+
+        <div class="noise-bar">
+
+          <div
+            id="noiseFill"
+            class="noise-fill"
+          ></div>
+
+        </div>
+
+      </div>
+
+
+      <!-- =====================================================
+           HIDE TIMER
+           ===================================================== -->
+
+      <div
+        id="hideTimer"
+        class="hide-timer hidden"
+      >
+
+        <div class="hide-timer-label">
+          HIDE
+        </div>
+
+        <div id="hideTimerValue">
+          10
+        </div>
+
+      </div>
+
+
+      <!-- =====================================================
+           DANGER WARNING
+           ===================================================== -->
+
+      <div
+        id="dangerWarning"
+        class="danger-warning"
+        aria-live="assertive"
+      >
+        IT HEARD YOU
+      </div>
+
+
+      <!-- =====================================================
+           NOTE TOAST
+           ===================================================== -->
+
+      <div
+        id="noteToast"
+        class="note-toast hidden"
+      >
+
+        <div class="note-toast-label">
+          NOTE FOUND
+        </div>
+
+        <div
+          id="noteToastText"
+          class="note-toast-text"
+        ></div>
+
+      </div>
+
+
+      <!-- =====================================================
+           SCREAM OVERLAY
+           ===================================================== -->
+
+      <div
+        id="screamOverlay"
+        class="scream-overlay"
+        aria-hidden="true"
+      ></div>
+
+
+      <!-- =====================================================
+           GAME CONTROLS
+           ===================================================== -->
+
+      <div class="controls">
+
+        <span>
+          WASD
+        </span>
+
+        MOVE
+
+
+        <span>
+          SHIFT
+        </span>
+
+        RUN
+
+
+        <span>
+          E
+        </span>
+
+        INTERACT
+
+
+        <span>
+          F
+        </span>
+
+        FLASHLIGHT
+
+
+        <span>
+          ESC
+        </span>
+
+        PAUSE
+
+      </div>
+
+
+      <!-- =====================================================
+           PC DEVICE INDICATOR
+           ===================================================== -->
+
+      <div
+        id="pcDeviceIndicator"
+        class="device-indicator hidden"
+      >
+        PC
+      </div>
+
+
+      <!-- =====================================================
+           MOBILE DEVICE INDICATOR
+           ===================================================== -->
+
+      <div
+        id="mobileDeviceIndicator"
+        class="device-indicator hidden"
+      >
+        MOBILE
+      </div>
+
+
+    </div>
+
+
+    <!-- =======================================================
+         MOBILE CONTROLS
+         ======================================================= -->
+
+    <div
+      id="mobileControls"
+      class="mobile-controls hidden"
+    >
+
+
+      <!-- =====================================================
+           JOYSTICK
+           ===================================================== -->
+
+      <div
+        id="joystickZone"
+        class="joystick-zone"
+      >
+
+        <div
+          id="joystickBase"
+          class="joystick-base"
+        >
+
+          <div
+            id="joystickKnob"
+            class="joystick-knob"
+          ></div>
+
+        </div>
+
+      </div>
+
+
+      <!-- =====================================================
+           LOOK AREA
+           ===================================================== -->
+
+      <div
+        id="lookZone"
+        class="look-zone"
+        aria-label="Look around"
+      ></div>
+
+
+      <!-- =====================================================
+           MOBILE ACTIONS
+           ===================================================== -->
+
+      <div class="mobile-actions">
+
+
+        <button
+          id="mobileRun"
+          class="mobile-btn mobile-run"
+          type="button"
+        >
+          RUN
+        </button>
+
+
+        <button
+          id="mobileInteract"
+          class="mobile-btn mobile-interact"
+          type="button"
+        >
+          E
+        </button>
+
+
+        <button
+          id="mobileFlashlight"
+          class="mobile-btn mobile-flash"
+          type="button"
+        >
+          F
+        </button>
+
+
+      </div>
+
+
+      <!-- =====================================================
+           MOBILE MAP TOGGLE
+           ===================================================== -->
+
+      <button
+        id="mobileMapButton"
+        class="mobile-map-button"
+        type="button"
+        aria-label="Toggle map"
+      >
+        MAP
+      </button>
+
+
+      <!-- =====================================================
+           MOBILE PAUSE
+           ===================================================== -->
+
+      <button
+        id="mobilePauseButton"
+        class="mobile-pause-button"
+        type="button"
+        aria-label="Pause game"
+      >
+        II
+      </button>
+
+
+    </div>
+
+
+    <!-- =======================================================
+         PAUSE SCREEN
+         ======================================================= -->
+
+    <div
+      id="pauseScreen"
+      class="overlay hidden"
+    >
+
+      <div class="pause-panel">
+
+
+        <div class="pause-eyebrow">
+          THE SEEKER
+        </div>
+
+
+        <div class="pause-title">
+          PAUSED
+        </div>
+
+
+        <div class="pause-line"></div>
+
+
+        <button
+          id="resumeButton"
+          type="button"
+        >
+          RESUME
+        </button>
+
+
+        <button
+          id="notesLogButton"
+          type="button"
+        >
+          VIEW NOTES
+        </button>
+
+
+        <button
+          id="quitButton"
+          type="button"
+        >
+          QUIT TO MENU
+        </button>
+
+
+      </div>
+
+    </div>
+
+
+    <!-- =======================================================
+         NOTES LOG
+         ======================================================= -->
+
+    <div
+      id="notesLogScreen"
+      class="overlay hidden"
+    >
+
+      <div class="notes-log-panel">
+
+
+        <div class="pause-eyebrow">
+          THE SEEKER
+        </div>
+
+
+        <div class="pause-title">
+          NOTES
+        </div>
+
+
+        <div
+          id="notesLogList"
+          class="notes-log-list"
+        >
+
+          <p class="notes-log-empty">
+            No notes found yet.
+            They're hidden around the house.
+          </p>
+
+        </div>
+
+
+        <button
+          id="notesLogBack"
+          type="button"
+        >
+          BACK
+        </button>
+
+
+      </div>
+
+    </div>
+
+
+    <!-- =======================================================
+         DEATH SCREEN
+         ======================================================= -->
+
+    <div
+      id="deathScreen"
+      class="overlay hidden"
+    >
+
+      <div class="death-panel">
+
+
+        <div class="death-code">
+          SIGNAL LOST
+        </div>
+
+
+        <div class="death-title">
+          YOU WERE FOUND
+        </div>
+
+
+        <div class="death-line"></div>
+
+
+        <p id="deathReason">
+          THE SEEKER FOUND YOU.
+        </p>
+
+
+        <div class="death-stat">
+
+          <span>
+            BUTTONS
+          </span>
+
+          <strong id="deathButtons">
+            0 / 3
+          </strong>
+
+        </div>
+
+
+        <div class="death-stat">
+
+          <span>
+            NOTES
+          </span>
+
+          <strong id="deathNotes">
+            0 / 6
+          </strong>
+
+        </div>
+
+
+        <button
+          id="retryButton"
+          type="button"
+        >
+          TRY AGAIN
+        </button>
+
+
+        <button
+          id="deathMenuButton"
+          type="button"
+        >
+          MAIN MENU
+        </button>
+
+
+      </div>
+
+    </div>
+
+
+    <!-- =======================================================
+         WIN SCREEN
+         ======================================================= -->
+
+    <div
+      id="winScreen"
+      class="overlay hidden"
+    >
+
+      <div class="win-panel">
+
+
+        <div class="win-code">
+          SIGNAL RESTORED
+        </div>
+
+
+        <div
+          class="win-title"
+          id="winTitle"
+        >
+          YOU ESCAPED
+        </div>
+
+
+        <div class="win-line"></div>
+
+
+        <p id="winText">
+          The gate opened.
+          <br>
+          You made it out.
+        </p>
+
+
+        <div class="win-stats">
+
+
+          <div class="win-stat">
+
+            <span>
+              TIME
+            </span>
+
+            <strong id="winTime">
+              --
+            </strong>
+
+          </div>
+
+
+          <div class="win-stat">
+
+            <span>
+              BUTTONS
+            </span>
+
+            <strong id="winButtons">
+              3 / 3
+            </strong>
+
+          </div>
+
+
+          <div class="win-stat">
+
+            <span>
+              NOTES
+            </span>
+
+            <strong id="winNotes">
+              0 / 6
+            </strong>
+
+          </div>
+
+
+        </div>
+
+
+        <button
+          id="winAgainButton"
+          type="button"
+        >
+          PLAY AGAIN
+        </button>
+
+
+        <button
+          id="winMenuButton"
+          type="button"
+        >
+          MAIN MENU
+        </button>
+
+
+      </div>
+
+    </div>
+
+
+    <!-- =======================================================
+         GAME START COUNTDOWN
+         ======================================================= -->
+
+    <div
+      id="gameStartOverlay"
+      class="game-start-overlay hidden"
+    >
+
+      <div class="start-content">
+
+
+        <div class="start-label">
+          THE SEEKER
+        </div>
+
+
+        <div
+          id="startDeviceLabel"
+          class="start-device-label"
+        >
+          PC
+        </div>
+
+
+        <div
+          id="startCountdown"
+          class="start-countdown"
+        >
+          3
+        </div>
+
+
+        <p>
+          GET READY
+        </p>
+
+
+      </div>
+
+    </div>
+
+
+    <!-- =======================================================
+         DEMON ALERT
+         ======================================================= -->
+
+    <div
+      id="demonAlert"
+      class="demon-alert hidden"
+      aria-live="assertive"
+    >
+
+      <div class="demon-alert-symbol">
+        !
+      </div>
+
+
+      <div>
+
+        <strong>
+          THE SEEKER IS NEAR
+        </strong>
+
+        <span>
+          STAY QUIET
+        </span>
+
+      </div>
+
+    </div>
+
+
+    <!-- =======================================================
+         GATE STATUS
+         ======================================================= -->
+
+    <div
+      id="gateStatus"
+      class="gate-status hidden"
+    >
+
+      <div class="gate-status-label">
+        GATE
+      </div>
+
+      <div
+        id="gateStatusText"
+        class="gate-status-text"
+      >
+        LOCKED
+      </div>
+
+    </div>
+
+
+  </main>
+
+
+  <!-- =========================================================
+       CLASSIC FALLBACK WATCHDOG
+       ========================================================= -->
+
+  <script>
+
+    window.addEventListener(
+      "DOMContentLoaded",
+      function () {
+
+        setTimeout(
+          function () {
+
+            if (!window.__seekerBooted) {
+
+              var errorElement =
+                document.getElementById("loadError");
+
+              if (errorElement) {
+
+                errorElement.classList.remove("hidden");
+
+                errorElement.setAttribute(
+                  "aria-hidden",
+                  "false"
+                );
+
+              }
+
+            }
+
+          },
+          3500
+        );
+
       }
-    }, 2500);
-  });
-</script>
+    );
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  </script>
+
+
+  <!-- =========================================================
+       THREE.JS IMPORT MAP
+       ========================================================= -->
+
+  <script type="importmap">
+
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
   }
-}
-</script>
-<script type="module" src="game.js"></script>
+
+  </script>
+
+
+  <!-- =========================================================
+       GAME ENGINE
+       ========================================================= -->
+
+  <script
+    type="module"
+    src="game.js"
+  ></script>
+
+
 </body>
 </html>
