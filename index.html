@@ -2,841 +2,720 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#050505">
-    <meta name="description" content="THE SEEKER — BlackHollow Games">
-    <title>THE SEEKER — BlackHollow Games</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    >
+
+    <title>THE SEEKER</title>
+
+    <meta
+        name="description"
+        content="THE SEEKER — A BlackHollow Games horror experience."
+    >
 
     <link rel="stylesheet" href="style.css">
-
-    <script
-        src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
-        crossorigin="anonymous">
-    </script>
 </head>
 
 <body>
 
-    <!-- =====================================================
-         CINEMATIC INTRO
-    ====================================================== -->
+    <!-- =========================================================
+         INTRO
+         ========================================================= -->
 
-    <section
-        id="introScreen"
-        class="intro-screen"
-        aria-hidden="true">
+    <div id="introScreen" class="intro-screen">
 
-        <div class="intro-noise"></div>
-        <div class="intro-vignette"></div>
+        <div class="intro-background">
+            <div class="intro-stars"></div>
+            <div class="intro-fog intro-fog-a"></div>
+            <div class="intro-fog intro-fog-b"></div>
+            <div class="intro-grain"></div>
+            <div class="intro-vignette"></div>
+        </div>
+
+        <div id="introParticles" class="intro-particles"></div>
+
+        <div class="intro-center">
+
+            <div
+                id="introPresent"
+                class="intro-present"
+            >
+                BLACKHOLLOWGAMES PRESENT
+            </div>
+
+            <div
+                id="introDivider"
+                class="intro-divider"
+            ></div>
+
+            <div
+                id="introSub"
+                class="intro-sub"
+            >
+                A BLACKHOLLOW GAMES PRODUCTION
+            </div>
+
+        </div>
 
         <div
             id="introFlash"
-            class="intro-flash">
-        </div>
+            class="intro-flash"
+        ></div>
 
         <div
             id="introShockwave"
-            class="intro-shockwave">
+            class="intro-shockwave"
+        ></div>
+
+        <div
+            id="introBoom"
+            class="intro-boom"
+        ></div>
+
+        <div
+            id="introSkip"
+            class="intro-skip"
+        >
+            PRESS SPACE TO SKIP
         </div>
 
-        <div class="intro-content">
+    </div>
 
-            <div
-                id="introBrand"
-                class="intro-brand">
-                BLACKHOLLOW GAMES
-            </div>
 
-            <div
-                id="introLine"
-                class="intro-line">
-            </div>
-
-            <div
-                id="introGameTitle"
-                class="intro-game-title">
-                THE SEEKER
-            </div>
-
-            <div
-                id="introSubtitle"
-                class="intro-subtitle">
-                SOMETHING IS HUNTING
-            </div>
-
-        </div>
-
-    </section>
-
-    <!-- =====================================================
+    <!-- =========================================================
          MAIN MENU
-    ====================================================== -->
+         ========================================================= -->
 
     <main
         id="mainMenu"
-        class="menu-screen">
+        class="menu-screen"
+        hidden
+    >
 
-        <div class="menu-background">
-            <div class="menu-grid"></div>
-            <div class="menu-fog menu-fog-a"></div>
-            <div class="menu-fog menu-fog-b"></div>
-            <div class="menu-light menu-light-a"></div>
-            <div class="menu-light menu-light-b"></div>
-            <div class="menu-noise"></div>
+        <div class="menu-world">
+            <div class="menu-background-layer"></div>
+            <div class="menu-fog menu-fog-1"></div>
+            <div class="menu-fog menu-fog-2"></div>
             <div class="menu-vignette"></div>
+            <div class="menu-grain"></div>
         </div>
 
         <header class="menu-header">
 
             <div class="brand-block">
-                <div class="brand-mark"></div>
 
-                <div>
-                    <div class="brand-name">
-                        BLACKHOLLOW GAMES
-                    </div>
+                <div class="brand-line"></div>
 
-                    <div class="brand-subtitle">
-                        ORIGINAL SURVIVAL HORROR
-                    </div>
-                </div>
+                <span>
+                    BLACKHOLLOW GAMES
+                </span>
+
+                <div class="brand-line"></div>
+
             </div>
 
-            <div class="menu-build">
-                BUILD 01
+            <div
+                id="menuServerStatus"
+                class="server-status"
+            >
+                OFFLINE
             </div>
 
         </header>
 
-        <section class="menu-hero">
 
-            <div class="hero-kicker">
-                YOU SHOULD NOT BE HERE
+        <section class="menu-center">
+
+            <div class="title-area">
+
+                <div class="title-kicker">
+                    BLACKHOLLOW GAMES PRESENT
+                </div>
+
+                <h1>
+                    THE SEEKER
+                </h1>
+
+                <div class="title-rule"></div>
+
+                <p>
+                    THE HUNT BEGINS WHEN THE LIGHTS GO OUT.
+                </p>
+
             </div>
 
-            <h1>
-                THE
-                <span>SEEKER</span>
-            </h1>
 
-            <div class="hero-rule"></div>
+            <div class="menu-buttons">
 
-            <p>
-                FIND THE THREE BUTTONS.
-                TAKE THE KEY.
-                OPEN THE GATE.
-                ESCAPE BEFORE IT FINDS YOU.
-            </p>
-
-        </section>
-
-        <section class="main-menu-panel">
-
-            <button
-                id="playButton"
-                class="menu-button menu-button-primary"
-                data-play-game
-                type="button">
-
-                <span class="button-left">
-                    <span class="button-index">
-                        01
+                <button
+                    id="playButton"
+                    class="menu-button primary"
+                    type="button"
+                >
+                    <span class="button-title">
+                        PLAY
                     </span>
 
-                    <span>
-                        START GAME
+                    <span class="button-description">
+                        ENTER THE FACILITY
                     </span>
-                </span>
+                </button>
 
-                <span class="button-arrow">
-                    →
-                </span>
 
-            </button>
-
-            <button
-                id="multiplayerButton"
-                class="menu-button"
-                type="button">
-
-                <span class="button-left">
-                    <span class="button-index">
-                        02
-                    </span>
-
-                    <span>
+                <button
+                    id="multiplayerButton"
+                    class="menu-button"
+                    type="button"
+                >
+                    <span class="button-title">
                         MULTIPLAYER
                     </span>
-                </span>
 
-                <span class="button-arrow">
-                    →
-                </span>
-
-            </button>
-
-            <button
-                id="settingsButton"
-                class="menu-button"
-                type="button">
-
-                <span class="button-left">
-                    <span class="button-index">
-                        03
+                    <span class="button-description">
+                        HOST OR JOIN A HUNT
                     </span>
+                </button>
 
-                    <span>
+
+                <button
+                    id="settingsButton"
+                    class="menu-button"
+                    type="button"
+                >
+                    <span class="button-title">
                         SETTINGS
                     </span>
-                </span>
 
-                <span class="button-arrow">
-                    →
-                </span>
-
-            </button>
-
-            <button
-                id="creditsButton"
-                class="menu-button"
-                type="button">
-
-                <span class="button-left">
-                    <span class="button-index">
-                        04
+                    <span class="button-description">
+                        AUDIO AND CONTROLS
                     </span>
+                </button>
 
-                    <span>
+
+                <button
+                    id="creditsButton"
+                    class="menu-button"
+                    type="button"
+                >
+                    <span class="button-title">
                         CREDITS
                     </span>
-                </span>
 
-                <span class="button-arrow">
-                    →
-                </span>
+                    <span class="button-description">
+                        BLACKHOLLOW GAMES
+                    </span>
+                </button>
 
-            </button>
+            </div>
 
         </section>
+
 
         <footer class="menu-footer">
 
-            <div>
-                WASD / MOUSE
-            </div>
-
-            <div>
-                BLACKHOLLOW GAMES
-            </div>
-
-            <div>
+            <span>
                 THE SEEKER
-            </div>
+            </span>
+
+            <span>
+                BLACKHOLLOWGAMES
+            </span>
+
+            <span>
+                BUILD 1.0
+            </span>
 
         </footer>
 
     </main>
 
-    <!-- =====================================================
-         MODE SELECT
-    ====================================================== -->
 
-    <section
-        id="modeModal"
-        class="modal-screen"
-        aria-hidden="true">
+    <!-- =========================================================
+         PLATFORM SELECT
+         ========================================================= -->
 
-        <div class="modal-backdrop"></div>
+    <div
+        id="platformModal"
+        class="modal"
+        hidden
+    >
 
-        <div class="modal-window mode-window">
+        <div class="modal-panel platform-panel">
 
-            <div class="modal-topline">
-                START GAME
+            <button
+                class="modal-close"
+                data-close="platformModal"
+                type="button"
+                aria-label="Close"
+            >
+                ×
+            </button>
+
+            <div class="modal-kicker">
+                PLAY VERSION
             </div>
 
             <h2>
                 SELECT PLATFORM
             </h2>
 
-            <p class="modal-description">
-                Choose the control layout before entering the facility.
+            <p>
+                Choose the control system you want to use.
             </p>
 
-            <div class="mode-grid">
+
+            <div class="platform-grid">
 
                 <button
-                    class="mode-card"
-                    id="pcModeButton"
-                    type="button">
-
-                    <div class="mode-icon">
-                        <span class="monitor-icon"></span>
+                    class="platform-card"
+                    data-platform="pc"
+                    type="button"
+                >
+                    <div class="platform-icon pc-icon">
+                        <span></span>
+                        <span></span>
                     </div>
 
-                    <div class="mode-title">
+                    <strong>
                         PC
-                    </div>
+                    </strong>
 
-                    <div class="mode-description">
-                        WASD movement<br>
-                        Mouse look<br>
-                        Keyboard actions
-                    </div>
-
+                    <small>
+                        Keyboard and Mouse
+                    </small>
                 </button>
 
+
                 <button
-                    class="mode-card"
-                    id="mobileModeButton"
-                    type="button">
-
-                    <div class="mode-icon">
-                        <span class="mobile-icon"></span>
+                    class="platform-card"
+                    data-platform="mobile"
+                    type="button"
+                >
+                    <div class="platform-icon mobile-icon">
+                        <span></span>
                     </div>
 
-                    <div class="mode-title">
+                    <strong>
                         MOBILE
-                    </div>
+                    </strong>
 
-                    <div class="mode-description">
-                        Virtual movement wheel<br>
-                        Touch camera<br>
-                        Touch actions
-                    </div>
-
+                    <small>
+                        Touch Controls
+                    </small>
                 </button>
 
             </div>
 
+        </div>
+    </div>
+
+
+    <!-- =========================================================
+         MULTIPLAYER
+         ========================================================= -->
+
+    <div
+        id="multiplayerModal"
+        class="modal"
+        hidden
+    >
+
+        <div class="modal-panel">
+
             <button
                 class="modal-close"
-                data-close-modal="modeModal"
-                type="button">
-                CANCEL
+                data-close="multiplayerModal"
+                type="button"
+                aria-label="Close"
+            >
+                ×
             </button>
 
-        </div>
-
-    </section>
-
-    <!-- =====================================================
-         MULTIPLAYER
-    ====================================================== -->
-
-    <section
-        id="multiplayerModal"
-        class="modal-screen"
-        aria-hidden="true">
-
-        <div class="modal-backdrop"></div>
-
-        <div class="modal-window multiplayer-window">
-
-            <div class="modal-topline">
+            <div class="modal-kicker">
                 MULTIPLAYER
             </div>
 
             <h2>
-                ENTER THE FACILITY TOGETHER
+                ENTER THE HUNT
             </h2>
 
-            <p class="modal-description">
-                Create a lobby or join one using its code.
-                Multiplayer uses a real network connection.
+            <p>
+                Create a lobby or join an existing one.
             </p>
 
-            <div class="multiplayer-actions">
+
+            <div class="network-panel">
+
+                <div class="network-indicator"></div>
+
+                <div>
+                    <span>
+                        SERVER
+                    </span>
+
+                    <strong id="networkStatus">
+                        OFFLINE
+                    </strong>
+                </div>
+
+            </div>
+
+
+            <div class="modal-actions">
 
                 <button
-                    id="hostLobbyButton"
-                    class="large-action-button"
-                    type="button">
-
-                    <span class="action-title">
-                        HOST LOBBY
-                    </span>
-
-                    <span class="action-description">
-                        Create a lobby and choose the map.
-                    </span>
-
+                    id="hostButton"
+                    class="modal-action-button primary"
+                    type="button"
+                >
+                    HOST LOBBY
                 </button>
 
                 <button
-                    id="joinLobbyButton"
-                    class="large-action-button"
-                    type="button">
-
-                    <span class="action-title">
-                        JOIN LOBBY
-                    </span>
-
-                    <span class="action-description">
-                        Enter a code from another host.
-                    </span>
-
+                    id="joinButton"
+                    class="modal-action-button"
+                    type="button"
+                >
+                    JOIN LOBBY
                 </button>
 
             </div>
+
+        </div>
+    </div>
+
+
+    <!-- =========================================================
+         HOST LOBBY
+         ========================================================= -->
+
+    <div
+        id="hostModal"
+        class="modal"
+        hidden
+    >
+
+        <div class="modal-panel">
 
             <button
                 class="modal-close"
-                data-close-modal="multiplayerModal"
-                type="button">
-                BACK
+                data-close="hostModal"
+                type="button"
+                aria-label="Close"
+            >
+                ×
             </button>
 
-        </div>
-
-    </section>
-
-    <!-- =====================================================
-         HOST LOBBY
-    ====================================================== -->
-
-    <section
-        id="hostModal"
-        class="modal-screen"
-        aria-hidden="true">
-
-        <div class="modal-backdrop"></div>
-
-        <div class="modal-window lobby-window">
-
-            <div class="modal-topline">
-                HOST LOBBY
+            <div class="modal-kicker">
+                HOST
             </div>
 
             <h2>
-                CREATE A LOBBY
+                CREATE LOBBY
             </h2>
 
-            <div class="form-row">
 
-                <label for="hostNameInput">
+            <div class="form-group">
+
+                <label for="hostPlayerName">
                     PLAYER NAME
                 </label>
 
                 <input
-                    id="hostNameInput"
-                    type="text"
+                    id="hostPlayerName"
+                    class="text-input"
                     maxlength="20"
                     autocomplete="off"
-                    placeholder="PLAYER">
+                    placeholder="Player"
+                >
 
             </div>
 
-            <div class="form-row">
 
-                <label for="lobbyNameInput">
+            <div class="form-group">
+
+                <label for="hostLobbyName">
                     LOBBY NAME
                 </label>
 
                 <input
-                    id="lobbyNameInput"
-                    type="text"
-                    maxlength="28"
+                    id="hostLobbyName"
+                    class="text-input"
+                    maxlength="32"
                     autocomplete="off"
-                    placeholder="THE SEEKER LOBBY">
+                    value="The Seeker Lobby"
+                >
 
             </div>
 
-            <div class="form-row">
 
-                <label>
+            <div class="form-group">
+
+                <label for="hostMap">
                     MAP
                 </label>
 
-                <div
-                    id="hostMapOptions"
-                    class="map-options">
-
-                    <button
-                        class="map-option active"
-                        data-map="facility"
-                        type="button">
-                        FACILITY
-                    </button>
-
-                    <button
-                        class="map-option"
-                        data-map="basement"
-                        type="button">
-                        BASEMENT
-                    </button>
-
-                    <button
-                        class="map-option"
-                        data-map="forest"
-                        type="button">
-                        FOREST
-                    </button>
-
-                </div>
-
-            </div>
-
-            <div class="form-row">
-
-                <label for="hostPlayerCount">
-                    MAX PLAYERS
-                </label>
-
-                <select id="hostPlayerCount">
-
-                    <option value="2">
-                        2
+                <select
+                    id="hostMap"
+                    class="select-input"
+                >
+                    <option value="facility">
+                        ABANDONED FACILITY
                     </option>
 
-                    <option value="3">
-                        3
+                    <option value="underground">
+                        UNDERGROUND COMPLEX
                     </option>
 
-                    <option value="4" selected>
-                        4
+                    <option value="blackwood">
+                        BLACKWOOD FOREST
                     </option>
-
-                    <option value="6">
-                        6
-                    </option>
-
-                    <option value="8">
-                        8
-                    </option>
-
                 </select>
 
             </div>
 
+
+            <div
+                id="hostStatus"
+                class="modal-status"
+            >
+                READY
+            </div>
+
+
             <button
                 id="createLobbyButton"
-                class="modal-primary-button"
-                type="button">
-                CREATE LOBBY
-            </button>
-
-            <button
-                class="modal-close"
-                data-close-modal="hostModal"
-                type="button">
-                CANCEL
-            </button>
-
-        </div>
-
-    </section>
-
-    <!-- =====================================================
-         HOSTED LOBBY
-    ====================================================== -->
-
-    <section
-        id="hostedLobbyModal"
-        class="modal-screen"
-        aria-hidden="true">
-
-        <div class="modal-backdrop"></div>
-
-        <div class="modal-window hosted-window">
-
-            <div class="modal-topline">
-                LOBBY READY
-            </div>
-
-            <div class="lobby-code-heading">
-                LOBBY CODE
-            </div>
-
-            <div
-                id="hostedLobbyCode"
-                class="lobby-code">
-                ------
-            </div>
-
-            <div
-                id="hostedLobbyStatus"
-                class="lobby-status">
-                CONNECTING TO SERVER
-            </div>
-
-            <div class="lobby-info-grid">
-
-                <div class="lobby-info-card">
-                    <span>
-                        NAME
-                    </span>
-                    <strong id="hostedLobbyName">
-                        --
-                    </strong>
-                </div>
-
-                <div class="lobby-info-card">
-                    <span>
-                        MAP
-                    </span>
-                    <strong id="hostedLobbyMap">
-                        --
-                    </strong>
-                </div>
-
-                <div class="lobby-info-card">
-                    <span>
-                        PLAYERS
-                    </span>
-                    <strong id="hostedPlayerCount">
-                        1 / 4
-                    </strong>
-                </div>
-
-            </div>
-
-            <div
-                id="hostedPlayerList"
-                class="player-list">
-            </div>
-
-            <div class="voice-row">
-
-                <div>
-                    <div class="voice-title">
-                        GROUP VOICE
-                    </div>
-
-                    <div class="voice-description">
-                        Voice only. No text chat.
-                    </div>
-                </div>
-
-                <button
-                    id="hostVoiceButton"
-                    class="voice-toggle"
-                    type="button">
-                    ENABLE MIC
-                </button>
-
-            </div>
-
-            <button
-                id="hostStartGameButton"
-                class="modal-primary-button"
+                class="modal-action-button primary"
                 type="button"
-                disabled>
-                START GAME
-            </button>
-
-            <button
-                id="hostLeaveButton"
-                class="modal-close"
-                type="button">
-                LEAVE LOBBY
+            >
+                CREATE REAL LOBBY
             </button>
 
         </div>
+    </div>
 
-    </section>
 
-    <!-- =====================================================
+    <!-- =========================================================
          JOIN LOBBY
-    ====================================================== -->
+         ========================================================= -->
 
-    <section
+    <div
         id="joinModal"
-        class="modal-screen"
-        aria-hidden="true">
+        class="modal"
+        hidden
+    >
 
-        <div class="modal-backdrop"></div>
+        <div class="modal-panel">
 
-        <div class="modal-window join-window">
+            <button
+                class="modal-close"
+                data-close="joinModal"
+                type="button"
+                aria-label="Close"
+            >
+                ×
+            </button>
 
-            <div class="modal-topline">
-                JOIN LOBBY
+            <div class="modal-kicker">
+                JOIN
             </div>
 
             <h2>
-                ENTER LOBBY CODE
+                JOIN LOBBY
             </h2>
 
-            <p class="modal-description">
-                Use the code given to you by the host.
-            </p>
 
-            <div class="form-row">
+            <div class="form-group">
 
-                <label for="joinNameInput">
+                <label for="joinPlayerName">
                     PLAYER NAME
                 </label>
 
                 <input
-                    id="joinNameInput"
-                    type="text"
+                    id="joinPlayerName"
+                    class="text-input"
                     maxlength="20"
                     autocomplete="off"
-                    placeholder="PLAYER">
+                    placeholder="Player"
+                >
 
             </div>
 
-            <div class="form-row">
 
-                <label for="joinCodeInput">
+            <div class="form-group">
+
+                <label for="joinCode">
                     LOBBY CODE
                 </label>
 
                 <input
-                    id="joinCodeInput"
-                    class="join-code-input"
-                    type="text"
-                    maxlength="6"
+                    id="joinCode"
+                    class="text-input lobby-code-input"
+                    maxlength="8"
                     autocomplete="off"
                     spellcheck="false"
-                    placeholder="ABC123">
+                    placeholder="ABC123"
+                >
 
             </div>
 
-            <button
-                id="joinConfirmButton"
-                class="modal-primary-button"
-                type="button">
-                JOIN LOBBY
-            </button>
 
             <div
-                id="joinLobbyMessage"
-                class="form-message">
+                id="joinStatus"
+                class="modal-status"
+            >
+                ENTER THE HOST'S CODE
             </div>
 
+
             <button
-                class="modal-close"
-                data-close-modal="joinModal"
-                type="button">
-                CANCEL
+                id="joinLobbyButton"
+                class="modal-action-button primary"
+                type="button"
+            >
+                JOIN REAL LOBBY
             </button>
 
         </div>
+    </div>
 
-    </section>
 
-    <!-- =====================================================
-         JOINED LOBBY
-    ====================================================== -->
+    <!-- =========================================================
+         WAITING LOBBY
+         ========================================================= -->
 
-    <section
-        id="joinedLobbyModal"
-        class="modal-screen"
-        aria-hidden="true">
+    <div
+        id="lobbyModal"
+        class="modal"
+        hidden
+    >
 
-        <div class="modal-backdrop"></div>
+        <div class="modal-panel lobby-panel">
 
-        <div class="modal-window hosted-window">
+            <button
+                class="modal-close"
+                data-close="lobbyModal"
+                type="button"
+                aria-label="Close"
+            >
+                ×
+            </button>
 
-            <div class="modal-topline">
-                JOINED LOBBY
+            <div class="modal-kicker">
+                REAL SERVER LOBBY
             </div>
 
-            <div class="lobby-code-heading">
-                LOBBY CODE
-            </div>
+            <h2>
+                WAITING ROOM
+            </h2>
 
-            <div
-                id="joinedLobbyCode"
-                class="lobby-code">
-                ------
-            </div>
 
-            <div
-                id="joinedLobbyStatus"
-                class="lobby-status">
-                CONNECTED
-            </div>
+            <div class="lobby-code-display">
 
-            <div class="lobby-info-grid">
+                <span>
+                    LOBBY CODE
+                </span>
 
-                <div class="lobby-info-card">
-                    <span>
-                        NAME
-                    </span>
-
-                    <strong id="joinedLobbyName">
-                        --
-                    </strong>
-                </div>
-
-                <div class="lobby-info-card">
-                    <span>
-                        MAP
-                    </span>
-
-                    <strong id="joinedLobbyMap">
-                        --
-                    </strong>
-                </div>
-
-                <div class="lobby-info-card">
-                    <span>
-                        PLAYERS
-                    </span>
-
-                    <strong id="joinedPlayerCount">
-                        --
-                    </strong>
-                </div>
-
-            </div>
-
-            <div
-                id="joinedPlayerList"
-                class="player-list">
-            </div>
-
-            <div class="voice-row">
-
-                <div>
-                    <div class="voice-title">
-                        GROUP VOICE
-                    </div>
-
-                    <div class="voice-description">
-                        Voice only. No text chat.
-                    </div>
-                </div>
+                <strong id="lobbyCode">
+                    ------
+                </strong>
 
                 <button
-                    id="joinedVoiceButton"
-                    class="voice-toggle"
-                    type="button">
-                    ENABLE MIC
+                    id="copyLobbyCode"
+                    type="button"
+                >
+                    COPY
                 </button>
 
             </div>
 
-            <div class="waiting-label">
-                WAITING FOR HOST TO START
+
+            <div class="lobby-meta">
+
+                <div>
+                    <span>
+                        PLAYERS
+                    </span>
+
+                    <strong id="playerCount">
+                        0 / 4
+                    </strong>
+                </div>
+
+                <div>
+                    <span>
+                        MAP
+                    </span>
+
+                    <strong id="lobbyMap">
+                        ABANDONED FACILITY
+                    </strong>
+                </div>
+
             </div>
 
-            <button
-                id="joinedLeaveButton"
-                class="modal-close"
-                type="button">
-                LEAVE LOBBY
-            </button>
+
+            <div
+                id="lobbyPlayers"
+                class="lobby-player-list"
+            ></div>
+
+
+            <div
+                id="lobbyStatus"
+                class="modal-status"
+            >
+                WAITING FOR PLAYERS
+            </div>
+
+
+            <div class="lobby-actions">
+
+                <button
+                    id="startGameButton"
+                    class="modal-action-button primary"
+                    type="button"
+                >
+                    START GAME
+                </button>
+
+                <button
+                    id="leaveLobbyButton"
+                    class="modal-action-button"
+                    type="button"
+                >
+                    LEAVE LOBBY
+                </button>
+
+            </div>
 
         </div>
+    </div>
 
-    </section>
 
-    <!-- =====================================================
+    <!-- =========================================================
          SETTINGS
-    ====================================================== -->
+         ========================================================= -->
 
-    <section
+    <div
         id="settingsModal"
-        class="modal-screen"
-        aria-hidden="true">
+        class="modal"
+        hidden
+    >
 
-        <div class="modal-backdrop"></div>
+        <div class="modal-panel">
 
-        <div class="modal-window settings-window">
+            <button
+                class="modal-close"
+                data-close="settingsModal"
+                type="button"
+                aria-label="Close"
+            >
+                ×
+            </button>
 
-            <div class="modal-topline">
+            <div class="modal-kicker">
                 SETTINGS
             </div>
 
@@ -844,239 +723,171 @@
                 GAME SETTINGS
             </h2>
 
-            <div class="setting-row">
 
-                <div>
-                    <strong>
-                        MASTER VOLUME
-                    </strong>
+            <div class="settings-list">
 
-                    <small>
-                        All game audio
-                    </small>
+                <div class="setting-row">
+
+                    <div>
+                        <strong>
+                            MUSIC
+                        </strong>
+
+                        <span>
+                            Menu and gameplay music
+                        </span>
+                    </div>
+
+                    <label class="switch">
+
+                        <input
+                            id="musicToggle"
+                            type="checkbox"
+                            checked
+                        >
+
+                        <span class="switch-track"></span>
+
+                    </label>
+
                 </div>
 
-                <input
-                    id="masterVolume"
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value="0.82">
 
-            </div>
+                <div class="setting-row">
 
-            <div class="setting-row">
+                    <div>
+                        <strong>
+                            SOUND EFFECTS
+                        </strong>
 
-                <div>
-                    <strong>
-                        MUSIC VOLUME
-                    </strong>
+                        <span>
+                            Interface and gameplay sounds
+                        </span>
+                    </div>
 
-                    <small>
-                        Menu and Seeker music
-                    </small>
+                    <label class="switch">
+
+                        <input
+                            id="sfxToggle"
+                            type="checkbox"
+                            checked
+                        >
+
+                        <span class="switch-track"></span>
+
+                    </label>
+
                 </div>
 
-                <input
-                    id="musicVolume"
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value="0.68">
 
-            </div>
+                <div class="setting-row volume-row">
 
-            <div class="setting-row">
+                    <div>
+                        <strong>
+                            MASTER VOLUME
+                        </strong>
 
-                <div>
-                    <strong>
-                        EFFECT VOLUME
-                    </strong>
-
-                    <small>
-                        Footsteps and interaction
-                    </small>
-                </div>
-
-                <input
-                    id="effectsVolume"
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value="0.9">
-
-            </div>
-
-            <div class="setting-row">
-
-                <div>
-                    <strong>
-                        VOICE VOLUME
-                    </strong>
-
-                    <small>
-                        Multiplayer voice
-                    </small>
-                </div>
-
-                <input
-                    id="voiceVolume"
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value="0.85">
-
-            </div>
-
-            <div class="setting-row checkbox-row">
-
-                <div>
-                    <strong>
-                        SCREEN EFFECTS
-                    </strong>
-
-                    <small>
-                        Threat flashes and atmosphere
-                    </small>
-                </div>
-
-                <label class="switch">
+                        <span>
+                            <span id="volumeValue">
+                                75%
+                            </span>
+                        </span>
+                    </div>
 
                     <input
-                        id="screenEffectsToggle"
-                        type="checkbox"
-                        checked>
+                        id="volumeSlider"
+                        class="volume-slider"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value="0.75"
+                    >
 
-                    <span></span>
-
-                </label>
-
-            </div>
-
-            <div class="setting-row checkbox-row">
-
-                <div>
-                    <strong>
-                        REDUCED MOTION
-                    </strong>
-
-                    <small>
-                        Reduce camera and UI motion
-                    </small>
                 </div>
 
-                <label class="switch">
-
-                    <input
-                        id="reducedMotionToggle"
-                        type="checkbox">
-
-                    <span></span>
-
-                </label>
-
             </div>
-
-            <button
-                id="closeSettingsButton"
-                class="modal-primary-button"
-                type="button">
-                DONE
-            </button>
 
         </div>
+    </div>
 
-    </section>
 
-    <!-- =====================================================
+    <!-- =========================================================
          CREDITS
-    ====================================================== -->
+         ========================================================= -->
 
-    <section
+    <div
         id="creditsModal"
-        class="modal-screen"
-        aria-hidden="true">
+        class="modal"
+        hidden
+    >
 
-        <div class="modal-backdrop"></div>
+        <div class="modal-panel credits-panel">
 
-        <div class="modal-window credits-window">
+            <button
+                class="modal-close"
+                data-close="creditsModal"
+                type="button"
+                aria-label="Close"
+            >
+                ×
+            </button>
 
-            <div class="modal-topline">
-                BLACKHOLLOW GAMES
+            <div class="modal-kicker">
+                CREDITS
             </div>
 
             <h2>
                 THE SEEKER
             </h2>
 
-            <div class="credit-stack">
+            <div class="credits-block">
 
-                <div>
+                <div class="credit-line">
                     <span>
-                        GAME
+                        CREATED BY
                     </span>
-                    <strong>
-                        THE SEEKER
-                    </strong>
-                </div>
 
-                <div>
-                    <span>
-                        STUDIO
-                    </span>
                     <strong>
                         BLACKHOLLOW GAMES
                     </strong>
                 </div>
 
-                <div>
+                <div class="credit-line">
                     <span>
-                        ENGINE
+                        PROJECT
                     </span>
+
                     <strong>
-                        WEBGL / THREE.JS
+                        THE SEEKER
                     </strong>
                 </div>
 
-                <div>
+                <div class="credit-line">
                     <span>
-                        MODE
+                        VERSION
                     </span>
+
                     <strong>
-                        SINGLEPLAYER / MULTIPLAYER
+                        1.0
                     </strong>
                 </div>
 
             </div>
 
-            <p class="credits-note">
-                You are inside an abandoned facility.
-                Three buttons unlock the path to the key.
-                The gate is your only way out.
-            </p>
-
-            <button
-                class="modal-close"
-                data-close-modal="creditsModal"
-                type="button">
-                CLOSE
-            </button>
-
         </div>
+    </div>
 
-    </section>
 
-    <!-- =====================================================
-         GAME LOADING
-    ====================================================== -->
+    <!-- =========================================================
+         LOADING SCREEN
+         ========================================================= -->
 
-    <section
-        id="gameLoading"
-        class="game-loading">
+    <div
+        id="loadingScreen"
+        class="loading-screen"
+        hidden
+    >
 
         <div class="loading-center">
 
@@ -1084,321 +895,397 @@
                 BLACKHOLLOW GAMES
             </div>
 
-            <div class="loading-title">
+            <div class="loading-game">
                 THE SEEKER
             </div>
 
-            <div class="loading-line"></div>
-
-            <div
-                id="loadingStatus"
-                class="loading-status">
-                PREPARING FACILITY
-            </div>
-
-        </div>
-
-    </section>
-
-    <!-- =====================================================
-         GAME CANVAS
-    ====================================================== -->
-
-    <canvas
-        id="gameCanvas"
-        class="game-canvas"
-        aria-label="THE SEEKER 3D world">
-    </canvas>
-
-    <!-- =====================================================
-         GAME HUD
-    ====================================================== -->
-
-    <div
-        id="gameHUD"
-        class="game-hud">
-
-        <div class="hud-top-left">
-
-            <div class="objective-card">
-
-                <div class="objective-label">
-                    OBJECTIVE
-                </div>
+            <div class="loading-bar">
 
                 <div
-                    id="objectiveText"
-                    class="objective-text">
-                    FIND THE THREE BUTTONS
-                </div>
+                    id="loadingProgress"
+                    class="loading-progress"
+                ></div>
 
             </div>
-
-        </div>
-
-        <div class="hud-top-center">
 
             <div
-                id="setupTimerWrap"
-                class="setup-timer-wrap">
-
-                <div class="setup-label">
-                    SEEKER AWAKENS IN
-                </div>
-
-                <div
-                    id="setupTimer"
-                    class="setup-timer">
-                    03:00
-                </div>
-
+                id="loadingText"
+                class="loading-status"
+            >
+                INITIALIZING
             </div>
 
         </div>
 
-        <div class="hud-top-right">
+    </div>
 
-            <div class="hud-map-name">
+
+    <!-- =========================================================
+         GAME
+         ========================================================= -->
+
+    <section
+        id="gameScreen"
+        class="game-screen"
+        hidden
+    >
+
+        <canvas
+            id="gameCanvas"
+        ></canvas>
+
+
+        <!-- =====================================================
+             MINIMAP
+             ===================================================== -->
+
+        <div
+            id="minimap"
+            class="minimap"
+        >
+
+            <div class="minimap-header">
                 FACILITY
             </div>
 
+            <div
+                id="minimapWorld"
+                class="minimap-world"
+            >
+
+                <div
+                    id="playerMarker"
+                    class="map-marker player-marker"
+                ></div>
+
+                <div
+                    id="seekerMarker"
+                    class="map-marker seeker-marker"
+                ></div>
+
+            </div>
+
+            <div class="minimap-legend">
+
+                <span>
+                    WHITE = YOU
+                </span>
+
+                <span>
+                    RED = SEEKER
+                </span>
+
+            </div>
+
         </div>
 
-        <div class="hud-bottom-left">
 
-            <div class="inventory">
+        <!-- =====================================================
+             HUD
+             ===================================================== -->
 
-                <button
-                    id="inventorySlot1"
-                    class="inventory-slot active"
-                    type="button"
-                    aria-label="Flashlight">
+        <div
+            id="gameHud"
+            class="game-hud"
+        >
 
-                    <span class="inventory-number">
-                        1
-                    </span>
+            <div class="hud-left">
 
-                    <span class="flashlight-symbol">
-                        <span class="flashlight-icon-body"></span>
-                        <span class="flashlight-icon-head"></span>
-                    </span>
+                <div class="hud-card">
 
-                    <span
-                        id="flashlightBattery"
-                        class="inventory-status">
-                        READY
-                    </span>
-
-                </button>
-
-                <button
-                    id="inventorySlot2"
-                    class="inventory-slot"
-                    type="button"
-                    aria-label="Empty">
                     <span>
-                        2
+                        OBJECTIVE
                     </span>
-                </button>
+
+                    <strong id="objectiveText">
+                        FIND THE THREE BUTTONS.
+                    </strong>
+
+                </div>
+
+
+                <div class="hud-card">
+
+                    <span>
+                        BUTTONS
+                    </span>
+
+                    <strong id="buttonProgress">
+                        0 / 3
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="hud-center">
+
+                <div
+                    id="setupTimer"
+                    class="setup-timer"
+                >
+                    03:00
+                </div>
+
+                <div class="timer-caption">
+                    BEFORE THE HUNT
+                </div>
+
+            </div>
+
+
+            <div class="hud-right">
+
+                <div
+                    id="threatDisplay"
+                    class="threat-display"
+                >
+
+                    <span>
+                        SEEKER
+                    </span>
+
+                    <strong id="threatText">
+                        DORMANT
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="hud-bottom">
+
+                <div class="inventory">
+
+                    <button
+                        id="inventorySlot1"
+                        class="inventory-slot active"
+                        type="button"
+                    >
+
+                        <span class="slot-number">
+                            1
+                        </span>
+
+                        <span class="slot-icon flashlight-symbol">
+                            <span></span>
+                        </span>
+
+                        <span class="slot-name">
+                            FLASHLIGHT
+                        </span>
+
+                    </button>
+
+                </div>
+
 
                 <button
-                    id="inventorySlot3"
-                    class="inventory-slot"
+                    id="voiceButton"
+                    class="voice-button"
                     type="button"
-                    aria-label="Empty">
-                    <span>
-                        3
+                >
+
+                    <span class="voice-icon">
+                        <span></span>
                     </span>
+
+                    <span>
+                        VOICE
+                    </span>
+
                 </button>
 
             </div>
 
         </div>
 
-        <div class="hud-bottom-right">
 
-            <div class="control-hint">
-                <strong>
-                    E
-                </strong>
-                INTERACT
-            </div>
-
-            <div class="control-hint">
-                <strong>
-                    F
-                </strong>
-                FLASHLIGHT
-            </div>
-
-        </div>
+        <!-- =====================================================
+             MOBILE CONTROLS
+             ===================================================== -->
 
         <div
-            id="threatOverlay"
-            class="threat-overlay">
-        </div>
-
-        <div
-            id="centerReticle"
-            class="center-reticle">
-        </div>
-
-    </div>
-
-    <!-- =====================================================
-         MOBILE GAME CONTROLS
-    ====================================================== -->
-
-    <div
-        id="mobileControls"
-        class="mobile-controls"
-        aria-hidden="true">
-
-        <div
-            id="movementWheel"
-            class="movement-wheel">
-
-            <div class="movement-wheel-ring"></div>
+            id="mobileControls"
+            class="mobile-controls"
+            hidden
+        >
 
             <div
-                id="movementStick"
-                class="movement-stick">
+                id="movementJoystick"
+                class="joystick movement-joystick"
+            >
+
+                <div class="joystick-ring">
+
+                    <div
+                        id="movementKnob"
+                        class="joystick-knob"
+                    ></div>
+
+                </div>
+
             </div>
 
+
+            <div
+                id="lookJoystick"
+                class="joystick look-joystick"
+            >
+
+                <div class="joystick-ring">
+
+                    <div
+                        id="lookKnob"
+                        class="joystick-knob"
+                    ></div>
+
+                </div>
+
+            </div>
+
+
+            <button
+                id="mobileSprint"
+                class="mobile-action"
+                type="button"
+            >
+                SPRINT
+            </button>
+
+
+            <button
+                id="mobileInteract"
+                class="mobile-action"
+                type="button"
+            >
+                USE
+            </button>
+
         </div>
+
+
+        <!-- =====================================================
+             DANGER VIGNETTE
+             ===================================================== -->
 
         <div
-            id="mobileLookZone"
-            class="mobile-look-zone">
-        </div>
+            id="dangerOverlay"
+            class="danger-overlay"
+        ></div>
 
-        <button
-            id="mobileInteractButton"
-            class="mobile-action-button"
-            type="button">
-            INTERACT
-        </button>
 
-        <button
-            id="mobileFlashlightButton"
-            class="mobile-action-button mobile-flashlight-button"
-            type="button">
-            FLASHLIGHT
-        </button>
+        <!-- =====================================================
+             PAUSE
+             ===================================================== -->
 
-    </div>
+        <div
+            id="pauseOverlay"
+            class="game-overlay"
+            hidden
+        >
 
-    <!-- =====================================================
-         GAME PAUSE
-    ====================================================== -->
+            <div class="overlay-panel">
 
-    <section
-        id="pauseScreen"
-        class="game-overlay">
+                <div class="modal-kicker">
+                    PAUSED
+                </div>
 
-        <div class="game-overlay-card">
+                <h2>
+                    THE HUNT IS WAITING.
+                </h2>
 
-            <div class="game-overlay-kicker">
-                THE SEEKER
+                <button
+                    id="resumeButton"
+                    class="modal-action-button primary"
+                    type="button"
+                >
+                    RESUME
+                </button>
+
+                <button
+                    id="pauseMenuButton"
+                    class="modal-action-button"
+                    type="button"
+                >
+                    MAIN MENU
+                </button>
+
             </div>
 
-            <h2>
-                PAUSED
-            </h2>
+        </div>
 
-            <button
-                id="resumeButton"
-                class="modal-primary-button"
-                type="button">
-                RESUME
-            </button>
 
-            <button
-                id="pauseMenuButton"
-                class="modal-close"
-                type="button">
-                MAIN MENU
-            </button>
+        <!-- =====================================================
+             CAUGHT
+             ===================================================== -->
+
+        <div
+            id="caughtOverlay"
+            class="game-overlay caught-overlay"
+            hidden
+        >
+
+            <div class="overlay-panel">
+
+                <div class="modal-kicker">
+                    THE HUNT IS OVER
+                </div>
+
+                <h2>
+                    YOU WERE CAUGHT
+                </h2>
+
+                <div class="caught-rule"></div>
+
+                <button
+                    id="restartButton"
+                    class="modal-action-button primary"
+                    type="button"
+                >
+                    TRY AGAIN
+                </button>
+
+                <button
+                    id="caughtMenuButton"
+                    class="modal-action-button"
+                    type="button"
+                >
+                    MAIN MENU
+                </button>
+
+            </div>
 
         </div>
 
     </section>
 
-    <!-- =====================================================
-         CAUGHT
-    ====================================================== -->
 
-    <section
-        id="caughtScreen"
-        class="game-overlay caught-overlay">
-
-        <div class="caught-noise"></div>
-
-        <div class="game-overlay-card caught-card">
-
-            <div class="game-overlay-kicker">
-                BLACKHOLLOW GAMES
-            </div>
-
-            <h2>
-                YOU WERE CAUGHT
-            </h2>
-
-            <p>
-                THE SEEKER FOUND YOU.
-            </p>
-
-            <button
-                id="retryButton"
-                class="modal-primary-button"
-                type="button">
-                TRY AGAIN
-            </button>
-
-            <button
-                id="caughtMenuButton"
-                class="modal-close"
-                type="button">
-                MAIN MENU
-            </button>
-
-        </div>
-
-    </section>
-
-    <!-- =====================================================
-         NOTIFICATION
-    ====================================================== -->
-
-    <div
-        id="gameNotification"
-        class="game-notification">
-    </div>
-
-    <!-- =====================================================
-         INTRO AUDIO
-    ====================================================== -->
+    <!-- =========================================================
+         AUDIO
+         ========================================================= -->
 
     <audio
-        id="introBoomAudio"
-        preload="auto">
-        <source
-            src="boom.mp3"
-            type="audio/mpeg">
-    </audio>
-
-    <audio
-        id="menuMusicAudio"
+        id="menuMusic"
         preload="auto"
-        loop>
-        <source
-            src="menu.mp3"
-            type="audio/mpeg">
-    </audio>
+        loop
+    ></audio>
 
-    <!-- =====================================================
+    <audio
+        id="boomAudio"
+        preload="auto"
+    ></audio>
+
+
+    <!-- =========================================================
          SCRIPTS
-    ====================================================== -->
+         ========================================================= -->
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"
+    ></script>
 
     <script src="system.js"></script>
     <script src="details.js"></script>

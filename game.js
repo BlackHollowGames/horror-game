@@ -2,344 +2,297 @@
    THE SEEKER
    BLACKHOLLOW GAMES
    game.js
-
-   REAL 3D EXPLORATION SYSTEM
-   ------------------------------------------------------------
-   - Large explorable world
-   - Multiple rooms
-   - Open courtyard
-   - Storage room
-   - Control room
-   - Generator room
-   - Security room
-   - Main hall
-   - Side corridors
-   - Free WASD movement
-   - Mouse look
-   - Sprint
-   - Mobile touch controls
-   - Collision system
-   - Gravity
-   - Stairs / raised areas
-   - Doors
-   - Props
-   - Furniture
-   - Lights
-   - Seeker enemy
-   - Button objectives
-   - Key
-   - Exit gate
-   - Minimap
-   - Flashlight integration
-   - Details.js integration
-   - System.js integration
-============================================================ */
+   ============================================================ */
 
 (() => {
     "use strict";
 
-    /* ========================================================
-       THREE CHECK
-    ======================================================== */
-
-    const THREE = window.THREE;
-
-    if (!THREE) {
-        console.error(
-            "[THE SEEKER] THREE.js is missing."
-        );
-        return;
-    }
-
-    /* ========================================================
-       GAME OBJECT
-    ======================================================== */
-
     const Game = {
+        started: false,
+        paused: false,
+        multiplayer: false,
+
+        platform: "pc",
+        map: "facility",
 
         scene: null,
         camera: null,
         renderer: null,
+        clock: null,
 
-        world: null,
-        architecture: null,
-        props: null,
-        lights: null,
-        interactables: null,
-        enemyGroup: null,
-
+        worldGroup: null,
         player: null,
-        playerBody: null,
-
         seeker: null,
-        seekerBody: null,
-
-        raycaster: new THREE.Raycaster(),
-
-        clock: new THREE.Clock(),
-
-        started: false,
-
-        width: 140,
-        depth: 110,
-
-        playerHeight: 1.72,
-
-        playerRadius: 0.38,
-
-        gravity: 22,
-
-        jumpVelocity: 7,
-
-        moveSpeed: 4.2,
-
-        sprintSpeed: 7.2,
-
-        mouseSensitivity: 0.0022,
-
-        velocity: new THREE.Vector3(),
-
-        direction: new THREE.Vector3(),
-
-        verticalVelocity: 0,
-
-        grounded: true,
-
-        yaw: 0,
-
-        pitch: 0,
-
-        keys: {},
-
-        pointerLocked: false,
-
-        mobile: false,
-
-        mobileLookActive: false,
-
-        mobileMoveActive: false,
-
-        mobileMoveOrigin: {
-            x: 0,
-            y: 0
-        },
-
-        mobileMove: {
-            x: 0,
-            y: 0
-        },
-
-        doors: [],
 
         colliders: [],
+        interactables: [],
+        decorations: [],
 
         buttons: [],
+        buttonsFound: new Set(),
 
-        buttonMeshes: [],
-
-        keyObject: null,
+        key: null,
+        hasKey: false,
 
         gate: null,
+        gateUnlocked: false,
 
-        gateOpened: false,
+        velocity: new THREE.Vector3(),
+        moveVector: new THREE.Vector3(),
 
-        collectedButtons: 0,
+        keys: new Set(),
 
-        totalButtons: 3,
+        yaw: 0,
+        pitch: 0,
 
-        gameOver: false,
+        mouseLocked: false,
+        sprinting: false,
 
-        startTime: 0,
+        playerSpeed: 4.4,
+        sprintSpeed: 7.2,
 
+        setupDuration: 180,
+        setupRemaining: 180,
+
+        seekerActive: false,
         seekerSpeed: 2.8,
+        seekerTargetDistance: Infinity,
+        seekerTimer: null,
 
-        seekerAcceleration: 0.45,
+        flashlightOn: true,
 
-        seekerAwake: false,
+        joystick: {
+            moveX: 0,
+            moveY: 0,
+            lookX: 0,
+            lookY: 0,
+            sprint: false
+        },
 
-        seekerPosition: new THREE.Vector3(
-            34,
-            1.2,
-            30
-        ),
+        remotePlayers: new Map(),
 
-        seekerTarget: new THREE.Vector3(),
+        lastNetworkSend: 0,
 
-        lastStep: 0,
+        minimap: {
+            world: null,
+            player: null,
+            seeker: null
+        },
 
-        stepTimer: 0,
+        /* ======================================================
+           START
+           ====================================================== */
 
-        minimap: null,
+        start(options = {}) {
+            if (this.started) {
+                this.stop();
+            }
 
-        minimapCanvas: null,
+            this.started = true;
+            this.paused = false;
 
-        minimapContext: null,
+            this.multiplayer =
+                !!options.multiplayer;
 
-        minimapPlayer: null,
+            this.platform =
+                options.platform === "mobile"
+                    ? "mobile"
+                    : "pc";
 
-        minimapSeeker: null,
+            this.map =
+                options.map ||
+                "facility";
 
-        fogNear: 4,
+            this.setupDuration = 180;
+            this.setupRemaining = 180;
 
-        fogFar: 150,
+            this.buttonsFound.clear();
 
-        materials: {},
+            this.hasKey = false;
+            this.gateUnlocked = false;
 
-        geometry: {},
+            this.seekerActive = false;
 
-        audioStarted: false
-    };
+            this.keys.clear();
 
-    /* ========================================================
-       BASIC HELPERS
-    ======================================================== */
+            this.clock =
+                new THREE.Clock();
 
-    const clamp = (
-        value,
-        min,
-        max
-    ) => {
-        return Math.max(
-            min,
-            Math.min(
-                max,
-                value
-            )
-        );
-    };
+            this.createRenderer();
+            this.createScene();
+            this.createCamera();
+            this.createLights();
 
-    const random = (
-        min,
-        max
-    ) => {
-        return min +
-            Math.random() *
-            (max - min);
-    };
+            this.createWorld();
+            this.createPlayer();
+            this.createSeeker();
+            this.createObjectives();
+            this.createMinimap();
 
-    const randomInt = (
-        min,
-        max
-    ) => {
-        return Math.floor(
-            random(
-                min,
-                max + 1
-            )
-        );
-    };
+            this.bindControls();
+            this.bindGameEvents();
 
-    const distance2D = (
-        a,
-        b
-    ) => {
-        const dx =
-            a.x - b.x;
+            this.resize();
 
-        const dz =
-            a.z - b.z;
-
-        return Math.sqrt(
-            dx * dx +
-            dz * dz
-        );
-    };
-
-    const makeMesh = (
-        geometry,
-        material,
-        name = "Object"
-    ) => {
-
-        const object =
-            new THREE.Mesh(
-                geometry,
-                material
+            window.addEventListener(
+                "resize",
+                this.resizeBound
             );
 
-        object.name =
-            name;
+            this.startSetupTimer();
 
-        object.castShadow = true;
-        object.receiveShadow = true;
+            this.lastNetworkSend =
+                performance.now();
 
-        return object;
-    };
+            this.animate();
 
-    /* ========================================================
-       INITIALIZATION
-    ======================================================== */
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:game-ready"
+                )
+            );
+        },
 
-    Game.init = function() {
+        /* ======================================================
+           STOP
+           ====================================================== */
 
-        Game.mobile =
-            window.matchMedia(
-                "(pointer: coarse)"
-            ).matches ||
-            window.innerWidth < 900;
+        stop() {
+            this.started = false;
+            this.paused = false;
 
-        Game.createRenderer();
+            clearInterval(
+                this.seekerTimer
+            );
 
-        Game.createScene();
+            this.seekerTimer = null;
 
-        Game.createMaterials();
+            if (this.renderer) {
+                this.renderer
+                    .domElement
+                    .removeEventListener(
+                        "click",
+                        this.requestPointerLockBound
+                    );
+            }
 
-        Game.createWorld();
+            document.removeEventListener(
+                "keydown",
+                this.keyDownBound
+            );
 
-        Game.createPlayer();
+            document.removeEventListener(
+                "keyup",
+                this.keyUpBound
+            );
 
-        Game.createSeeker();
+            document.removeEventListener(
+                "mousemove",
+                this.mouseMoveBound
+            );
 
-        Game.createObjectives();
+            document.removeEventListener(
+                "pointerlockchange",
+                this.pointerLockBound
+            );
 
-        Game.createMinimap();
+            window.removeEventListener(
+                "resize",
+                this.resizeBound
+            );
 
-        Game.createControls();
+            this.stopAudio();
 
-        Game.connectSystems();
+            this.remotePlayers.forEach(
+                (entry) => {
+                    if (entry.mesh) {
+                        this.scene?.remove(
+                            entry.mesh
+                        );
+                    }
+                }
+            );
 
-        Game.resize();
+            this.remotePlayers.clear();
 
-        window.addEventListener(
-            "resize",
-            () => Game.resize()
-        );
+            if (this.renderer) {
+                this.renderer.dispose();
+            }
 
-        Game.hideLoading();
-
-        console.log(
-            "[THE SEEKER] 3D exploration world ready."
-        );
-    };
-
-    /* ========================================================
-       RENDERER
-    ======================================================== */
-
-    Game.createRenderer =
-        function() {
-
-            let canvas =
+            const canvas =
                 document.getElementById(
                     "gameCanvas"
                 );
 
-            if (!canvas) {
-
-                canvas =
-                    document.createElement(
-                        "canvas"
+            if (
+                canvas &&
+                canvas.parentNode &&
+                this.renderer?.domElement !== canvas
+            ) {
+                canvas
+                    .getContext("2d")
+                    ?.clearRect(
+                        0,
+                        0,
+                        canvas.width,
+                        canvas.height
                     );
-
-                canvas.id =
-                    "gameCanvas";
-
-                document.body.appendChild(
-                    canvas
-                );
             }
 
-            Game.renderer =
+            this.scene = null;
+            this.camera = null;
+            this.renderer = null;
+            this.player = null;
+            this.seeker = null;
+            this.colliders = [];
+            this.interactables = [];
+            this.decorations = [];
+        },
+
+        restart() {
+            const config = {
+                multiplayer:
+                    this.multiplayer,
+                platform:
+                    this.platform,
+                map:
+                    this.map,
+                lobby:
+                    window.Main?.state?.lobby ||
+                    null
+            };
+
+            this.stop();
+
+            setTimeout(
+                () => this.start(config),
+                80
+            );
+        },
+
+        pause() {
+            this.paused = true;
+        },
+
+        resume() {
+            this.paused = false;
+
+            if (this.clock) {
+                this.clock.getDelta();
+            }
+        },
+
+        /* ======================================================
+           RENDERER
+           ====================================================== */
+
+        createRenderer() {
+            const canvas =
+                document.getElementById(
+                    "gameCanvas"
+                );
+
+            this.renderer =
                 new THREE.WebGLRenderer({
                     canvas,
                     antialias: true,
@@ -347,2704 +300,1173 @@
                         "high-performance"
                 });
 
-            Game.renderer.setPixelRatio(
+            this.renderer.setPixelRatio(
                 Math.min(
-                    window.devicePixelRatio,
+                    window.devicePixelRatio || 1,
                     2
                 )
             );
 
-            Game.renderer.setSize(
+            this.renderer.setSize(
                 window.innerWidth,
-                window.innerHeight
+                window.innerHeight,
+                false
             );
 
-            Game.renderer.shadowMap.enabled =
+            this.renderer.shadowMap.enabled =
                 true;
 
-            Game.renderer.shadowMap.type =
+            this.renderer.shadowMap.type =
                 THREE.PCFSoftShadowMap;
 
-            Game.renderer.outputColorSpace =
+            this.renderer.outputColorSpace =
                 THREE.SRGBColorSpace;
 
-            Game.renderer.toneMapping =
+            this.renderer.toneMapping =
                 THREE.ACESFilmicToneMapping;
 
-            Game.renderer.toneMappingExposure =
-                0.85;
-        };
+            this.renderer.toneMappingExposure =
+                1.05;
+        },
 
-    /* ========================================================
-       SCENE
-    ======================================================== */
+        /* ======================================================
+           SCENE
+           ====================================================== */
 
-    Game.createScene =
-        function() {
-
-            Game.scene =
+        createScene() {
+            this.scene =
                 new THREE.Scene();
 
-            Game.scene.background =
+            this.scene.background =
                 new THREE.Color(
-                    0x080808
+                    0x030405
                 );
 
-            Game.scene.fog =
-                new THREE.Fog(
-                    0x080808,
-                    Game.fogNear,
-                    Game.fogFar
+            this.scene.fog =
+                new THREE.FogExp2(
+                    0x050608,
+                    0.014
                 );
 
-            Game.camera =
-                new THREE.PerspectiveCamera(
-                    75,
-                    window.innerWidth /
-                    window.innerHeight,
-                    0.05,
-                    220
-                );
-
-            Game.camera.position.set(
-                0,
-                Game.playerHeight,
-                0
-            );
-
-            Game.world =
+            this.worldGroup =
                 new THREE.Group();
 
-            Game.world.name =
+            this.worldGroup.name =
                 "SEEKER_WORLD";
 
-            Game.architecture =
-                new THREE.Group();
+            this.scene.add(
+                this.worldGroup
+            );
+        },
 
-            Game.architecture.name =
-                "ARCHITECTURE";
+        /* ======================================================
+           CAMERA
+           ====================================================== */
 
-            Game.props =
-                new THREE.Group();
+        createCamera() {
+            this.camera =
+                new THREE.PerspectiveCamera(
+                    72,
+                    window.innerWidth /
+                        window.innerHeight,
+                    0.05,
+                    500
+                );
 
-            Game.props.name =
-                "PROPS";
+            this.camera.rotation.order =
+                "YXZ";
 
-            Game.lights =
-                new THREE.Group();
+            this.yaw = 0;
+            this.pitch = -0.03;
 
-            Game.lights.name =
-                "LIGHTS";
+            this.camera.rotation.y =
+                this.yaw;
 
-            Game.interactables =
-                new THREE.Group();
+            this.camera.rotation.x =
+                this.pitch;
+        },
 
-            Game.interactables.name =
-                "INTERACTABLES";
+        /* ======================================================
+           LIGHTING
+           ====================================================== */
 
-            Game.enemyGroup =
-                new THREE.Group();
+        createLights() {
+            const ambient =
+                new THREE.HemisphereLight(
+                    0x8c96a3,
+                    0x11100e,
+                    0.6
+                );
 
-            Game.enemyGroup.name =
-                "ENEMIES";
-
-            Game.world.add(
-                Game.architecture
+            this.scene.add(
+                ambient
             );
 
-            Game.world.add(
-                Game.props
+            const moon =
+                new THREE.DirectionalLight(
+                    0x8ba0bf,
+                    0.6
+                );
+
+            moon.position.set(
+                -30,
+                40,
+                10
             );
 
-            Game.world.add(
-                Game.lights
+            moon.castShadow =
+                true;
+
+            moon.shadow.mapSize.width =
+                2048;
+
+            moon.shadow.mapSize.height =
+                2048;
+
+            moon.shadow.camera.near =
+                1;
+
+            moon.shadow.camera.far =
+                160;
+
+            moon.shadow.camera.left =
+                -80;
+
+            moon.shadow.camera.right =
+                80;
+
+            moon.shadow.camera.top =
+                80;
+
+            moon.shadow.camera.bottom =
+                -80;
+
+            this.scene.add(
+                moon
             );
+        },
 
-            Game.world.add(
-                Game.interactables
-            );
+        /* ======================================================
+           MATERIALS
+           ====================================================== */
 
-            Game.world.add(
-                Game.enemyGroup
-            );
+        material(
+            color,
+            roughness = 0.8,
+            metalness = 0
+        ) {
+            return new THREE.MeshStandardMaterial({
+                color,
+                roughness,
+                metalness
+            });
+        },
 
-            Game.scene.add(
-                Game.world
-            );
-        };
+        /* ======================================================
+           WORLD
+           ====================================================== */
 
-    /* ========================================================
-       MATERIALS
-    ======================================================== */
-
-    Game.createMaterials =
-        function() {
-
-            Game.materials.floor =
-                new THREE.MeshStandardMaterial({
-                    color: 0x242424,
-                    roughness: 0.95
-                });
-
-            Game.materials.floorDark =
-                new THREE.MeshStandardMaterial({
-                    color: 0x151515,
-                    roughness: 1
-                });
-
-            Game.materials.wall =
-                new THREE.MeshStandardMaterial({
-                    color: 0x303030,
-                    roughness: 0.93
-                });
-
-            Game.materials.wallDark =
-                new THREE.MeshStandardMaterial({
-                    color: 0x191919,
-                    roughness: 1
-                });
-
-            Game.materials.concrete =
-                new THREE.MeshStandardMaterial({
-                    color: 0x454545,
-                    roughness: 0.98
-                });
-
-            Game.materials.metal =
-                new THREE.MeshStandardMaterial({
-                    color: 0x2d2d2d,
-                    roughness: 0.6,
-                    metalness: 0.7
-                });
-
-            Game.materials.metalDark =
-                new THREE.MeshStandardMaterial({
-                    color: 0x121212,
-                    roughness: 0.5,
-                    metalness: 0.6
-                });
-
-            Game.materials.wood =
-                new THREE.MeshStandardMaterial({
-                    color: 0x34251e,
-                    roughness: 0.92
-                });
-
-            Game.materials.door =
-                new THREE.MeshStandardMaterial({
-                    color: 0x272727,
-                    roughness: 0.82
-                });
-
-            Game.materials.glass =
-                new THREE.MeshStandardMaterial({
-                    color: 0x87969c,
-                    roughness: 0.15,
-                    metalness: 0.15,
-                    transparent: true,
-                    opacity: 0.42
-                });
-
-            Game.materials.warning =
-                new THREE.MeshStandardMaterial({
-                    color: 0xc9a227,
-                    emissive: 0x3e2f00,
-                    emissiveIntensity: 0.8
-                });
-
-            Game.materials.red =
-                new THREE.MeshStandardMaterial({
-                    color: 0x741f1f,
-                    emissive: 0x250000,
-                    emissiveIntensity: 0.6
-                });
-
-            Game.materials.green =
-                new THREE.MeshStandardMaterial({
-                    color: 0x476c4e,
-                    emissive: 0x0d1e10,
-                    emissiveIntensity: 0.4
-                });
-
-            Game.materials.white =
-                new THREE.MeshStandardMaterial({
-                    color: 0xd4d0c7,
-                    roughness: 0.65
-                });
-
-            Game.materials.black =
-                new THREE.MeshStandardMaterial({
-                    color: 0x050505,
-                    roughness: 1
-                });
-
-            Game.materials.seeker =
-                new THREE.MeshStandardMaterial({
-                    color: 0x080808,
-                    roughness: 0.8
-                });
-
-            Game.materials.seekerEye =
-                new THREE.MeshStandardMaterial({
-                    color: 0xa00000,
-                    emissive: 0x720000,
-                    emissiveIntensity: 3
-                });
-        };
-
-    /* ========================================================
-       WORLD
-    ======================================================== */
-
-    Game.createWorld =
-        function() {
-
-            Game.createGround();
-
-            Game.createOuterWalls();
-
-            Game.createMainBuilding();
-
-            Game.createCourtyard();
-
-            Game.createStorageRoom();
-
-            Game.createControlRoom();
-
-            Game.createGeneratorRoom();
-
-            Game.createSecurityRoom();
-
-            Game.createSideBuilding();
-
-            Game.createRoofStructures();
-
-            Game.populateLargeProps();
-
-            Game.populateSmallProps();
-
-            Game.createExteriorDetails();
-
-            Game.createRoomLighting();
-
-            Game.createAtmosphere();
+        createWorld() {
+            this.createGround();
+            this.createOuterWalls();
 
             if (
-                window.SeekerDetails
+                this.map === "underground"
             ) {
-
-                try {
-
-                    window.SeekerDetails
-                        .init({
-                            scene:
-                                Game.scene,
-                            camera:
-                                Game.camera,
-                            renderer:
-                                Game.renderer,
-                            player:
-                                Game.player
-                        });
-
-                } catch (
-                    error
-                ) {
-
-                    console.warn(
-                        "[THE SEEKER] Details connection failed.",
-                        error
-                    );
-                }
-            }
-        };
-
-    /* ========================================================
-       GROUND
-    ======================================================== */
-
-    Game.createGround =
-        function() {
-
-            const ground =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        Game.width,
-                        0.4,
-                        Game.depth
-                    ),
-                    Game.materials.floor,
-                    "WORLD_GROUND"
-                );
-
-            ground.position.y =
-                -0.2;
-
-            Game.architecture.add(
-                ground
-            );
-
-            Game.addCollider(
-                new THREE.Box3().setFromObject(
-                    ground
-                )
-            );
-
-            /* Floor grid sections */
-
-            for (
-                let x = -60;
-                x <= 60;
-                x += 10
+                this.createUndergroundMap();
+            } else if (
+                this.map === "blackwood"
             ) {
-
-                const seam =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            0.025,
-                            0.012,
-                            Game.depth
-                        ),
-                        Game.materials.wallDark,
-                        "FLOOR_SEAM"
-                    );
-
-                seam.position.set(
-                    x,
-                    0.01,
-                    0
-                );
-
-                Game.architecture.add(
-                    seam
-                );
+                this.createForestMap();
+            } else {
+                this.createFacilityMap();
             }
+        },
 
-            for (
-                let z = -50;
-                z <= 50;
-                z += 10
-            ) {
-
-                const seam =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            Game.width,
-                            0.012,
-                            0.025
-                        ),
-                        Game.materials.wallDark,
-                        "FLOOR_SEAM"
-                    );
-
-                seam.position.set(
-                    0,
-                    0.012,
-                    z
+        createGround() {
+            const geometry =
+                new THREE.PlaneGeometry(
+                    150,
+                    120
                 );
-
-                Game.architecture.add(
-                    seam
-                );
-            }
-        };
-
-    /* ========================================================
-       WALL HELPER
-    ======================================================== */
-
-    Game.createWall =
-        function(
-            x,
-            y,
-            z,
-            width,
-            height,
-            depth,
-            options = {}
-        ) {
 
             const material =
-                options.material ||
-                Game.materials.wall;
-
-            const wall =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        width,
-                        height,
-                        depth
-                    ),
-                    material,
-                    options.name ||
-                    "WALL"
+                this.material(
+                    0x17191a,
+                    0.95
                 );
 
-            wall.position.set(
-                x,
-                y + height / 2,
-                z
-            );
-
-            Game.architecture.add(
-                wall
-            );
-
-            if (
-                options.collision !== false
-            ) {
-
-                Game.addCollider(
-                    new THREE.Box3().setFromObject(
-                        wall
-                    )
+            const ground =
+                new THREE.Mesh(
+                    geometry,
+                    material
                 );
-            }
 
-            return wall;
-        };
+            ground.rotation.x =
+                -Math.PI / 2;
 
-    /* ========================================================
-       OUTER WALLS
-    ======================================================== */
+            ground.receiveShadow =
+                true;
 
-    Game.createOuterWalls =
-        function() {
+            ground.position.y =
+                0;
 
-            const wallHeight = 8;
+            this.worldGroup.add(
+                ground
+            );
+        },
 
-            Game.createWall(
+        createOuterWalls() {
+            const thickness = 2;
+            const height = 7;
+
+            this.createWall(
                 0,
-                0,
-                -Game.depth / 2,
-                Game.width,
-                wallHeight,
-                0.7,
-                {
-                    name:
-                        "OUTER_NORTH"
-                }
+                height / 2,
+                -60,
+                150,
+                height,
+                thickness
             );
 
-            Game.createWall(
+            this.createWall(
                 0,
-                0,
-                Game.depth / 2,
-                Game.width,
-                wallHeight,
-                0.7,
-                {
-                    name:
-                        "OUTER_SOUTH"
-                }
+                height / 2,
+                60,
+                150,
+                height,
+                thickness
             );
 
-            Game.createWall(
-                -Game.width / 2,
+            this.createWall(
+                -75,
+                height / 2,
                 0,
-                0,
-                0.7,
-                wallHeight,
-                Game.depth,
-                {
-                    name:
-                        "OUTER_WEST"
-                }
+                thickness,
+                height,
+                120
             );
 
-            Game.createWall(
-                Game.width / 2,
+            this.createWall(
+                75,
+                height / 2,
                 0,
-                0,
-                0.7,
-                wallHeight,
-                Game.depth,
-                {
-                    name:
-                        "OUTER_EAST"
-                }
+                thickness,
+                height,
+                120
             );
-        };
+        },
 
-    /* ========================================================
-       MAIN BUILDING
-    ======================================================== */
+        createFacilityMap() {
+            this.createBuilding(
+                0,
+                4,
+                10,
+                62,
+                8,
+                42,
+                "MAIN FACILITY"
+            );
 
-    Game.createMainBuilding =
-        function() {
-
-            /*
-             * Large central structure:
-             *
-             * +---------------------------+
-             * | SECURITY | MAIN | CONTROL |
-             * |----------+------+----------|
-             * | STORAGE  | HALL | GENERATOR|
-             * +---------------------------+
-             */
-
-            const floorY = 0;
-
-            this.createRoomBox(
-                -34,
-                -23,
-                28,
+            this.createBuilding(
+                -47,
+                3,
+                4,
                 24,
-                7,
-                "STORAGE_WING"
+                6,
+                30,
+                "STORAGE"
             );
 
-            this.createRoomBox(
+            this.createBuilding(
+                45,
+                3,
+                -12,
+                28,
+                6,
+                25,
+                "CONTROL"
+            );
+
+            this.createBuilding(
                 0,
-                -20,
+                3,
+                48,
                 38,
-                18,
-                13,
-                "MAIN_HALL"
+                6,
+                14,
+                "SECURITY"
             );
 
-            this.createRoomBox(
-                34,
+            this.createRoomDividers();
+            this.createFacilityDetails();
+
+            this.createExitGate(
+                0,
+                1.2,
+                58.5
+            );
+        },
+
+        createUndergroundMap() {
+            this.createBuilding(
+                0,
+                4,
+                0,
+                70,
+                8,
+                70,
+                "UNDERGROUND"
+            );
+
+            this.createBuilding(
+                -53,
+                3,
+                0,
+                18,
+                6,
+                28,
+                "GENERATOR"
+            );
+
+            this.createBuilding(
+                53,
+                3,
+                0,
+                18,
+                6,
+                28,
+                "PUMP ROOM"
+            );
+
+            this.createUndergroundDetails();
+
+            this.createExitGate(
+                0,
+                1.2,
+                58.5
+            );
+        },
+
+        createForestMap() {
+            this.createForestDetails();
+
+            this.createSmallBuilding(
+                0,
+                3,
+                15,
+                25,
+                18,
+                6
+            );
+
+            this.createSmallBuilding(
+                -42,
+                2.8,
                 -22,
-                28,
-                24,
-                7,
-                "CONTROL_WING"
-            );
-
-            this.createRoomBox(
-                0,
-                22,
-                38,
                 18,
-                14,
-                "GENERATOR_WING"
+                12,
+                5
             );
 
-            /*
-             * Horizontal connectors.
-             */
-
-            this.createWall(
-                -17,
-                floorY,
-                -20,
-                14,
-                7,
-                0.45
+            this.createSmallBuilding(
+                42,
+                2.8,
+                8,
+                18,
+                12,
+                5
             );
 
-            this.createWall(
-                17,
-                floorY,
-                -20,
-                14,
-                7,
-                0.45
-            );
-
-            /*
-             * Doors between major sections.
-             */
-
-            this.createDoor(
-                -17,
+            this.createExitGate(
                 0,
-                -20,
-                2.6,
-                4.2,
-                "storage-main"
+                1.2,
+                58.5
             );
+        },
 
-            this.createDoor(
-                17,
-                0,
-                -20,
-                2.6,
-                4.2,
-                "main-control"
-            );
+        /* ======================================================
+           BUILDINGS
+           ====================================================== */
 
-            this.createDoor(
-                0,
-                0,
-                -2,
-                3.0,
-                4.5,
-                "main-south"
-            );
-
-            this.createDoor(
-                0,
-                0,
-                29,
-                3.0,
-                4.5,
-                "main-generator"
-            );
-
-            /*
-             * Central open area.
-             */
-
-            const centerFloor =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        34,
-                        0.15,
-                        30
-                    ),
-                    Game.materials.floorDark,
-                    "CENTRAL_OPEN_FLOOR"
-                );
-
-            centerFloor.position.set(
-                0,
-                0.02,
-                -17
-            );
-
-            Game.architecture.add(
-                centerFloor
-            );
-
-            /*
-             * Structural beams.
-             */
-
-            for (
-                let x = -15;
-                x <= 15;
-                x += 5
-            ) {
-
-                this.createBeam(
-                    x,
-                    6.8,
-                    -17,
-                    0.28,
-                    0.28,
-                    34
-                );
-            }
-
-            /*
-             * Main hall pillars.
-             */
-
-            for (
-                let x = -14;
-                x <= 14;
-                x += 7
-            ) {
-
-                this.createPillar(
-                    x,
-                    -23,
-                    6.2
-                );
-            }
-        };
-
-    /* ========================================================
-       ROOM BOX
-    ======================================================== */
-
-    Game.createRoomBox =
-        function(
-            centerX,
-            centerZ,
-            width,
-            depth,
-            height,
-            name
-        ) {
-
-            const halfW =
-                width / 2;
-
-            const halfD =
-                depth / 2;
-
-            /*
-             * North wall.
-             */
-
-            this.createWall(
-                centerX,
-                0,
-                centerZ - halfD,
-                width,
-                height,
-                0.5,
-                {
-                    name:
-                        `${name}_NORTH`
-                }
-            );
-
-            /*
-             * South wall.
-             */
-
-            this.createWall(
-                centerX,
-                0,
-                centerZ + halfD,
-                width,
-                height,
-                0.5,
-                {
-                    name:
-                        `${name}_SOUTH`
-                }
-            );
-
-            /*
-             * West wall.
-             */
-
-            this.createWall(
-                centerX - halfW,
-                0,
-                centerZ,
-                0.5,
-                height,
-                depth,
-                {
-                    name:
-                        `${name}_WEST`
-                }
-            );
-
-            /*
-             * East wall.
-             */
-
-            this.createWall(
-                centerX + halfW,
-                0,
-                centerZ,
-                0.5,
-                height,
-                depth,
-                {
-                    name:
-                        `${name}_EAST`
-                }
-            );
-
-            /*
-             * Floor.
-             */
-
-            const floor =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        width - 0.4,
-                        0.14,
-                        depth - 0.4
-                    ),
-                    Game.materials.floor,
-                    `${name}_FLOOR`
-                );
-
-            floor.position.set(
-                centerX,
-                0.02,
-                centerZ
-            );
-
-            Game.architecture.add(
-                floor
-            );
-
-            /*
-             * Ceiling.
-             */
-
-            const ceiling =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        width,
-                        0.25,
-                        depth
-                    ),
-                    Game.materials.wallDark,
-                    `${name}_CEILING`
-                );
-
-            ceiling.position.set(
-                centerX,
-                height,
-                centerZ
-            );
-
-            Game.architecture.add(
-                ceiling
-            );
-
-            /*
-             * Ceiling beams.
-             */
-
-            for (
-                let x =
-                    centerX -
-                    halfW +
-                    3;
-                x <=
-                    centerX +
-                    halfW -
-                    3;
-                x += 4
-            ) {
-
-                this.createBeam(
-                    x,
-                    height - 0.22,
-                    centerZ,
-                    0.22,
-                    0.22,
-                    depth - 2
-                );
-            }
-
-            /*
-             * Warning stripes around the room.
-             */
-
-            this.createRoomStripe(
-                centerX,
-                centerZ -
-                halfD +
-                0.34,
-                width - 1
-            );
-
-            this.createRoomStripe(
-                centerX,
-                centerZ +
-                halfD -
-                0.34,
-                width - 1
-            );
-        };
-
-    /* ========================================================
-       BEAM
-    ======================================================== */
-
-    Game.createBeam =
-        function(
+        createBuilding(
             x,
             y,
             z,
-            thickness,
+            width,
             height,
-            length
+            depth,
+            name
         ) {
+            const group =
+                new THREE.Group();
 
-            const beam =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        length,
-                        height,
-                        thickness
-                    ),
-                    Game.materials.metalDark,
-                    "STRUCTURAL_BEAM"
-                );
+            group.name = name;
 
-            beam.position.set(
+            this.addRoomShell(
+                group,
+                width,
+                height,
+                depth
+            );
+
+            group.position.set(
                 x,
                 y,
                 z
             );
 
-            Game.architecture.add(
-                beam
+            this.worldGroup.add(
+                group
             );
+        },
 
-            return beam;
-        };
-
-    /* ========================================================
-       PILLAR
-    ======================================================== */
-
-    Game.createPillar =
-        function(
+        createSmallBuilding(
             x,
+            y,
             z,
-            height = 6
+            width,
+            depth,
+            height
         ) {
+            this.createBuilding(
+                x,
+                y,
+                z,
+                width,
+                height,
+                depth,
+                "STRUCTURE"
+            );
+        },
 
-            const pillar =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.65,
-                        height,
-                        0.65
-                    ),
-                    Game.materials.concrete,
-                    "STRUCTURAL_PILLAR"
+        addRoomShell(
+            group,
+            width,
+            height,
+            depth
+        ) {
+            const wallMaterial =
+                this.material(
+                    0x242628,
+                    0.86
                 );
 
-            pillar.position.set(
-                x,
-                height / 2,
-                z
-            );
-
-            Game.architecture.add(
-                pillar
-            );
-
-            Game.addCollider(
-                new THREE.Box3().setFromObject(
-                    pillar
-                )
-            );
-
-            const ring =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.82,
-                        0.12,
-                        0.82
-                    ),
-                    Game.materials.metal,
-                    "PILLAR_RING"
+            const floorMaterial =
+                this.material(
+                    0x131516,
+                    0.97
                 );
 
-            ring.position.set(
-                x,
-                1,
-                z
-            );
-
-            Game.architecture.add(
-                ring
-            );
-
-            return pillar;
-        };
-
-    /* ========================================================
-       ROOM STRIPE
-    ======================================================== */
-
-    Game.createRoomStripe =
-        function(
-            x,
-            z,
-            width
-        ) {
-
-            const stripe =
-                makeMesh(
+            const floor =
+                new THREE.Mesh(
                     new THREE.BoxGeometry(
                         width,
-                        0.08,
-                        0.18
+                        0.35,
+                        depth
                     ),
-                    Game.materials.warning,
-                    "WARNING_STRIPE"
+                    floorMaterial
                 );
 
-            stripe.position.set(
-                x,
-                0.075,
-                z
+            floor.position.y =
+                -0.16;
+
+            floor.receiveShadow =
+                true;
+
+            group.add(
+                floor
             );
 
-            Game.architecture.add(
-                stripe
+            this.addBuildingWall(
+                group,
+                0,
+                height / 2,
+                -depth / 2,
+                width,
+                height,
+                0.6,
+                wallMaterial
             );
 
-            return stripe;
-        };
+            this.addBuildingWall(
+                group,
+                0,
+                height / 2,
+                depth / 2,
+                width,
+                height,
+                0.6,
+                wallMaterial
+            );
 
-    /* ========================================================
-       DOOR
-    ======================================================== */
+            this.addBuildingWall(
+                group,
+                -width / 2,
+                height / 2,
+                0,
+                0.6,
+                height,
+                depth,
+                wallMaterial
+            );
 
-    Game.createDoor =
-        function(
+            this.addBuildingWall(
+                group,
+                width / 2,
+                height / 2,
+                0,
+                0.6,
+                height,
+                depth,
+                wallMaterial
+            );
+        },
+
+        addBuildingWall(
+            group,
             x,
             y,
             z,
             width,
             height,
-            id
+            depth,
+            material
         ) {
-
-            const group =
-                new THREE.Group();
-
-            group.name =
-                `DOOR_${id}`;
-
-            const body =
-                makeMesh(
+            const wall =
+                new THREE.Mesh(
                     new THREE.BoxGeometry(
                         width,
                         height,
-                        0.22
+                        depth
                     ),
-                    Game.materials.door,
-                    "DOOR_BODY"
+                    material
+                );
+
+            wall.position.set(
+                x,
+                y,
+                z
+            );
+
+            wall.castShadow =
+                true;
+
+            wall.receiveShadow =
+                true;
+
+            group.add(
+                wall
+            );
+
+            if (
+                group.parent ||
+                group === this.worldGroup
+            ) {
+                const worldPosition =
+                    new THREE.Vector3();
+
+                wall.getWorldPosition(
+                    worldPosition
+                );
+
+                this.addCollider(
+                    worldPosition.x,
+                    worldPosition.z,
+                    width,
+                    depth
+                );
+            }
+        },
+
+        createWall(
+            x,
+            y,
+            z,
+            width,
+            height,
+            depth
+        ) {
+            const wall =
+                new THREE.Mesh(
+                    new THREE.BoxGeometry(
+                        width,
+                        height,
+                        depth
+                    ),
+                    this.material(
+                        0x17191b,
+                        0.9
+                    )
+                );
+
+            wall.position.set(
+                x,
+                y,
+                z
+            );
+
+            wall.castShadow =
+                true;
+
+            wall.receiveShadow =
+                true;
+
+            this.worldGroup.add(
+                wall
+            );
+
+            this.addCollider(
+                x,
+                z,
+                width,
+                depth
+            );
+        },
+
+        /* ======================================================
+           COLLIDERS
+           ====================================================== */
+
+        addCollider(
+            x,
+            z,
+            width,
+            depth
+        ) {
+            this.colliders.push({
+                minX:
+                    x - Math.abs(width) / 2,
+                maxX:
+                    x + Math.abs(width) / 2,
+                minZ:
+                    z - Math.abs(depth) / 2,
+                maxZ:
+                    z + Math.abs(depth) / 2
+            });
+        },
+
+        canMove(
+            x,
+            z,
+            radius = 0.45
+        ) {
+            for (
+                const collider
+                of this.colliders
+            ) {
+                if (
+                    x + radius >
+                        collider.minX &&
+                    x - radius <
+                        collider.maxX &&
+                    z + radius >
+                        collider.minZ &&
+                    z - radius <
+                        collider.maxZ
+                ) {
+                    return false;
+                }
+            }
+
+            return true;
+        },
+
+        /* ======================================================
+           FACILITY DETAILS
+           ====================================================== */
+
+        createRoomDividers() {
+            const dividerMaterial =
+                this.material(
+                    0x202224,
+                    0.88
+                );
+
+            const walls = [
+                {
+                    x: -31,
+                    z: 10,
+                    w: 0.6,
+                    d: 20
+                },
+                {
+                    x: 31,
+                    z: 10,
+                    w: 0.6,
+                    d: 20
+                },
+                {
+                    x: 0,
+                    z: -11,
+                    w: 52,
+                    d: 0.6
+                },
+                {
+                    x: 0,
+                    z: 31,
+                    w: 52,
+                    d: 0.6
+                }
+            ];
+
+            walls.forEach(
+                (data) => {
+
+                    const wall =
+                        new THREE.Mesh(
+                            new THREE.BoxGeometry(
+                                data.w,
+                                7,
+                                data.d
+                            ),
+                            dividerMaterial
+                        );
+
+                    wall.position.set(
+                        data.x,
+                        3.5,
+                        data.z
+                    );
+
+                    wall.castShadow =
+                        true;
+
+                    wall.receiveShadow =
+                        true;
+
+                    this.worldGroup.add(
+                        wall
+                    );
+
+                    this.addCollider(
+                        data.x,
+                        data.z,
+                        data.w,
+                        data.d
+                    );
+                }
+            );
+        },
+
+        createFacilityDetails() {
+            for (
+                let x = -55;
+                x <= 55;
+                x += 9
+            ) {
+                this.createCrate(
+                    x,
+                    -43
+                );
+            }
+
+            for (
+                let x = -22;
+                x <= 22;
+                x += 11
+            ) {
+                this.createLightFixture(
+                    x,
+                    -5
+                );
+
+                this.createLightFixture(
+                    x,
+                    21
+                );
+            }
+
+            this.createCrate(
+                -50,
+                -8
+            );
+
+            this.createCrate(
+                -43,
+                -8
+            );
+
+            this.createCrate(
+                51,
+                -2
+            );
+
+            this.createMetalCabinet(
+                42,
+                -10
+            );
+
+            this.createMetalCabinet(
+                49,
+                -10
+            );
+
+            this.createDesk(
+                -16,
+                17
+            );
+
+            this.createDesk(
+                17,
+                17
+            );
+
+            this.createTerminal(
+                45,
+                -18
+            );
+        },
+
+        createUndergroundDetails() {
+            for (
+                let x = -28;
+                x <= 28;
+                x += 7
+            ) {
+                this.createPipe(
+                    x,
+                    -30,
+                    0x46484a
+                );
+
+                this.createPipe(
+                    x,
+                    30,
+                    0x383b3e
+                );
+            }
+
+            for (
+                let z = -27;
+                z <= 27;
+                z += 9
+            ) {
+                this.createGenerator(
+                    -52,
+                    z
+                );
+
+                this.createPump(
+                    52,
+                    z
+                );
+            }
+        },
+
+        createForestDetails() {
+            const positions = [
+                [-55,-45],
+                [-43,-38],
+                [-30,-48],
+                [-15,-39],
+                [15,-44],
+                [31,-49],
+                [48,-40],
+                [59,-28],
+                [-61,-12],
+                [-54,4],
+                [-40,20],
+                [-29,35],
+                [-12,47],
+                [15,40],
+                [31,34],
+                [45,45],
+                [59,29],
+                [-62,28],
+                [60,0],
+                [37,-20],
+                [-32,-17]
+            ];
+
+            positions.forEach(
+                ([x, z]) => {
+                    this.createTree(
+                        x,
+                        z
+                    );
+                }
+            );
+
+            for (
+                let i = 0;
+                i < 32;
+                i++
+            ) {
+                const x =
+                    -65 +
+                    Math.random() * 130;
+
+                const z =
+                    -52 +
+                    Math.random() * 104;
+
+                if (
+                    Math.abs(x) < 22 &&
+                    Math.abs(z - 15) < 18
+                ) {
+                    continue;
+                }
+
+                this.createRock(
+                    x,
+                    z
+                );
+            }
+        },
+
+        /* ======================================================
+           PROPS
+           ====================================================== */
+
+        createCrate(
+            x,
+            z
+        ) {
+            const crate =
+                new THREE.Mesh(
+                    new THREE.BoxGeometry(
+                        2.4,
+                        2.2,
+                        2.4
+                    ),
+                    this.material(
+                        0x4a3925,
+                        0.92
+                    )
+                );
+
+            crate.position.set(
+                x,
+                1.1,
+                z
+            );
+
+            crate.rotation.y =
+                Math.random() *
+                Math.PI;
+
+            crate.castShadow =
+                true;
+
+            crate.receiveShadow =
+                true;
+
+            this.worldGroup.add(
+                crate
+            );
+        },
+
+        createMetalCabinet(
+            x,
+            z
+        ) {
+            const cabinet =
+                new THREE.Mesh(
+                    new THREE.BoxGeometry(
+                        2,
+                        5,
+                        1.1
+                    ),
+                    this.material(
+                        0x383c3f,
+                        0.65,
+                        0.1
+                    )
+                );
+
+            cabinet.position.set(
+                x,
+                2.5,
+                z
+            );
+
+            cabinet.castShadow =
+                true;
+
+            this.worldGroup.add(
+                cabinet
+            );
+        },
+
+        createDesk(
+            x,
+            z
+        ) {
+            const group =
+                new THREE.Group();
+
+            const wood =
+                this.material(
+                    0x30251d,
+                    0.82
+                );
+
+            const top =
+                new THREE.Mesh(
+                    new THREE.BoxGeometry(
+                        4.5,
+                        0.35,
+                        2
+                    ),
+                    wood
+                );
+
+            top.position.y =
+                2;
+
+            group.add(
+                top
+            );
+
+            const legGeometry =
+                new THREE.BoxGeometry(
+                    0.25,
+                    2,
+                    0.25
+                );
+
+            [
+                [-1.8,-0.7],
+                [1.8,-0.7],
+                [-1.8,0.7],
+                [1.8,0.7]
+            ].forEach(
+                ([lx, lz]) => {
+
+                    const leg =
+                        new THREE.Mesh(
+                            legGeometry,
+                            wood
+                        );
+
+                    leg.position.set(
+                        lx,
+                        1,
+                        lz
+                    );
+
+                    group.add(
+                        leg
+                    );
+
+                }
+            );
+
+            group.position.set(
+                x,
+                0,
+                z
+            );
+
+            this.worldGroup.add(
+                group
+            );
+        },
+
+        createTerminal(
+            x,
+            z
+        ) {
+            const group =
+                new THREE.Group();
+
+            const body =
+                new THREE.Mesh(
+                    new THREE.BoxGeometry(
+                        1.8,
+                        1.2,
+                        1.1
+                    ),
+                    this.material(
+                        0x25282a,
+                        0.55,
+                        0.1
+                    )
                 );
 
             body.position.y =
-                height / 2;
+                0.8;
 
             group.add(
                 body
             );
 
-            const frameLeft =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.16,
-                        height + 0.2,
-                        0.38
-                    ),
-                    Game.materials.metal,
-                    "DOOR_FRAME"
-                );
-
-            frameLeft.position.set(
-                -width / 2 -
-                0.08,
-                height / 2,
-                0
-            );
-
-            group.add(
-                frameLeft
-            );
-
-            const frameRight =
-                frameLeft.clone();
-
-            frameRight.position.x =
-                width / 2 +
-                0.08;
-
-            group.add(
-                frameRight
-            );
-
-            const top =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        width + 0.32,
-                        0.16,
-                        0.38
-                    ),
-                    Game.materials.metal,
-                    "DOOR_FRAME_TOP"
-                );
-
-            top.position.y =
-                height;
-
-            group.add(
-                top
-            );
-
-            const handle =
-                makeMesh(
-                    new THREE.CylinderGeometry(
-                        0.045,
-                        0.045,
-                        0.26,
-                        12
-                    ),
-                    Game.materials.warning,
-                    "DOOR_HANDLE"
-                );
-
-            handle.rotation.z =
-                Math.PI / 2;
-
-            handle.position.set(
-                width * 0.25,
-                height * 0.48,
-                -0.18
-            );
-
-            group.add(
-                handle
-            );
-
-            group.position.set(
-                x,
-                y,
-                z
-            );
-
-            Game.architecture.add(
-                group
-            );
-
-            const collider =
-                new THREE.Box3().setFromObject(
-                    group
-                );
-
-            Game.colliders.push(
-                collider
-            );
-
-            Game.doors.push({
-                id,
-                group,
-                collider,
-                open: false,
-                width,
-                height,
-                closedZ: z,
-                closedX: x
-            });
-
-            return group;
-        };
-
-    /* ========================================================
-       STORAGE ROOM
-    ======================================================== */
-
-    Game.createStorageRoom =
-        function() {
-
-            const x =
-                -34;
-
-            const z =
-                -23;
-
-            /*
-             * Shelves.
-             */
-
-            for (
-                let i = -1;
-                i <= 1;
-                i++
-            ) {
-
-                this.createShelf(
-                    x + i * 6,
-                    0,
-                    z - 5,
-                    4.5
-                );
-            }
-
-            for (
-                let i = -1;
-                i <= 1;
-                i++
-            ) {
-
-                this.createShelf(
-                    x + i * 6,
-                    0,
-                    z + 5,
-                    4.5
-                );
-            }
-
-            /*
-             * Boxes.
-             */
-
-            for (
-                let i = 0;
-                i < 14;
-                i++
-            ) {
-
-                this.createBox(
-                    x +
-                    random(
-                        -9,
-                        9
-                    ),
-                    random(
-                        0.3,
-                        1.5
-                    ),
-                    z +
-                    random(
-                        -7,
-                        7
-                    ),
-                    random(
-                        0.45,
-                        1.2
-                    )
-                );
-            }
-
-            /*
-             * Workbench.
-             */
-
-            this.createWorkbench(
-                x,
-                1.2,
-                z
-            );
-
-            /*
-             * Storage light.
-             */
-
-            this.createCeilingLight(
-                x,
-                6,
-                z
-            );
-        };
-
-    /* ========================================================
-       CONTROL ROOM
-    ======================================================== */
-
-    Game.createControlRoom =
-        function() {
-
-            const x =
-                34;
-
-            const z =
-                -22;
-
-            /*
-             * Control desks.
-             */
-
-            for (
-                let i = -1;
-                i <= 1;
-                i++
-            ) {
-
-                this.createDesk(
-                    x,
-                    z + i * 5,
-                    4
-                );
-            }
-
-            /*
-             * Screens.
-             */
-
-            for (
-                let i = -1;
-                i <= 1;
-                i++
-            ) {
-
-                this.createMonitor(
-                    x + 5.2,
-                    2.2,
-                    z + i * 5
-                );
-            }
-
-            /*
-             * Main console.
-             */
-
-            this.createConsole(
-                x - 4,
-                1,
-                z
-            );
-
-            /*
-             * Control room light.
-             */
-
-            this.createCeilingLight(
-                x,
-                6,
-                z,
-                0xcfcab9,
-                1.8
-            );
-        };
-
-    /* ========================================================
-       GENERATOR ROOM
-    ======================================================== */
-
-    Game.createGeneratorRoom =
-        function() {
-
-            const x =
-                0;
-
-            const z =
-                22;
-
-            /*
-             * Main generators.
-             */
-
-            for (
-                let i = -1;
-                i <= 1;
-                i++
-            ) {
-
-                this.createGenerator(
-                    x + i * 5,
-                    z
-                );
-            }
-
-            /*
-             * Thick cables.
-             */
-
-            for (
-                let i = -2;
-                i <= 2;
-                i++
-            ) {
-
-                this.createCable(
-                    x + i * 2.2,
-                    5.3,
-                    z + 5,
-                    x + i * 2.2,
-                    1.5,
-                    z
-                );
-            }
-
-            /*
-             * Generator control panel.
-             */
-
-            this.createConsole(
-                x,
-                1,
-                z - 5
-            );
-
-            this.createCeilingLight(
-                x,
-                6,
-                z,
-                0xffc86b,
-                1.7
-            );
-        };
-
-    /* ========================================================
-       SECURITY ROOM
-    ======================================================== */
-
-    Game.createSecurityRoom =
-        function() {
-
-            const x =
-                0;
-
-            const z =
-                -38;
-
-            /*
-             * Reception desk.
-             */
-
-            this.createDesk(
-                x,
-                z,
-                7
-            );
-
-            /*
-             * Camera monitors.
-             */
-
-            for (
-                let i = -2;
-                i <= 2;
-                i++
-            ) {
-
-                this.createMonitor(
-                    x + i * 2.5,
-                    2.6,
-                    z - 3
-                );
-            }
-
-            /*
-             * Filing cabinets.
-             */
-
-            for (
-                let i = -1;
-                i <= 1;
-                i++
-            ) {
-
-                this.createCabinet(
-                    x + i * 4,
-                    0,
-                    z + 4
-                );
-            }
-
-            this.createCeilingLight(
-                x,
-                6,
-                z,
-                0xc2d2d6,
-                1.5
-            );
-        };
-
-    /* ========================================================
-       SIDE BUILDING
-    ======================================================== */
-
-    Game.createSideBuilding =
-        function() {
-
-            const x =
-                -48;
-
-            const z =
-                25;
-
-            const width =
-                18;
-
-            const depth =
-                22;
-
-            const height =
-                7;
-
-            this.createRoomBox(
-                x,
-                z,
-                width,
-                depth,
-                height,
-                "SIDE_BUILDING"
-            );
-
-            this.createDesk(
-                x,
-                0,
-                z,
-                5
-            );
-
-            this.createShelf(
-                x - 5,
-                0,
-                z,
-                3
-            );
-
-            this.createBox(
-                x + 5,
-                0.7,
-                z + 5,
-                1.2
-            );
-
-            this.createCeilingLight(
-                x,
-                5.8,
-                z
-            );
-        };
-
-    /* ========================================================
-       COURTYARD
-    ======================================================== */
-
-    Game.createCourtyard =
-        function() {
-
-            /*
-             * The south-central section is open.
-             */
-
-            const courtyard =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        44,
-                        0.12,
-                        22
-                    ),
-                    Game.materials.floorDark,
-                    "COURTYARD"
-                );
-
-            courtyard.position.set(
-                0,
-                0.03,
-                39
-            );
-
-            Game.architecture.add(
-                courtyard
-            );
-
-            /*
-             * Concrete blocks.
-             */
-
-            for (
-                let i = -2;
-                i <= 2;
-                i++
-            ) {
-
-                const block =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            3,
-                            1,
-                            2
-                        ),
-                        Game.materials.concrete,
-                        "COURTYARD_BLOCK"
-                    );
-
-                block.position.set(
-                    i * 7,
-                    0.5,
-                    39
-                );
-
-                Game.props.add(
-                    block
-                );
-
-                Game.addCollider(
-                    new THREE.Box3()
-                        .setFromObject(
-                            block
-                        )
-                );
-            }
-
-            /*
-             * Exterior lamp posts.
-             */
-
-            for (
-                let x = -18;
-                x <= 18;
-                x += 9
-            ) {
-
-                this.createLampPost(
-                    x,
-                    39
-                );
-            }
-
-            /*
-             * Exit gate.
-             */
-
-            this.createExitGate(
-                0,
-                0,
-                50
-            );
-        };
-
-    /* ========================================================
-       ROOF STRUCTURES
-    ======================================================== */
-
-    Game.createRoofStructures =
-        function() {
-
-            /*
-             * Large rooftop vents visible from courtyard and
-             * open areas.
-             */
-
-            for (
-                let i = -2;
-                i <= 2;
-                i++
-            ) {
-
-                const vent =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            2.5,
-                            1.8,
-                            2.5
-                        ),
-                        Game.materials.metalDark,
-                        "ROOFTOP_VENT"
-                    );
-
-                vent.position.set(
-                    i * 7,
-                    6.8,
-                    -5
-                );
-
-                Game.props.add(
-                    vent
-                );
-
-                const cap =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            2.8,
-                            0.18,
-                            2.8
-                        ),
-                        Game.materials.metal,
-                        "ROOFTOP_VENT_CAP"
-                    );
-
-                cap.position.set(
-                    i * 7,
-                    7.75,
-                    -5
-                );
-
-                Game.props.add(
-                    cap
-                );
-            }
-        };
-
-    /* ========================================================
-       SHELF
-    ======================================================== */
-
-    Game.createShelf =
-        function(
-            x,
-            y,
-            z,
-            width
-        ) {
-
-            const shelf =
-                new THREE.Group();
-
-            shelf.position.set(
-                x,
-                y,
-                z
-            );
-
-            const boards = 4;
-
-            for (
-                let i = 0;
-                i < boards;
-                i++
-            ) {
-
-                const board =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            width,
-                            0.16,
-                            0.85
-                        ),
-                        Game.materials.wood,
-                        "SHELF_BOARD"
-                    );
-
-                board.position.y =
-                    i * 1.35 +
-                    0.6;
-
-                shelf.add(
-                    board
-                );
-            }
-
-            for (
-                const px of [
-                    -width / 2 +
-                    0.1,
-                    width / 2 -
-                    0.1
-                ]
-            ) {
-
-                const post =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            0.13,
-                            5.2,
-                            0.13
-                        ),
-                        Game.materials.metal,
-                        "SHELF_POST"
-                    );
-
-                post.position.set(
-                    px,
-                    2.7,
-                    0
-                );
-
-                shelf.add(
-                    post
-                );
-            }
-
-            /*
-             * Items.
-             */
-
-            for (
-                let level = 0;
-                level < boards;
-                level++
-            ) {
-
-                for (
-                    let item = 0;
-                    item < randomInt(2, 5);
-                    item++
-                ) {
-
-                    const box =
-                        makeMesh(
-                            new THREE.BoxGeometry(
-                                random(
-                                    0.25,
-                                    0.55
-                                ),
-                                random(
-                                    0.22,
-                                    0.5
-                                ),
-                                random(
-                                    0.2,
-                                    0.45
-                                )
-                            ),
-                            Math.random() >
-                            0.5
-                                ? Game.materials.metal
-                                : Game.materials.wood,
-                            "SHELF_ITEM"
-                        );
-
-                    box.position.set(
-                        random(
-                            -width *
-                            0.35,
-                            width *
-                            0.35
-                        ),
-                        0.8 +
-                        level * 1.35,
-                        random(
-                            -0.22,
-                            0.22
-                        )
-                    );
-
-                    box.rotation.y =
-                        random(
-                            -0.4,
-                            0.4
-                        );
-
-                    shelf.add(
-                        box
-                    );
-                }
-            }
-
-            Game.props.add(
-                shelf
-            );
-
-            return shelf;
-        };
-
-    /* ========================================================
-       BOX
-    ======================================================== */
-
-    Game.createBox =
-        function(
-            x,
-            y,
-            z,
-            size
-        ) {
-
-            const box =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        size,
-                        size,
-                        size
-                    ),
-                    Math.random() > 0.5
-                        ? Game.materials.wood
-                        : Game.materials.concrete,
-                    "CRATE"
-                );
-
-            box.position.set(
-                x,
-                y,
-                z
-            );
-
-            box.rotation.y =
-                random(
-                    -0.8,
-                    0.8
-                );
-
-            Game.props.add(
-                box
-            );
-
-            Game.addCollider(
-                new THREE.Box3()
-                    .setFromObject(
-                        box
-                    )
-            );
-
-            return box;
-        };
-
-    /* ========================================================
-       WORKBENCH
-    ======================================================== */
-
-    Game.createWorkbench =
-        function(
-            x,
-            y,
-            z
-        ) {
-
-            const group =
-                new THREE.Group();
-
-            group.position.set(
-                x,
-                y,
-                z
-            );
-
-            const top =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        3.5,
-                        0.16,
-                        1.1
-                    ),
-                    Game.materials.wood,
-                    "WORKBENCH_TOP"
-                );
-
-            top.position.y =
-                1.1;
-
-            group.add(
-                top
-            );
-
-            for (
-                const px of [
-                    -1.5,
-                    1.5
-                ]
-            ) {
-
-                const leg =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            0.15,
-                            1.1,
-                            0.15
-                        ),
-                        Game.materials.metal,
-                        "WORKBENCH_LEG"
-                    );
-
-                leg.position.set(
-                    px,
-                    0.55,
-                    0
-                );
-
-                group.add(
-                    leg
-                );
-            }
-
-            for (
-                let i = 0;
-                i < 5;
-                i++
-            ) {
-
-                const tool =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            random(
-                                0.1,
-                                0.3
-                            ),
-                            random(
-                                0.06,
-                                0.12
-                            ),
-                            random(
-                                0.08,
-                                0.18
-                            )
-                        ),
-                        Game.materials.metal,
-                        "WORKBENCH_TOOL"
-                    );
-
-                tool.position.set(
-                    random(
-                        -1.35,
-                        1.35
-                    ),
-                    1.22,
-                    random(
-                        -0.35,
-                        0.35
-                    )
-                );
-
-                group.add(
-                    tool
-                );
-            }
-
-            Game.props.add(
-                group
-            );
-
-            return group;
-        };
-
-    /* ========================================================
-       DESK
-    ======================================================== */
-
-    Game.createDesk =
-        function(
-            x,
-            z,
-            width = 4
-        ) {
-
-            const desk =
-                new THREE.Group();
-
-            desk.position.set(
-                x,
-                0,
-                z
-            );
-
-            const top =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        width,
-                        0.16,
-                        1.25
-                    ),
-                    Game.materials.wood,
-                    "DESK_TOP"
-                );
-
-            top.position.y =
-                1.1;
-
-            desk.add(
-                top
-            );
-
-            for (
-                const px of [
-                    -width / 2 + 0.15,
-                    width / 2 - 0.15
-                ]
-            ) {
-
-                for (
-                    const pz of [
-                        -0.45,
-                        0.45
-                    ]
-                ) {
-
-                    const leg =
-                        makeMesh(
-                            new THREE.BoxGeometry(
-                                0.14,
-                                1.1,
-                                0.14
-                            ),
-                            Game.materials.metal,
-                            "DESK_LEG"
-                        );
-
-                    leg.position.set(
-                        px,
-                        0.55,
-                        pz
-                    );
-
-                    desk.add(
-                        leg
-                    );
-                }
-            }
-
-            const monitor =
-                this.createMonitor(
-                    0,
-                    1.9,
-                    0
-                );
-
-            desk.add(
-                monitor.clone()
-            );
-
-            Game.props.add(
-                desk
-            );
-
-            return desk;
-        };
-
-    /* ========================================================
-       MONITOR
-    ======================================================== */
-
-    Game.createMonitor =
-        function(
-            x,
-            y,
-            z
-        ) {
-
-            const group =
-                new THREE.Group();
-
-            group.position.set(
-                x,
-                y,
-                z
-            );
-
             const screen =
-                makeMesh(
+                new THREE.Mesh(
                     new THREE.BoxGeometry(
-                        0.9,
-                        0.56,
-                        0.1
+                        1.25,
+                        0.72,
+                        0.05
                     ),
-                    Game.materials.black,
-                    "MONITOR"
+                    new THREE.MeshStandardMaterial({
+                        color:
+                            0x31453d,
+                        emissive:
+                            0x182c23,
+                        emissiveIntensity:
+                            1.2
+                    })
                 );
+
+            screen.position.set(
+                0,
+                1.15,
+                -0.56
+            );
 
             group.add(
                 screen
             );
 
-            const glow =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.75,
-                        0.42,
-                        0.012
-                    ),
-                    new THREE.MeshBasicMaterial({
-                        color:
-                            0x8a9f91,
-                        transparent:
-                            true,
-                        opacity:
-                            0.65
-                    }),
-                    "MONITOR_SCREEN"
-                );
-
-            glow.position.z =
-                -0.055;
-
-            group.add(
-                glow
+            group.position.set(
+                x,
+                0,
+                z
             );
 
-            const stand =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.12,
-                        0.38,
-                        0.12
-                    ),
-                    Game.materials.metal,
-                    "MONITOR_STAND"
-                );
-
-            stand.position.y =
-                -0.36;
-
-            group.add(
-                stand
-            );
-
-            const base =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.35,
-                        0.06,
-                        0.25
-                    ),
-                    Game.materials.metal,
-                    "MONITOR_BASE"
-                );
-
-            base.position.y =
-                -0.55;
-
-            group.add(
-                base
-            );
-
-            Game.props.add(
+            this.worldGroup.add(
                 group
             );
+        },
 
-            return group;
-        };
-
-    /* ========================================================
-       CONSOLE
-    ======================================================== */
-
-    Game.createConsole =
-        function(
-            x,
-            y,
-            z
-        ) {
-
-            const consoleGroup =
-                new THREE.Group();
-
-            consoleGroup.position.set(
-                x,
-                y,
-                z
-            );
-
-            const body =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        3,
-                        1.25,
-                        1
-                    ),
-                    Game.materials.metalDark,
-                    "CONTROL_CONSOLE"
-                );
-
-            body.position.y =
-                0.65;
-
-            consoleGroup.add(
-                body
-            );
-
-            for (
-                let i = 0;
-                i < 5;
-                i++
-            ) {
-
-                const button =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            0.22,
-                            0.08,
-                            0.16
-                        ),
-                        i %
-                        2 ===
-                        0
-                            ? Game.materials.warning
-                            : Game.materials.red,
-                        "CONSOLE_BUTTON"
-                    );
-
-                button.position.set(
-                    -0.8 +
-                    i * 0.4,
-                    1.3,
-                    -0.28
-                );
-
-                consoleGroup.add(
-                    button
-                );
-            }
-
-            Game.props.add(
-                consoleGroup
-            );
-
-            return consoleGroup;
-        };
-
-    /* ========================================================
-       CABINET
-    ======================================================== */
-
-    Game.createCabinet =
-        function(
-            x,
-            y,
-            z
-        ) {
-
-            const cabinet =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        1.1,
-                        2.3,
-                        0.65
-                    ),
-                    Game.materials.metal,
-                    "FILING_CABINET"
-                );
-
-            cabinet.position.set(
-                x,
-                y + 1.15,
-                z
-            );
-
-            Game.props.add(
-                cabinet
-            );
-
-            Game.addCollider(
-                new THREE.Box3()
-                    .setFromObject(
-                        cabinet
-                    )
-            );
-
-            for (
-                let i = 0;
-                i < 3;
-                i++
-            ) {
-
-                const handle =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            0.3,
-                            0.04,
-                            0.05
-                        ),
-                        Game.materials.warning,
-                        "CABINET_HANDLE"
-                    );
-
-                handle.position.set(
-                    x,
-                    0.7 +
-                    i * 0.7,
-                    z -
-                    0.36
-                );
-
-                Game.props.add(
-                    handle
-                );
-            }
-
-            return cabinet;
-        };
-
-    /* ========================================================
-       GENERATOR
-    ======================================================== */
-
-    Game.createGenerator =
-        function(
+        createLightFixture(
             x,
             z
         ) {
-
-            const generator =
-                new THREE.Group();
-
-            generator.position.set(
-                x,
-                0,
-                z
-            );
-
-            const body =
-                makeMesh(
+            const fixture =
+                new THREE.Mesh(
                     new THREE.BoxGeometry(
-                        3.4,
-                        2.4,
-                        2
-                    ),
-                    Game.materials.metal,
-                    "GENERATOR_BODY"
-                );
-
-            body.position.y =
-                1.2;
-
-            generator.add(
-                body
-            );
-
-            const top =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        2.5,
-                        0.2,
-                        1.3
-                    ),
-                    Game.materials.metalDark,
-                    "GENERATOR_TOP"
-                );
-
-            top.position.y =
-                2.45;
-
-            generator.add(
-                top
-            );
-
-            for (
-                let i = 0;
-                i < 5;
-                i++
-            ) {
-
-                const vent =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            1.4,
-                            0.06,
-                            0.06
-                        ),
-                        Game.materials.black,
-                        "GENERATOR_VENT"
-                    );
-
-                vent.position.set(
-                    0,
-                    0.55 +
-                    i * 0.23,
-                    -1.03
-                );
-
-                generator.add(
-                    vent
-                );
-            }
-
-            const warning =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.7,
-                        0.45,
-                        0.04
-                    ),
-                    Game.materials.warning,
-                    "GENERATOR_WARNING"
-                );
-
-            warning.position.set(
-                0,
-                1.55,
-                -1.06
-            );
-
-            generator.add(
-                warning
-            );
-
-            Game.props.add(
-                generator
-            );
-
-            Game.addCollider(
-                new THREE.Box3()
-                    .setFromObject(
-                        body
-                    )
-            );
-
-            return generator;
-        };
-
-    /* ========================================================
-       CABLE
-    ======================================================== */
-
-    Game.createCable =
-        function(
-            x1,
-            y1,
-            z1,
-            x2,
-            y2,
-            z2
-        ) {
-
-            const start =
-                new THREE.Vector3(
-                    x1,
-                    y1,
-                    z1
-                );
-
-            const end =
-                new THREE.Vector3(
-                    x2,
-                    y2,
-                    z2
-                );
-
-            const middle =
-                new THREE.Vector3(
-                    (
-                        x1 +
-                        x2
-                    ) / 2,
-                    Math.min(
-                        y1,
-                        y2
-                    ) - 0.7,
-                    (
-                        z1 +
-                        z2
-                    ) / 2
-                );
-
-            const curve =
-                new THREE.QuadraticBezierCurve3(
-                    start,
-                    middle,
-                    end
-                );
-
-            const cable =
-                makeMesh(
-                    new THREE.TubeGeometry(
-                        curve,
-                        16,
-                        0.045,
-                        6,
-                        false
-                    ),
-                    Game.materials.black,
-                    "CABLE"
-                );
-
-            Game.props.add(
-                cable
-            );
-
-            return cable;
-        };
-
-    /* ========================================================
-       LAMP POST
-    ======================================================== */
-
-    Game.createLampPost =
-        function(
-            x,
-            z
-        ) {
-
-            const post =
-                makeMesh(
-                    new THREE.CylinderGeometry(
-                        0.09,
+                        2.8,
                         0.12,
-                        3.5,
-                        8
-                    ),
-                    Game.materials.metal,
-                    "LAMP_POST"
-                );
-
-            post.position.set(
-                x,
-                1.75,
-                z
-            );
-
-            Game.props.add(
-                post
-            );
-
-            const bulb =
-                makeMesh(
-                    new THREE.SphereGeometry(
-                        0.16,
-                        10,
-                        10
-                    ),
-                    new THREE.MeshStandardMaterial({
-                        color:
-                            0xdedbd1,
-                        emissive:
-                            0xdedbd1,
-                        emissiveIntensity:
-                            2
-                    }),
-                    "LAMP_BULB"
-                );
-
-            bulb.position.set(
-                x,
-                3.65,
-                z
-            );
-
-            Game.lights.add(
-                bulb
-            );
-
-            const light =
-                new THREE.PointLight(
-                    0xdedbd1,
-                    1.4,
-                    10
-                );
-
-            light.position.copy(
-                bulb.position
-            );
-
-            light.castShadow =
-                true;
-
-            Game.lights.add(
-                light
-            );
-
-            return post;
-        };
-
-    /* ========================================================
-       CEILING LIGHT
-    ======================================================== */
-
-    Game.createCeilingLight =
-        function(
-            x,
-            y,
-            z,
-            color =
-                0xc8c4b8,
-            intensity =
-                1.25
-        ) {
-
-            const housing =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        1.2,
-                        0.1,
                         0.32
                     ),
-                    Game.materials.metalDark,
-                    "CEILING_LIGHT"
+                    this.material(
+                        0x55585a,
+                        0.5
+                    )
                 );
 
-            housing.position.set(
+            fixture.position.set(
                 x,
-                y,
+                6.75,
                 z
             );
 
-            Game.lights.add(
-                housing
-            );
-
-            const bulb =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.85,
-                        0.04,
-                        0.18
-                    ),
-                    new THREE.MeshStandardMaterial({
-                        color,
-                        emissive:
-                            color,
-                        emissiveIntensity:
-                            2.5
-                    }),
-                    "LIGHT_BULB"
-                );
-
-            bulb.position.set(
-                x,
-                y - 0.08,
-                z
-            );
-
-            Game.lights.add(
-                bulb
+            this.worldGroup.add(
+                fixture
             );
 
             const light =
                 new THREE.PointLight(
-                    color,
-                    intensity,
-                    13
+                    0xcfd9dd,
+                    1.8,
+                    18
                 );
 
             light.position.set(
                 x,
-                y - 0.1,
+                6.2,
                 z
             );
 
@@ -3057,1919 +1479,949 @@
             light.shadow.mapSize.height =
                 512;
 
-            Game.lights.add(
+            this.worldGroup.add(
                 light
             );
 
-            return light;
-        };
+            this.flickeringLights =
+                this.flickeringLights ||
+                [];
 
-    /* ========================================================
-       ROOM LIGHTING
-    ======================================================== */
-
-    Game.createRoomLighting =
-        function() {
-
-            const rooms = [
-
-                [
-                    -34,
-                    -23,
-                    0xc8c2ad
-                ],
-
-                [
-                    0,
-                    -20,
-                    0xd4d1c6
-                ],
-
-                [
-                    34,
-                    -22,
-                    0xb9c8c4
-                ],
-
-                [
-                    0,
-                    22,
-                    0xd0b37f
-                ],
-
-                [
-                    0,
-                    -38,
-                    0xcdd6d8
-                ]
-            ];
-
-            rooms.forEach(
-                room => {
-
-                    const [
-                        x,
-                        z,
-                        color
-                    ] =
-                        room;
-
-                    for (
-                        let dx = -8;
-                        dx <= 8;
-                        dx += 8
-                    ) {
-
-                        for (
-                            let dz = -4;
-                            dz <= 4;
-                            dz += 8
-                        ) {
-
-                            this.createCeilingLight(
-                                x + dx,
-                                6,
-                                z + dz,
-                                color,
-                                random(
-                                    0.7,
-                                    1.5
-                                )
-                            );
-                        }
-                    }
-                }
+            this.flickeringLights.push(
+                light
             );
+        },
 
-            /*
-             * Main central lighting.
-             */
-
-            for (
-                let x = -12;
-                x <= 12;
-                x += 6
-            ) {
-
-                this.createCeilingLight(
-                    x,
-                    6.3,
-                    -17,
-                    0xc3c0b7,
-                    1.1
-                );
-            }
-        };
-
-    /* ========================================================
-       LARGE PROPS
-    ======================================================== */
-
-    Game.populateLargeProps =
-        function() {
-
-            /*
-             * Pallets.
-             */
-
-            for (
-                let i = 0;
-                i < 8;
-                i++
-            ) {
-
-                this.createPallet(
-                    random(
-                        -55,
-                        55
-                    ),
-                    0,
-                    random(
-                        -48,
-                        42
-                    )
-                );
-            }
-
-            /*
-             * Barrels.
-             */
-
-            for (
-                let i = 0;
-                i < 20;
-                i++
-            ) {
-
-                this.createBarrel(
-                    random(
-                        -55,
-                        55
-                    ),
-                    0,
-                    random(
-                        -45,
-                        45
-                    )
-                );
-            }
-
-            /*
-             * Tables in unused areas.
-             */
-
-            this.createTable(
-                -48,
-                0,
-                -3
-            );
-
-            this.createTable(
-                48,
-                0,
-                5
-            );
-
-            /*
-             * Carts.
-             */
-
-            this.createCart(
-                -52,
-                0,
-                10
-            );
-
-            this.createCart(
-                50,
-                0,
-                32
-            );
-        };
-
-    /* ========================================================
-       SMALL PROPS
-    ======================================================== */
-
-    Game.populateSmallProps =
-        function() {
-
-            for (
-                let i = 0;
-                i < 180;
-                i++
-            ) {
-
-                const x =
-                    random(
-                        -60,
-                        60
-                    );
-
-                const z =
-                    random(
-                        -48,
-                        47
-                    );
-
-                const size =
-                    random(
-                        0.04,
-                        0.18
-                    );
-
-                const debris =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            size,
-                            size,
-                            size
-                        ),
-                        Math.random() >
-                        0.5
-                            ? Game.materials.concrete
-                            : Game.materials.metalDark,
-                        "TINY_DEBRIS"
-                    );
-
-                debris.position.set(
-                    x,
-                    size / 2,
-                    z
-                );
-
-                debris.rotation.set(
-                    random(
-                        0,
-                        Math.PI
-                    ),
-                    random(
-                        0,
-                        Math.PI
-                    ),
-                    random(
-                        0,
-                        Math.PI
-                    )
-                );
-
-                Game.props.add(
-                    debris
-                );
-            }
-        };
-
-    /* ========================================================
-       PALLET
-    ======================================================== */
-
-    Game.createPallet =
-        function(
+        createPipe(
             x,
-            y,
-            z
+            z,
+            color
         ) {
+            const pipe =
+                new THREE.Mesh(
+                    new THREE.CylinderGeometry(
+                        0.22,
+                        0.22,
+                        14,
+                        12
+                    ),
+                    this.material(
+                        color,
+                        0.7
+                    )
+                );
 
-            const pallet =
-                new THREE.Group();
+            pipe.rotation.z =
+                Math.PI / 2;
 
-            pallet.position.set(
+            pipe.position.set(
                 x,
-                y,
+                5.4,
                 z
             );
 
-            for (
-                let i = 0;
-                i < 5;
-                i++
-            ) {
-
-                const plank =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            2.1,
-                            0.12,
-                            0.3
-                        ),
-                        Game.materials.wood,
-                        "PALLET_PLANK"
-                    );
-
-                plank.position.set(
-                    0,
-                    0.12,
-                    -0.65 +
-                    i * 0.32
-                );
-
-                pallet.add(
-                    plank
-                );
-            }
-
-            for (
-                let i = -1;
-                i <= 1;
-                i++
-            ) {
-
-                const support =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            0.2,
-                            0.25,
-                            1.8
-                        ),
-                        Game.materials.woodDark,
-                        "PALLET_SUPPORT"
-                    );
-
-                support.position.set(
-                    i * 0.8,
-                    0.0,
-                    0
-                );
-
-                pallet.add(
-                    support
-                );
-            }
-
-            Game.props.add(
-                pallet
+            this.worldGroup.add(
+                pipe
             );
+        },
 
-            return pallet;
-        };
-
-    /* ========================================================
-       BARREL
-    ======================================================== */
-
-    Game.createBarrel =
-        function(
+        createGenerator(
             x,
-            y,
             z
         ) {
-
-            const barrel =
-                new THREE.Group();
-
-            barrel.position.set(
-                x,
-                y,
-                z
-            );
-
             const body =
-                makeMesh(
-                    new THREE.CylinderGeometry(
-                        0.42,
-                        0.45,
-                        1.25,
-                        14
+                new THREE.Mesh(
+                    new THREE.BoxGeometry(
+                        5,
+                        5,
+                        4
                     ),
-                    Game.materials.metal,
-                    "BARREL"
-                );
-
-            body.position.y =
-                0.63;
-
-            barrel.add(
-                body
-            );
-
-            for (
-                let i = 0;
-                i < 3;
-                i++
-            ) {
-
-                const ring =
-                    makeMesh(
-                        new THREE.TorusGeometry(
-                            0.45,
-                            0.035,
-                            6,
-                            16
-                        ),
-                        Game.materials.metalDark,
-                        "BARREL_RING"
-                    );
-
-                ring.rotation.x =
-                    Math.PI / 2;
-
-                ring.position.y =
-                    0.22 +
-                    i * 0.4;
-
-                barrel.add(
-                    ring
-                );
-            }
-
-            Game.props.add(
-                barrel
-            );
-
-            Game.addCollider(
-                new THREE.Box3()
-                    .setFromObject(
-                        body
+                    this.material(
+                        0x292d30,
+                        0.72,
+                        0.15
                     )
-            );
+                );
 
-            return barrel;
-        };
-
-    /* ========================================================
-       TABLE
-    ======================================================== */
-
-    Game.createTable =
-        function(
-            x,
-            y,
-            z
-        ) {
-
-            const table =
-                new THREE.Group();
-
-            table.position.set(
+            body.position.set(
                 x,
-                y,
+                2.5,
                 z
             );
 
-            const top =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        3.2,
-                        0.14,
-                        1.5
-                    ),
-                    Game.materials.wood,
-                    "TABLE_TOP"
-                );
-
-            top.position.y =
-                1.2;
-
-            table.add(
-                top
-            );
-
-            for (
-                const px of [
-                    -1.35,
-                    1.35
-                ]
-            ) {
-
-                for (
-                    const pz of [
-                        -0.55,
-                        0.55
-                    ]
-                ) {
-
-                    const leg =
-                        makeMesh(
-                            new THREE.BoxGeometry(
-                                0.12,
-                                1.2,
-                                0.12
-                            ),
-                            Game.materials.metal,
-                            "TABLE_LEG"
-                        );
-
-                    leg.position.set(
-                        px,
-                        0.6,
-                        pz
-                    );
-
-                    table.add(
-                        leg
-                    );
-                }
-            }
-
-            Game.props.add(
-                table
-            );
-
-            return table;
-        };
-
-    /* ========================================================
-       CART
-    ======================================================== */
-
-    Game.createCart =
-        function(
-            x,
-            y,
-            z
-        ) {
-
-            const cart =
-                new THREE.Group();
-
-            cart.position.set(
-                x,
-                y,
-                z
-            );
-
-            const base =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        1.8,
-                        0.12,
-                        1.0
-                    ),
-                    Game.materials.metal,
-                    "CART_BASE"
-                );
-
-            base.position.y =
-                0.55;
-
-            cart.add(
-                base
-            );
-
-            for (
-                const px of [
-                    -0.75,
-                    0.75
-                ]
-            ) {
-
-                const wheel =
-                    makeMesh(
-                        new THREE.CylinderGeometry(
-                            0.16,
-                            0.16,
-                            0.08,
-                            10
-                        ),
-                        Game.materials.black,
-                        "CART_WHEEL"
-                    );
-
-                wheel.rotation.z =
-                    Math.PI / 2;
-
-                wheel.position.set(
-                    px,
-                    0.18,
-                    0
-                );
-
-                cart.add(
-                    wheel
-                );
-            }
-
-            const handle =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.1,
-                        0.8,
-                        0.1
-                    ),
-                    Game.materials.metal,
-                    "CART_HANDLE"
-                );
-
-            handle.position.set(
-                0.7,
-                0.95,
-                0
-            );
-
-            cart.add(
-                handle
-            );
-
-            Game.props.add(
-                cart
-            );
-
-            return cart;
-        };
-
-    /* ========================================================
-       EXTERIOR DETAILS
-    ======================================================== */
-
-    Game.createExteriorDetails =
-        function() {
-
-            /*
-             * Poles.
-             */
-
-            for (
-                let i = -5;
-                i <= 5;
-                i++
-            ) {
-
-                this.createPole(
-                    i * 10,
-                    47
-                );
-            }
-
-            /*
-             * Large concrete barriers.
-             */
-
-            for (
-                let i = -4;
-                i <= 4;
-                i++
-            ) {
-
-                const barrier =
-                    makeMesh(
-                        new THREE.BoxGeometry(
-                            3,
-                            0.8,
-                            0.75
-                        ),
-                        Game.materials.concrete,
-                        "OUTSIDE_BARRIER"
-                    );
-
-                barrier.position.set(
-                    i * 7,
-                    0.4,
-                    44
-                );
-
-                Game.props.add(
-                    barrier
-                );
-
-                Game.addCollider(
-                    new THREE.Box3()
-                        .setFromObject(
-                            barrier
-                        )
-                );
-            }
-        };
-
-    /* ========================================================
-       POLE
-    ======================================================== */
-
-    Game.createPole =
-        function(
-            x,
-            z
-        ) {
-
-            const pole =
-                makeMesh(
-                    new THREE.CylinderGeometry(
-                        0.06,
-                        0.08,
-                        4.5,
-                        8
-                    ),
-                    Game.materials.metal,
-                    "POLE"
-                );
-
-            pole.position.set(
-                x,
-                2.25,
-                z
-            );
-
-            Game.props.add(
-                pole
-            );
-        };
-
-    /* ========================================================
-       ATMOSPHERE
-    ======================================================== */
-
-    Game.createAtmosphere =
-        function() {
-
-            /*
-             * Ambient light.
-             */
-
-            const ambient =
-                new THREE.HemisphereLight(
-                    0x62605a,
-                    0x0b0b0b,
-                    0.33
-                );
-
-            Game.lights.add(
-                ambient
-            );
-
-            /*
-             * Moon / exterior directional light.
-             */
-
-            const moon =
-                new THREE.DirectionalLight(
-                    0x777f8c,
-                    0.45
-                );
-
-            moon.position.set(
-                -30,
-                40,
-                20
-            );
-
-            moon.castShadow =
+            body.castShadow =
                 true;
 
-            moon.shadow.mapSize.width =
-                1024;
+            this.worldGroup.add(
+                body
+            );
+        },
 
-            moon.shadow.mapSize.height =
-                1024;
+        createPump(
+            x,
+            z
+        ) {
+            const pump =
+                new THREE.Mesh(
+                    new THREE.CylinderGeometry(
+                        1.5,
+                        1.5,
+                        3,
+                        18
+                    ),
+                    this.material(
+                        0x303438,
+                        0.68,
+                        0.1
+                    )
+                );
 
-            Game.lights.add(
-                moon
+            pump.position.set(
+                x,
+                1.5,
+                z
             );
 
-            /*
-             * Fog.
-             */
+            pump.castShadow =
+                true;
 
-            Game.scene.fog =
-                new THREE.Fog(
-                    0x070707,
-                    6,
-                    135
+            this.worldGroup.add(
+                pump
+            );
+        },
+
+        createTree(
+            x,
+            z
+        ) {
+            const group =
+                new THREE.Group();
+
+            const trunk =
+                new THREE.Mesh(
+                    new THREE.CylinderGeometry(
+                        0.5,
+                        0.75,
+                        5,
+                        9
+                    ),
+                    this.material(
+                        0x29231f,
+                        1
+                    )
                 );
-        };
 
-    /* ========================================================
-       PLAYER
-    ======================================================== */
+            trunk.position.y =
+                2.5;
 
-    Game.createPlayer =
-        function() {
+            group.add(
+                trunk
+            );
 
-            Game.player =
+            const foliage =
+                new THREE.Mesh(
+                    new THREE.DodecahedronGeometry(
+                        3.2,
+                        1
+                    ),
+                    this.material(
+                        0x17221d,
+                        1
+                    )
+                );
+
+            foliage.position.y =
+                6;
+
+            foliage.scale.y =
+                1.15;
+
+            group.add(
+                foliage
+            );
+
+            group.position.set(
+                x,
+                0,
+                z
+            );
+
+            this.worldGroup.add(
+                group
+            );
+
+            this.addCollider(
+                x,
+                z,
+                1.4,
+                1.4
+            );
+        },
+
+        createRock(
+            x,
+            z
+        ) {
+            const rock =
+                new THREE.Mesh(
+                    new THREE.DodecahedronGeometry(
+                        0.8 +
+                            Math.random() *
+                            1.1,
+                        0
+                    ),
+                    this.material(
+                        0x343638,
+                        1
+                    )
+                );
+
+            rock.position.set(
+                x,
+                0.65,
+                z
+            );
+
+            rock.scale.y =
+                0.65;
+
+            rock.rotation.set(
+                Math.random(),
+                Math.random(),
+                Math.random()
+            );
+
+            rock.castShadow =
+                true;
+
+            this.worldGroup.add(
+                rock
+            );
+        },
+
+        /* ======================================================
+           PLAYER
+           ====================================================== */
+
+        createPlayer() {
+            this.player =
                 new THREE.Object3D();
 
-            Game.player.name =
+            this.player.name =
                 "PLAYER";
 
-            Game.player.position.set(
+            this.player.position.set(
                 0,
-                0,
-                -8
+                1.65,
+                -46
             );
 
-            Game.player.add(
-                Game.camera
+            this.worldGroup.add(
+                this.player
             );
 
-            Game.camera.position.set(
+            this.camera.position.set(
                 0,
-                Game.playerHeight,
+                0,
                 0
             );
 
-            Game.world.add(
-                Game.player
+            this.player.add(
+                this.camera
             );
 
-            Game.player.userData = {
-                moving: false,
-                speed: 0
-            };
-
-            Game.createPlayerShadow();
-
-            /*
-             * Tell other systems that the player is ready.
-             */
+            if (
+                window.SeekerDetails &&
+                typeof
+                    window.SeekerDetails.attachPlayer ===
+                    "function"
+            ) {
+                window.SeekerDetails.attachPlayer(
+                    this.player,
+                    this.camera
+                );
+            }
 
             window.dispatchEvent(
                 new CustomEvent(
-                    "seeker:player-ready",
+                    "seeker:player-created",
                     {
                         detail: {
                             player:
-                                Game.player,
-                            camera:
-                                Game.camera
+                                this.player
                         }
                     }
                 )
             );
-        };
+        },
 
-    /* ========================================================
-       PLAYER SHADOW
-    ======================================================== */
+        /* ======================================================
+           SEEKER
+           ====================================================== */
 
-    Game.createPlayerShadow =
-        function() {
-
-            const shadow =
-                makeMesh(
-                    new THREE.CircleGeometry(
-                        0.45,
-                        24
-                    ),
-                    new THREE.MeshBasicMaterial({
-                        color:
-                            0x000000,
-                        transparent:
-                            true,
-                        opacity:
-                            0.3
-                    }),
-                    "PLAYER_SHADOW"
-                );
-
-            shadow.rotation.x =
-                -Math.PI / 2;
-
-            shadow.position.set(
-                0,
-                0.03,
-                0
-            );
-
-            Game.player.add(
-                shadow
-            );
-        };
-
-    /* ========================================================
-       SEEKER
-    ======================================================== */
-
-    Game.createSeeker =
-        function() {
-
-            Game.seeker =
+        createSeeker() {
+            const group =
                 new THREE.Group();
 
-            Game.seeker.name =
-                "THE_SEEKER";
+            group.name =
+                "SEEKER";
 
-            Game.seeker.position.copy(
-                Game.seekerPosition
-            );
+            const dark =
+                new THREE.MeshStandardMaterial({
+                    color:
+                        0x111214,
+                    roughness:
+                        0.76,
+                    metalness:
+                        0.05
+                });
 
             const body =
-                makeMesh(
+                new THREE.Mesh(
                     new THREE.CapsuleGeometry(
-                        0.55,
-                        1.25,
+                        0.7,
+                        2.2,
                         8,
-                        12
+                        16
                     ),
-                    Game.materials.seeker,
-                    "SEEKER_BODY"
+                    dark
                 );
 
             body.position.y =
-                1.2;
+                1.8;
 
-            Game.seeker.add(
+            body.castShadow =
+                true;
+
+            group.add(
                 body
             );
 
             const head =
-                makeMesh(
+                new THREE.Mesh(
                     new THREE.SphereGeometry(
-                        0.58,
-                        16,
-                        16
+                        0.72,
+                        20,
+                        20
                     ),
-                    Game.materials.seeker,
-                    "SEEKER_HEAD"
+                    dark
                 );
 
             head.position.y =
-                2.3;
+                3.55;
 
-            Game.seeker.add(
+            head.scale.set(
+                0.92,
+                1.08,
+                0.92
+            );
+
+            head.castShadow =
+                true;
+
+            group.add(
                 head
             );
 
-            /*
-             * Eyes.
-             */
+            const eyeMaterial =
+                new THREE.MeshStandardMaterial({
+                    color:
+                        0x650c0c,
+                    emissive:
+                        0xb51f1f,
+                    emissiveIntensity:
+                        3
+                });
 
-            const leftEye =
-                makeMesh(
-                    new THREE.SphereGeometry(
-                        0.055,
-                        8,
-                        8
-                    ),
-                    Game.materials.seekerEye,
-                    "SEEKER_EYE"
+            const eyeGeometry =
+                new THREE.SphereGeometry(
+                    0.08,
+                    12,
+                    12
                 );
 
-            leftEye.position.set(
-                -0.18,
-                2.34,
-                -0.51
+            const eye1 =
+                new THREE.Mesh(
+                    eyeGeometry,
+                    eyeMaterial
+                );
+
+            eye1.position.set(
+                -0.23,
+                3.6,
+                -0.64
             );
 
-            Game.seeker.add(
-                leftEye
+            const eye2 =
+                new THREE.Mesh(
+                    eyeGeometry,
+                    eyeMaterial
+                );
+
+            eye2.position.set(
+                0.23,
+                3.6,
+                -0.64
             );
 
-            const rightEye =
-                leftEye.clone();
-
-            rightEye.position.x =
-                0.18;
-
-            Game.seeker.add(
-                rightEye
+            group.add(
+                eye1,
+                eye2
             );
 
-            /*
-             * Long arms.
-             */
+            const armGeometry =
+                new THREE.CapsuleGeometry(
+                    0.22,
+                    2,
+                    6,
+                    10
+                );
 
             const leftArm =
-                makeMesh(
-                    new THREE.CapsuleGeometry(
-                        0.12,
-                        1.05,
-                        6,
-                        8
-                    ),
-                    Game.materials.seeker,
-                    "SEEKER_ARM"
+                new THREE.Mesh(
+                    armGeometry,
+                    dark
                 );
 
             leftArm.position.set(
-                -0.7,
-                1.25,
+                -1,
+                1.9,
                 0
             );
 
             leftArm.rotation.z =
-                -0.16;
-
-            Game.seeker.add(
-                leftArm
-            );
+                -0.18;
 
             const rightArm =
-                leftArm.clone();
+                new THREE.Mesh(
+                    armGeometry,
+                    dark
+                );
 
-            rightArm.position.x =
-                0.7;
-
-            rightArm.rotation.z =
-                0.16;
-
-            Game.seeker.add(
-                rightArm
-            );
-
-            Game.enemyGroup.add(
-                Game.seeker
-            );
-
-            Game.seekerBody =
-                body;
-
-            Game.seekerAwake =
-                false;
-        };
-
-    /* ========================================================
-       OBJECTIVES
-    ======================================================== */
-
-    Game.createObjectives =
-        function() {
-
-            const positions = [
-
-                {
-                    x: -49,
-                    y: 0,
-                    z: -19
-                },
-
-                {
-                    x: 34,
-                    y: 0,
-                    z: -31
-                },
-
-                {
-                    x: 0,
-                    y: 0,
-                    z: 26
-                }
-            ];
-
-            positions.forEach(
-                (
-                    position,
-                    index
-                ) => {
-
-                    Game.createButton(
-                        position.x,
-                        position.y,
-                        position.z,
-                        index
-                    );
-                }
-            );
-
-            Game.createKey(
-                30,
+            rightArm.position.set(
                 1,
-                20
-            );
-        };
-
-    /* ========================================================
-       BUTTON
-    ======================================================== */
-
-    Game.createButton =
-        function(
-            x,
-            y,
-            z,
-            index
-        ) {
-
-            const group =
-                new THREE.Group();
-
-            group.position.set(
-                x,
-                y,
-                z
-            );
-
-            const plate =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.42,
-                        0.08,
-                        0.42
-                    ),
-                    Game.materials.metalDark,
-                    `BUTTON_${index + 1}_PLATE`
-                );
-
-            plate.position.y =
-                1.15;
-
-            group.add(
-                plate
-            );
-
-            const button =
-                makeMesh(
-                    new THREE.CylinderGeometry(
-                        0.105,
-                        0.105,
-                        0.09,
-                        16
-                    ),
-                    Game.materials.red,
-                    `BUTTON_${index + 1}`
-                );
-
-            button.rotation.x =
-                Math.PI / 2;
-
-            button.position.set(
-                0,
-                1.22,
-                -0.02
-            );
-
-            group.add(
-                button
-            );
-
-            const glow =
-                new THREE.PointLight(
-                    0xb33030,
-                    0.35,
-                    2.5
-                );
-
-            glow.position.set(
-                0,
-                1.25,
+                1.9,
                 0
             );
 
+            rightArm.rotation.z =
+                0.18;
+
             group.add(
-                glow
+                leftArm,
+                rightArm
             );
 
-            group.userData = {
-                id:
-                    index + 1,
-                pressed:
-                    false
-            };
+            group.position.set(
+                42,
+                0,
+                42
+            );
 
-            Game.interactables.add(
+            this.worldGroup.add(
                 group
             );
 
-            Game.buttons.push(
-                group
+            this.seeker =
+                group;
+        },
+
+        wakeSeeker() {
+            if (
+                this.seekerActive
+            ) {
+                return;
+            }
+
+            this.seekerActive =
+                true;
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:activated"
+                )
+            );
+        },
+
+        /* ======================================================
+           OBJECTIVES
+           ====================================================== */
+
+        createObjectives() {
+            const positions = [
+                [-49, -18],
+                [48, 12],
+                [-8, 35]
+            ];
+
+            positions.forEach(
+                (position, index) => {
+
+                    const button =
+                        this.createButton(
+                            position[0],
+                            position[1],
+                            index + 1
+                        );
+
+                    this.buttons.push(
+                        button
+                    );
+
+                }
             );
 
-            Game.buttonMeshes.push(
-                button
+            this.createKey(
+                24,
+                22
             );
+        },
 
-            return group;
-        };
-
-    /* ========================================================
-       KEY
-    ======================================================== */
-
-    Game.createKey =
-        function(
+        createButton(
             x,
-            y,
-            z
+            z,
+            id
         ) {
-
             const group =
                 new THREE.Group();
 
             group.position.set(
                 x,
-                y,
+                1.4,
                 z
             );
 
-            const ring =
-                makeMesh(
-                    new THREE.TorusGeometry(
-                        0.14,
-                        0.04,
-                        8,
+            const base =
+                new THREE.Mesh(
+                    new THREE.BoxGeometry(
+                        1.1,
+                        0.4,
+                        0.8
+                    ),
+                    this.material(
+                        0x252525,
+                        0.7
+                    )
+                );
+
+            group.add(
+                base
+            );
+
+            const buttonMaterial =
+                new THREE.MeshStandardMaterial({
+                    color:
+                        0x7d1111,
+                    emissive:
+                        0x330000,
+                    emissiveIntensity:
+                        1.4
+                });
+
+            const top =
+                new THREE.Mesh(
+                    new THREE.CylinderGeometry(
+                        0.3,
+                        0.3,
+                        0.25,
                         16
                     ),
-                    Game.materials.warning,
-                    "KEY_RING"
+                    buttonMaterial
+                );
+
+            top.rotation.x =
+                Math.PI / 2;
+
+            top.position.z =
+                -0.22;
+
+            group.add(
+                top
+            );
+
+            const light =
+                new THREE.PointLight(
+                    0xc82121,
+                    1.1,
+                    5
+                );
+
+            light.position.set(
+                0,
+                0.2,
+                -0.45
+            );
+
+            group.add(
+                light
+            );
+
+            group.userData = {
+                type:
+                    "button",
+                id,
+                pressed:
+                    false,
+                light,
+                top
+            };
+
+            this.worldGroup.add(
+                group
+            );
+
+            this.interactables.push(
+                group
+            );
+
+            return group;
+        },
+
+        createKey(
+            x,
+            z
+        ) {
+            const group =
+                new THREE.Group();
+
+            group.position.set(
+                x,
+                1.5,
+                z
+            );
+
+            const gold =
+                new THREE.MeshStandardMaterial({
+                    color:
+                        0xc9a227,
+                    metalness:
+                        0.75,
+                    roughness:
+                        0.22,
+                    emissive:
+                        0x352400,
+                    emissiveIntensity:
+                        0.45
+                });
+
+            const ring =
+                new THREE.Mesh(
+                    new THREE.TorusGeometry(
+                        0.23,
+                        0.07,
+                        8,
+                        18
+                    ),
+                    gold
                 );
 
             ring.rotation.x =
                 Math.PI / 2;
-
-            ring.position.y =
-                1.2;
 
             group.add(
                 ring
             );
 
             const shaft =
-                makeMesh(
+                new THREE.Mesh(
                     new THREE.BoxGeometry(
-                        0.42,
-                        0.05,
+                        0.07,
+                        0.55,
                         0.07
                     ),
-                    Game.materials.warning,
-                    "KEY_SHAFT"
+                    gold
                 );
 
-            shaft.position.set(
-                0.22,
-                1.2,
-                0
-            );
+            shaft.position.y =
+                -0.25;
 
             group.add(
                 shaft
             );
 
-            const teeth =
-                makeMesh(
+            const tooth =
+                new THREE.Mesh(
                     new THREE.BoxGeometry(
-                        0.05,
-                        0.11,
+                        0.2,
+                        0.08,
                         0.08
                     ),
-                    Game.materials.warning,
-                    "KEY_TEETH"
+                    gold
                 );
 
-            teeth.position.set(
-                0.4,
-                1.14,
+            tooth.position.set(
+                0.07,
+                -0.43,
                 0
             );
 
             group.add(
-                teeth
+                tooth
+            );
+
+            const light =
+                new THREE.PointLight(
+                    0xd5ac3a,
+                    1.7,
+                    5
+                );
+
+            group.add(
+                light
             );
 
             group.userData = {
-                collectible: true
+                type:
+                    "key"
             };
 
-            Game.interactables.add(
+            this.worldGroup.add(
                 group
             );
 
-            Game.keyObject =
+            this.key =
                 group;
+        },
 
-            return group;
-        };
-
-    /* ========================================================
-       EXIT GATE
-    ======================================================== */
-
-    Game.createExitGate =
-        function(
+        createExitGate(
             x,
             y,
             z
         ) {
-
-            const gate =
+            const group =
                 new THREE.Group();
 
-            gate.position.set(
+            group.position.set(
                 x,
-                y,
+                0,
                 z
             );
 
-            const frameLeft =
-                makeMesh(
-                    new THREE.BoxGeometry(
-                        0.5,
-                        5.5,
-                        0.5
-                    ),
-                    Game.materials.metal,
-                    "GATE_LEFT"
+            const postMaterial =
+                this.material(
+                    0x202224,
+                    0.65,
+                    0.2
                 );
 
-            frameLeft.position.set(
-                -3,
-                2.75,
-                0
-            );
-
-            gate.add(
-                frameLeft
-            );
-
-            const frameRight =
-                frameLeft.clone();
-
-            frameRight.position.x =
-                3;
-
-            gate.add(
-                frameRight
-            );
-
-            const top =
-                makeMesh(
+            const leftPost =
+                new THREE.Mesh(
                     new THREE.BoxGeometry(
-                        6.5,
-                        0.5,
-                        0.5
+                        0.75,
+                        6,
+                        0.75
                     ),
-                    Game.materials.metal,
-                    "GATE_TOP"
+                    postMaterial
                 );
 
-            top.position.y =
-                5.25;
+            leftPost.position.x =
+                -4.5;
 
-            gate.add(
-                top
+            const rightPost =
+                new THREE.Mesh(
+                    new THREE.BoxGeometry(
+                        0.75,
+                        6,
+                        0.75
+                    ),
+                    postMaterial
+                );
+
+            rightPost.position.x =
+                4.5;
+
+            group.add(
+                leftPost,
+                rightPost
             );
 
             for (
-                let i = -2;
-                i <= 2;
-                i++
+                let xPos = -3.7;
+                xPos <= 3.7;
+                xPos += 1.05
             ) {
 
                 const bar =
-                    makeMesh(
+                    new THREE.Mesh(
                         new THREE.BoxGeometry(
-                            0.18,
-                            4.5,
-                            0.18
+                            0.32,
+                            5.3,
+                            0.32
                         ),
-                        Game.materials.metal,
-                        "GATE_BAR"
+                        postMaterial
                     );
 
                 bar.position.set(
-                    i * 1.05,
-                    2.25,
+                    xPos,
+                    2.65,
                     0
                 );
 
-                gate.add(
+                group.add(
                     bar
                 );
             }
 
-            Game.interactables.add(
-                gate
-            );
-
-            Game.gate =
-                gate;
-
-            Game.addCollider(
-                new THREE.Box3()
-                    .setFromObject(
-                        gate
-                    )
-            );
-
-            return gate;
-        };
-
-    /* ========================================================
-       COLLISION
-    ======================================================== */
-
-    Game.addCollider =
-        function(
-            box
-        ) {
-
-            Game.colliders.push(
-                box
-            );
-        };
-
-    Game.checkCollision =
-        function(
-            nextPosition
-        ) {
-
-            const playerBox =
-                new THREE.Box3(
-                    new THREE.Vector3(
-                        nextPosition.x -
-                        Game.playerRadius,
-                        0.05,
-                        nextPosition.z -
-                        Game.playerRadius
+            const sign =
+                new THREE.Mesh(
+                    new THREE.BoxGeometry(
+                        3,
+                        0.9,
+                        0.12
                     ),
-                    new THREE.Vector3(
-                        nextPosition.x +
-                        Game.playerRadius,
-                        Game.playerHeight,
-                        nextPosition.z +
-                        Game.playerRadius
-                    )
+                    new THREE.MeshStandardMaterial({
+                        color:
+                            0x3b1111,
+                        emissive:
+                            0x180000,
+                        emissiveIntensity:
+                            1
+                    })
                 );
 
-            for (
-                const collider
-                of Game.colliders
-            ) {
+            sign.position.set(
+                0,
+                5.2,
+                -0.45
+            );
 
-                if (
-                    playerBox.intersectsBox(
-                        collider
-                    )
-                ) {
+            group.add(
+                sign
+            );
 
-                    return true;
-                }
-            }
+            group.userData = {
+                type:
+                    "gate",
+                closed:
+                    true,
+                opened:
+                    false
+            };
 
-            return false;
-        };
+            this.worldGroup.add(
+                group
+            );
 
-    /* ========================================================
-       PLAYER MOVEMENT
-    ======================================================== */
+            this.gate =
+                group;
 
-    Game.updatePlayer =
-        function(
-            delta
-        ) {
+            this.addCollider(
+                x,
+                z,
+                10,
+                1.4
+            );
+        },
 
+        /* ======================================================
+           INTERACTION
+           ====================================================== */
+
+        interact() {
             if (
-                Game.gameOver
+                !this.player ||
+                !this.started
             ) {
                 return;
             }
 
-            const forward =
-                new THREE.Vector3(
+            const origin =
+                this.camera.getWorldPosition(
+                    new THREE.Vector3()
+                );
+
+            const direction =
+                new THREE.Vector3(0,0,-1)
+                    .applyQuaternion(
+                        this.camera.quaternion
+                    )
+                    .normalize();
+
+            const ray =
+                new THREE.Raycaster(
+                    origin,
+                    direction,
                     0,
-                    0,
-                    -1
+                    4
                 );
 
-            forward.applyAxisAngle(
-                new THREE.Vector3(
-                    0,
-                    1,
-                    0
-                ),
-                Game.yaw
-            );
+            const objects = [];
 
-            const right =
-                new THREE.Vector3(
-                    1,
-                    0,
-                    0
-                );
-
-            right.applyAxisAngle(
-                new THREE.Vector3(
-                    0,
-                    1,
-                    0
-                ),
-                Game.yaw
-            );
-
-            const movement =
-                new THREE.Vector3();
-
-            if (
-                Game.keys.KeyW ||
-                Game.keys.ArrowUp
-            ) {
-
-                movement.add(
-                    forward
-                );
-            }
-
-            if (
-                Game.keys.KeyS ||
-                Game.keys.ArrowDown
-            ) {
-
-                movement.sub(
-                    forward
-                );
-            }
-
-            if (
-                Game.keys.KeyD ||
-                Game.keys.ArrowRight
-            ) {
-
-                movement.add(
-                    right
-                );
-            }
-
-            if (
-                Game.keys.KeyA ||
-                Game.keys.ArrowLeft
-            ) {
-
-                movement.sub(
-                    right
-                );
-            }
-
-            if (
-                Game.mobile
-            ) {
-
-                movement.add(
-                    right.clone()
-                        .multiplyScalar(
-                            Game.mobileMove.x
-                        )
-                );
-
-                movement.add(
-                    forward.clone()
-                        .multiplyScalar(
-                            Game.mobileMove.y
-                        )
-                );
-            }
-
-            let speed =
-                Game.moveSpeed;
-
-            const sprint =
-                Game.keys.ShiftLeft ||
-                Game.keys.ShiftRight;
-
-            if (
-                sprint
-            ) {
-
-                speed =
-                    Game.sprintSpeed;
-            }
-
-            if (
-                movement.lengthSq() >
-                0
-            ) {
-
-                movement.normalize();
-
-                const displacement =
-                    movement.multiplyScalar(
-                        speed *
-                        delta
+            this.buttons.forEach(
+                (button) => {
+                    objects.push(
+                        ...button.children
                     );
-
-                const nextX =
-                    Game.player.position.clone();
-
-                nextX.x +=
-                    displacement.x;
-
-                if (
-                    !Game.checkCollision(
-                        nextX
-                    )
-                ) {
-
-                    Game.player.position.x =
-                        nextX.x;
                 }
+            );
 
-                const nextZ =
-                    Game.player.position.clone();
-
-                nextZ.z +=
-                    displacement.z;
-
-                if (
-                    !Game.checkCollision(
-                        nextZ
-                    )
-                ) {
-
-                    Game.player.position.z =
-                        nextZ.z;
-                }
-
-                Game.player.userData.moving =
-                    true;
-
-                Game.player.userData.speed =
-                    speed;
-
-                Game.handleFootsteps(
-                    delta,
-                    speed
+            if (this.key) {
+                objects.push(
+                    ...this.key.children
                 );
-
-            } else {
-
-                Game.player.userData.moving =
-                    false;
-
-                Game.player.userData.speed =
-                    0;
             }
 
-            /*
-             * Gravity.
-             */
-
-            if (
-                !Game.grounded
-            ) {
-
-                Game.verticalVelocity -=
-                    Game.gravity *
-                    delta;
-
-                Game.camera.position.y +=
-                    Game.verticalVelocity *
-                    delta;
-
-                if (
-                    Game.camera.position.y <=
-                    Game.playerHeight
-                ) {
-
-                    Game.camera.position.y =
-                        Game.playerHeight;
-
-                    Game.verticalVelocity =
-                        0;
-
-                    Game.grounded =
-                        true;
-                }
-            }
-        };
-
-    /* ========================================================
-       FOOTSTEPS
-    ======================================================== */
-
-    Game.handleFootsteps =
-        function(
-            delta,
-            speed
-        ) {
-
-            Game.stepTimer -=
-                delta;
-
-            if (
-                Game.stepTimer > 0
-            ) {
-                return;
-            }
-
-            Game.stepTimer =
-                speed >
-                Game.moveSpeed
-                    ? 0.29
-                    : 0.43;
-
-            window.dispatchEvent(
-                new CustomEvent(
-                    "seeker:player-moving",
-                    {
-                        detail: {
-                            moving:
-                                true,
-                            speed
-                        }
-                    }
-                )
-            );
-
-            if (
-                window.SeekerSystem
-            ) {
-
-                window.SeekerSystem
-                    .playFootstep?.(
-                        speed >
-                        Game.moveSpeed
-                            ? 1.15
-                            : 0.85
-                    );
-            }
-        };
-
-    /* ========================================================
-       LOOK
-    ======================================================== */
-
-    Game.look =
-        function(
-            movementX,
-            movementY
-        ) {
-
-            Game.yaw -=
-                movementX *
-                Game.mouseSensitivity;
-
-            Game.pitch -=
-                movementY *
-                Game.mouseSensitivity;
-
-            const limit =
-                Math.PI / 2 -
-                0.04;
-
-            Game.pitch =
-                clamp(
-                    Game.pitch,
-                    -limit,
-                    limit
-                );
-
-            Game.player.rotation.y =
-                Game.yaw;
-
-            Game.camera.rotation.x =
-                Game.pitch;
-
-            Game.camera.rotation.z =
-                0;
-        };
-
-    /* ========================================================
-       JUMP
-    ======================================================== */
-
-    Game.jump =
-        function() {
-
-            if (
-                !Game.grounded
-            ) {
-                return;
-            }
-
-            Game.grounded =
-                false;
-
-            Game.verticalVelocity =
-                Game.jumpVelocity;
-        };
-
-    /* ========================================================
-       OBJECTIVE UPDATE
-    ======================================================== */
-
-    Game.updateObjectives =
-        function() {
-
-            /*
-             * Buttons.
-             */
-
-            Game.buttons.forEach(
-                button => {
-
-                    if (
-                        button.userData
-                            .pressed
-                    ) {
-
-                        return;
-                    }
-
-                    button.rotation.y +=
-                        0.003;
-                }
-            );
-
-            /*
-             * Key floating animation.
-             */
-
-            if (
-                Game.keyObject
-            ) {
-
-                Game.keyObject.rotation.y +=
-                    0.015;
-
-                Game.keyObject.position.y =
-                    Math.sin(
-                        performance.now() *
-                        0.003
-                    ) *
-                    0.08;
-            }
-        };
-
-    /* ========================================================
-       INTERACTION
-    ======================================================== */
-
-    Game.interact =
-        function() {
-
-            Game.raycaster.setFromCamera(
-                new THREE.Vector2(
-                    0,
-                    0
-                ),
-                Game.camera
-            );
-
-            const targets = [];
-
-            Game.buttons.forEach(
-                button => {
-
-                    if (
-                        !button.userData
-                            .pressed
-                    ) {
-
-                        targets.push(
-                            ...button.children
-                        );
-                    }
-                }
-            );
-
-            if (
-                Game.keyObject
-            ) {
-
-                targets.push(
-                    ...Game.keyObject
-                        .children
+            if (this.gate) {
+                objects.push(
+                    ...this.gate.children
                 );
             }
 
             const hits =
-                Game.raycaster
-                    .intersectObjects(
-                        targets,
-                        true
-                    );
+                ray.intersectObjects(
+                    objects,
+                    true
+                );
 
-            if (
-                hits.length === 0
-            ) {
+            if (!hits.length) {
                 return;
             }
 
-            const hit =
-                hits[0]
-                    .object;
-
-            let parent =
-                hit.parent;
+            let object =
+                hits[0].object;
 
             while (
-                parent &&
-                parent !==
-                    Game.interactables
+                object.parent &&
+                object.parent !==
+                    this.worldGroup
             ) {
-
                 if (
-                    Game.buttons.includes(
-                        parent
-                    )
+                    object.userData?.type
                 ) {
-
-                    Game.pressButton(
-                        parent
-                    );
-
-                    return;
+                    break;
                 }
 
-                if (
-                    parent ===
-                    Game.keyObject
-                ) {
-
-                    Game.collectKey();
-
-                    return;
-                }
-
-                parent =
-                    parent.parent;
+                object =
+                    object.parent;
             }
-        };
 
-    /* ========================================================
-       PRESS BUTTON
-    ======================================================== */
+            const type =
+                object.userData?.type;
 
-    Game.pressButton =
-        function(
-            button
-        ) {
+            if (
+                type === "button"
+            ) {
+                this.pressButton(
+                    object
+                );
+                return;
+            }
 
+            if (
+                type === "key"
+            ) {
+                this.collectKey();
+                return;
+            }
+
+            if (
+                type === "gate"
+            ) {
+                this.useGate();
+            }
+        },
+
+        pressButton(button) {
             if (
                 button.userData.pressed
             ) {
@@ -4979,22 +2431,27 @@
             button.userData.pressed =
                 true;
 
-            Game.collectedButtons++;
-
-            button.children.forEach(
-                child => {
-
-                    if (
-                        child.name.startsWith(
-                            "BUTTON_"
-                        )
-                    ) {
-
-                        child.position.z =
-                            0.04;
-                    }
-                }
+            this.buttonsFound.add(
+                button.userData.id
             );
+
+            if (
+                button.userData.top
+            ) {
+                button.userData.top.position.z =
+                    -0.12;
+            }
+
+            if (
+                button.userData.light
+            ) {
+                button.userData.light.color.set(
+                    0x4da86d
+                );
+
+                button.userData.light.intensity =
+                    1.5;
+            }
 
             window.dispatchEvent(
                 new CustomEvent(
@@ -5008,324 +2465,973 @@
                 )
             );
 
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:button-progress",
+                    {
+                        detail: {
+                            found:
+                                this.buttonsFound.size
+                        }
+                    }
+                )
+            );
+
             if (
-                Game.collectedButtons >=
-                Game.totalButtons
+                window.SeekerSystem
             ) {
-
-                if (
-                    window.SeekerSystem
-                ) {
-
-                    window.SeekerSystem
-                        .buttonsFound =
-                        Game.totalButtons;
-                }
-
-                Game.enableKey();
+                window.SeekerSystem.registerButton(
+                    button.userData.id
+                );
             }
-        };
-
-    /* ========================================================
-       KEY
-    ======================================================== */
-
-    Game.enableKey =
-        function() {
 
             if (
-                Game.keyObject
+                this.buttonsFound.size >= 3
             ) {
-
-                Game.keyObject.visible =
-                    true;
+                this.spawnKeyNearSecurity();
             }
-        };
+        },
 
-    Game.collectKey =
-        function() {
+        spawnKeyNearSecurity() {
+            if (!this.key) {
+                return;
+            }
+
+            this.key.position.set(
+                24,
+                1.5,
+                22
+            );
+
+            this.key.visible =
+                true;
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:all-buttons-found"
+                )
+            );
+        },
+
+        collectKey() {
+            if (
+                this.hasKey ||
+                !this.key
+            ) {
+                return;
+            }
 
             if (
-                !Game.keyObject ||
-                !Game.keyObject.visible
+                this.buttonsFound.size <
+                3
             ) {
                 return;
             }
 
             const distance =
-                Game.player.position
-                    .distanceTo(
-                        Game.keyObject
-                            .position
-                    );
+                this.player.position.distanceTo(
+                    this.key.position
+                );
 
-            if (
-                distance > 3.2
-            ) {
-
+            if (distance > 3.5) {
                 return;
             }
 
-            Game.keyObject.visible =
+            this.hasKey =
+                true;
+
+            this.key.visible =
                 false;
 
             window.dispatchEvent(
                 new CustomEvent(
                     "seeker:key",
-                    {}
+                    {
+                        detail: {
+                            collected:
+                                true
+                        }
+                    }
                 )
             );
 
-            Game.showObjectiveMessage(
-                "KEY ACQUIRED — FIND THE EXIT GATE"
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:key-collected"
+                )
             );
-        };
+        },
 
-    /* ========================================================
-       GATE CHECK
-    ======================================================== */
-
-    Game.checkGate =
-        function() {
-
+        useGate() {
             if (
-                Game.gateOpened
-            ) {
-                return;
-            }
-
-            if (
-                !Game.gate
+                !this.gate
             ) {
                 return;
             }
 
             const distance =
-                Game.player.position
-                    .distanceTo(
-                        Game.gate
-                            .position
-                    );
+                this.player.position.distanceTo(
+                    this.gate.position
+                );
 
             if (
-                distance > 4.5
+                distance > 8
             ) {
                 return;
             }
 
             if (
-                !Game.keyObject ||
-                Game.keyObject.visible
+                !this.hasKey
             ) {
                 return;
             }
 
-            Game.openGate();
-        };
+            this.unlockGate();
+        },
 
-    /* ========================================================
-       OPEN GATE
-    ======================================================== */
+        unlockGate() {
+            if (
+                this.gateUnlocked ||
+                !this.gate
+            ) {
+                return;
+            }
 
-    Game.openGate =
-        function() {
-
-            Game.gateOpened =
+            this.gateUnlocked =
                 true;
 
-            Game.gate.children.forEach(
-                child => {
+            this.gate.userData.opened =
+                true;
 
-                    child.position.y +=
-                        5;
+            this.gate.children.forEach(
+                (child) => {
+                    child.userData.gatePart =
+                        true;
                 }
             );
+
+            this.gate.children.forEach(
+                (child) => {
+                    const startY =
+                        child.position.y;
+
+                    const startTime =
+                        performance.now();
+
+                    const animateGate =
+                        () => {
+
+                            if (
+                                !this.started
+                            ) {
+                                return;
+                            }
+
+                            const elapsed =
+                                performance.now() -
+                                startTime;
+
+                            const progress =
+                                Math.min(
+                                    1,
+                                    elapsed / 1600
+                                );
+
+                            const ease =
+                                1 -
+                                Math.pow(
+                                    1 - progress,
+                                    3
+                                );
+
+                            child.position.y =
+                                startY +
+                                ease * 7;
+
+                            if (
+                                progress < 1
+                            ) {
+                                requestAnimationFrame(
+                                    animateGate
+                                );
+                            }
+
+                        };
+
+                    requestAnimationFrame(
+                        animateGate
+                    );
+                }
+            );
+
+            this.removeGateCollider();
 
             window.dispatchEvent(
                 new CustomEvent(
                     "seeker:gate",
-                    {}
+                    {
+                        detail: {
+                            unlocked:
+                                true
+                        }
+                    }
                 )
             );
+        },
 
-            Game.showObjectiveMessage(
-                "GATE OPEN — ESCAPE"
+        removeGateCollider() {
+            if (!this.gate) {
+                return;
+            }
+
+            const x =
+                this.gate.position.x;
+
+            const z =
+                this.gate.position.z;
+
+            this.colliders =
+                this.colliders.filter(
+                    (collider) => {
+                        const centerX =
+                            (collider.minX +
+                                collider.maxX) /
+                            2;
+
+                        const centerZ =
+                            (collider.minZ +
+                                collider.maxZ) /
+                            2;
+
+                        return !(
+                            Math.abs(
+                                centerX - x
+                            ) < 6 &&
+                            Math.abs(
+                                centerZ - z
+                            ) < 2
+                        );
+                    }
+                );
+        },
+
+        /* ======================================================
+           CONTROLS
+           ====================================================== */
+
+        bindControls() {
+            this.resizeBound =
+                () => this.resize();
+
+            this.keyDownBound =
+                (event) =>
+                    this.onKeyDown(
+                        event
+                    );
+
+            this.keyUpBound =
+                (event) =>
+                    this.onKeyUp(
+                        event
+                    );
+
+            this.mouseMoveBound =
+                (event) =>
+                    this.onMouseMove(
+                        event
+                    );
+
+            this.pointerLockBound =
+                () =>
+                    this.onPointerLockChange();
+
+            this.requestPointerLockBound =
+                () =>
+                    this.requestPointerLock();
+
+            document.addEventListener(
+                "keydown",
+                this.keyDownBound
             );
-        };
 
-    /* ========================================================
-       SEEKER WAKE-UP
-    ======================================================== */
+            document.addEventListener(
+                "keyup",
+                this.keyUpBound
+            );
 
-    Game.wakeSeeker =
-        function() {
+            document.addEventListener(
+                "mousemove",
+                this.mouseMoveBound
+            );
+
+            document.addEventListener(
+                "pointerlockchange",
+                this.pointerLockBound
+            );
 
             if (
-                Game.seekerAwake
+                this.renderer
+            ) {
+                this.renderer
+                    .domElement
+                    .addEventListener(
+                        "click",
+                        this.requestPointerLockBound
+                    );
+            }
+
+            this.bindMobileControls();
+        },
+
+        onKeyDown(event) {
+            if (
+                event.code === "Escape"
             ) {
                 return;
             }
 
-            Game.seekerAwake =
-                true;
-
-            Game.showObjectiveMessage(
-                "THE SEEKER IS HUNTING YOU"
+            this.keys.add(
+                event.code
             );
+
+            if (
+                event.code === "KeyE"
+            ) {
+                this.interact();
+            }
+
+            if (
+                event.code === "KeyF" ||
+                event.code === "Digit1"
+            ) {
+                this.flashlightOn =
+                    !this.flashlightOn;
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        this.flashlightOn
+                            ? "seeker:flashlight-on"
+                            : "seeker:flashlight-off"
+                    )
+                );
+            }
+
+            if (
+                event.code === "ShiftLeft" ||
+                event.code === "ShiftRight"
+            ) {
+                this.sprinting =
+                    true;
+            }
+        },
+
+        onKeyUp(event) {
+            this.keys.delete(
+                event.code
+            );
+
+            if (
+                event.code === "ShiftLeft" ||
+                event.code === "ShiftRight"
+            ) {
+                this.sprinting =
+                    false;
+            }
+        },
+
+        onMouseMove(event) {
+            if (
+                this.platform ===
+                "mobile"
+            ) {
+                return;
+            }
+
+            if (
+                !this.mouseLocked
+            ) {
+                return;
+            }
+
+            const sensitivity =
+                0.002;
+
+            this.yaw -=
+                event.movementX *
+                sensitivity;
+
+            this.pitch -=
+                event.movementY *
+                sensitivity;
+
+            this.pitch =
+                THREE.MathUtils.clamp(
+                    this.pitch,
+                    -1.45,
+                    1.45
+                );
+        },
+
+        requestPointerLock() {
+            if (
+                this.platform ===
+                "mobile"
+            ) {
+                return;
+            }
+
+            if (
+                this.paused
+            ) {
+                return;
+            }
+
+            this.renderer
+                ?.domElement
+                ?.requestPointerLock?.();
+        },
+
+        onPointerLockChange() {
+            this.mouseLocked =
+                document.pointerLockElement ===
+                this.renderer?.domElement;
+        },
+
+        bindMobileControls() {
+            const move =
+                document.getElementById(
+                    "movementJoystick"
+                );
+
+            const look =
+                document.getElementById(
+                    "lookJoystick"
+                );
+
+            if (move) {
+                this.bindJoystick(
+                    move,
+                    "move"
+                );
+            }
+
+            if (look) {
+                this.bindJoystick(
+                    look,
+                    "look"
+                );
+            }
+
+            const sprint =
+                document.getElementById(
+                    "mobileSprint"
+                );
+
+            if (sprint) {
+                sprint.addEventListener(
+                    "touchstart",
+                    (event) => {
+                        event.preventDefault();
+                        this.joystick.sprint =
+                            true;
+                    },
+                    { passive: false }
+                );
+
+                sprint.addEventListener(
+                    "touchend",
+                    (event) => {
+                        event.preventDefault();
+                        this.joystick.sprint =
+                            false;
+                    },
+                    { passive: false }
+                );
+            }
+
+            const interact =
+                document.getElementById(
+                    "mobileInteract"
+                );
+
+            if (interact) {
+                interact.addEventListener(
+                    "touchstart",
+                    (event) => {
+                        event.preventDefault();
+                        this.interact();
+                    },
+                    { passive: false }
+                );
+            }
+        },
+
+        bindJoystick(
+            element,
+            type
+        ) {
+            let active =
+                false;
+
+            let pointerId =
+                null;
+
+            const update =
+                (clientX, clientY) => {
+
+                    const rect =
+                        element.getBoundingClientRect();
+
+                    const centerX =
+                        rect.left +
+                        rect.width /
+                            2;
+
+                    const centerY =
+                        rect.top +
+                        rect.height /
+                            2;
+
+                    let dx =
+                        clientX -
+                        centerX;
+
+                    let dy =
+                        clientY -
+                        centerY;
+
+                    const radius =
+                        rect.width *
+                        0.38;
+
+                    const length =
+                        Math.hypot(
+                            dx,
+                            dy
+                        );
+
+                    if (
+                        length >
+                        radius
+                    ) {
+                        const scale =
+                            radius /
+                            length;
+
+                        dx *= scale;
+                        dy *= scale;
+                    }
+
+                    const x =
+                        dx /
+                        radius;
+
+                    const y =
+                        dy /
+                        radius;
+
+                    if (
+                        type === "move"
+                    ) {
+                        this.joystick.moveX =
+                            x;
+
+                        this.joystick.moveY =
+                            y;
+                    } else {
+                        this.joystick.lookX =
+                            x;
+
+                        this.joystick.lookY =
+                            y;
+                    }
+
+                    const knob =
+                        document.getElementById(
+                            type === "move"
+                                ? "movementKnob"
+                                : "lookKnob"
+                        );
+
+                    if (knob) {
+                        knob.style.transform =
+                            `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                    }
+                };
+
+            const reset =
+                () => {
+
+                    active =
+                        false;
+
+                    pointerId =
+                        null;
+
+                    if (
+                        type === "move"
+                    ) {
+                        this.joystick.moveX =
+                            0;
+
+                        this.joystick.moveY =
+                            0;
+                    } else {
+                        this.joystick.lookX =
+                            0;
+
+                        this.joystick.lookY =
+                            0;
+                    }
+
+                    const knob =
+                        document.getElementById(
+                            type === "move"
+                                ? "movementKnob"
+                                : "lookKnob"
+                        );
+
+                    if (knob) {
+                        knob.style.transform =
+                            "translate(-50%, -50%)";
+                    }
+                };
+
+            element.addEventListener(
+                "pointerdown",
+                (event) => {
+
+                    active =
+                        true;
+
+                    pointerId =
+                        event.pointerId;
+
+                    element.setPointerCapture(
+                        pointerId
+                    );
+
+                    update(
+                        event.clientX,
+                        event.clientY
+                    );
+
+                }
+            );
+
+            element.addEventListener(
+                "pointermove",
+                (event) => {
+
+                    if (
+                        !active ||
+                        event.pointerId !==
+                            pointerId
+                    ) {
+                        return;
+                    }
+
+                    update(
+                        event.clientX,
+                        event.clientY
+                    );
+
+                }
+            );
+
+            element.addEventListener(
+                "pointerup",
+                reset
+            );
+
+            element.addEventListener(
+                "pointercancel",
+                reset
+            );
+        },
+
+        /* ======================================================
+           MOVEMENT
+           ====================================================== */
+
+        updatePlayer(delta) {
+            if (
+                !this.player
+            ) {
+                return;
+            }
+
+            let forward =
+                0;
+
+            let sideways =
+                0;
+
+            if (
+                this.keys.has("KeyW") ||
+                this.keys.has("ArrowUp")
+            ) {
+                forward += 1;
+            }
+
+            if (
+                this.keys.has("KeyS") ||
+                this.keys.has("ArrowDown")
+            ) {
+                forward -= 1;
+            }
+
+            if (
+                this.keys.has("KeyA") ||
+                this.keys.has("ArrowLeft")
+            ) {
+                sideways -= 1;
+            }
+
+            if (
+                this.keys.has("KeyD") ||
+                this.keys.has("ArrowRight")
+            ) {
+                sideways += 1;
+            }
+
+            if (
+                this.platform ===
+                "mobile"
+            ) {
+                forward +=
+                    -this.joystick.moveY;
+
+                sideways +=
+                    this.joystick.moveX;
+            }
+
+            const length =
+                Math.hypot(
+                    sideways,
+                    forward
+                );
+
+            if (
+                length > 1
+            ) {
+                sideways /=
+                    length;
+
+                forward /=
+                    length;
+            }
+
+            const isMoving =
+                Math.abs(sideways) >
+                    0.01 ||
+                Math.abs(forward) >
+                    0.01;
+
+            this.sprinting =
+                this.sprinting ||
+                this.joystick.sprint;
+
+            const speed =
+                this.sprinting &&
+                isMoving
+                    ? this.sprintSpeed
+                    : this.playerSpeed;
+
+            const move =
+                this.moveVector;
+
+            move.set(
+                0,
+                0,
+                0
+            );
+
+            const forwardDirection =
+                new THREE.Vector3(
+                    0,
+                    0,
+                    -1
+                );
+
+            forwardDirection.applyAxisAngle(
+                new THREE.Vector3(
+                    0,
+                    1,
+                    0
+                ),
+                this.yaw
+            );
+
+            const rightDirection =
+                new THREE.Vector3(
+                    1,
+                    0,
+                    0
+                );
+
+            rightDirection.applyAxisAngle(
+                new THREE.Vector3(
+                    0,
+                    1,
+                    0
+                ),
+                this.yaw
+            );
+
+            move
+                .addScaledVector(
+                    forwardDirection,
+                    forward
+                )
+                .addScaledVector(
+                    rightDirection,
+                    sideways
+                );
+
+            if (
+                move.lengthSq() >
+                0
+            ) {
+                move.normalize();
+                move.multiplyScalar(
+                    speed *
+                    delta
+                );
+            }
+
+            const nextX =
+                this.player.position.x +
+                move.x;
+
+            const nextZ =
+                this.player.position.z +
+                move.z;
+
+            const canX =
+                this.canMove(
+                    nextX,
+                    this.player.position.z
+                );
+
+            const canZ =
+                this.canMove(
+                    this.player.position.x,
+                    nextZ
+                );
+
+            if (canX) {
+                this.player.position.x =
+                    nextX;
+            }
+
+            if (canZ) {
+                this.player.position.z =
+                    nextZ;
+            }
+
+            this.camera.rotation.y =
+                this.yaw;
+
+            this.camera.rotation.x =
+                this.pitch;
 
             window.dispatchEvent(
                 new CustomEvent(
-                    "seeker:hunting-started",
-                    {}
+                    "seeker:player-moving",
+                    {
+                        detail: {
+                            moving:
+                                isMoving,
+                            speed:
+                                isMoving
+                                    ? speed
+                                    : 0
+                        }
+                    }
                 )
             );
-        };
-
-    /* ========================================================
-       SEEKER UPDATE
-    ======================================================== */
-
-    Game.updateSeeker =
-        function(
-            delta
-        ) {
 
             if (
-                !Game.seekerAwake ||
-                Game.gameOver
+                isMoving &&
+                this.seekerActive
+            ) {
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "seeker:footstep",
+                        {
+                            detail: {
+                                sprinting:
+                                    this.sprinting
+                            }
+                        }
+                    )
+                );
+            }
+        },
+
+        updateMobileLook(
+            delta
+        ) {
+            if (
+                this.platform !==
+                "mobile"
             ) {
                 return;
             }
 
-            const direction =
-                new THREE.Vector3()
-                    .subVectors(
-                        Game.player.position,
-                        Game.seeker.position
-                    );
+            const x =
+                this.joystick.lookX;
+
+            const y =
+                this.joystick.lookY;
+
+            if (
+                Math.abs(x) <
+                    0.04 &&
+                Math.abs(y) <
+                    0.04
+            ) {
+                return;
+            }
+
+            this.yaw -=
+                x *
+                delta *
+                3.1;
+
+            this.pitch -=
+                y *
+                delta *
+                2.5;
+
+            this.pitch =
+                THREE.MathUtils.clamp(
+                    this.pitch,
+                    -1.45,
+                    1.45
+                );
+        },
+
+        /* ======================================================
+           SEEKER AI
+           ====================================================== */
+
+        updateSeeker(delta) {
+            if (
+                !this.seeker ||
+                !this.player
+            ) {
+                return;
+            }
 
             const distance =
-                direction.length();
-
-            if (
-                distance >
-                0.001
-            ) {
-
-                direction.normalize();
-
-                Game.seekerSpeed =
-                    Math.min(
-                        5.8,
-                        Game.seekerSpeed +
-                        Game.seekerAcceleration *
-                        delta
-                    );
-
-                const step =
-                    Game.seekerSpeed *
-                    delta;
-
-                const next =
-                    Game.seeker.position
-                        .clone()
-                        .add(
-                            direction.multiplyScalar(
-                                step
-                            )
-                        );
-
-                /*
-                 * Seeker uses simpler collision checking.
-                 */
-
-                if (
-                    !Game.checkEnemyCollision(
-                        next
-                    )
-                ) {
-
-                    Game.seeker.position.copy(
-                        next
-                    );
-                }
-
-                Game.seeker.rotation.y =
-                    Math.atan2(
-                        direction.x,
-                        direction.z
-                    );
-            }
-
-            Game.updateThreat(
-                distance
-            );
-
-            /*
-             * Caught.
-             */
-
-            if (
-                distance < 1.25
-            ) {
-
-                Game.playerCaught();
-            }
-        };
-
-    /* ========================================================
-       ENEMY COLLISION
-    ======================================================== */
-
-    Game.checkEnemyCollision =
-        function(
-            position
-        ) {
-
-            const testBox =
-                new THREE.Box3(
-                    new THREE.Vector3(
-                        position.x -
-                        0.42,
-                        0,
-                        position.z -
-                        0.42
-                    ),
-                    new THREE.Vector3(
-                        position.x +
-                        0.42,
-                        3,
-                        position.z +
-                        0.42
-                    )
+                this.seeker.position.distanceTo(
+                    this.player.position
                 );
 
-            for (
-                const collider
-                of Game.colliders
-            ) {
-
-                if (
-                    testBox.intersectsBox(
-                        collider
-                    )
-                ) {
-
-                    return true;
-                }
-            }
-
-            return false;
-        };
-
-    /* ========================================================
-       THREAT
-    ======================================================== */
-
-    Game.updateThreat =
-        function(
-            distance
-        ) {
+            this.seekerTargetDistance =
+                distance;
 
             window.dispatchEvent(
                 new CustomEvent(
@@ -5339,73 +3445,105 @@
             );
 
             if (
-                window.SeekerSystem
+                !this.seekerActive
             ) {
-
-                window.SeekerSystem
-                    .setSeekerDistance?.(
-                        distance
-                    );
-            }
-
-            /*
-             * Seeker becomes visually stronger when close.
-             */
-
-            if (
-                Game.seeker
-            ) {
-
-                const threat =
-                    clamp(
-                        1 -
-                        (
-                            distance -
-                            2
-                        ) /
-                        25,
-                        0,
-                        1
-                    );
-
-                const scale =
-                    1 +
-                    threat *
-                    0.08;
-
-                Game.seeker.scale.set(
-                    scale,
-                    scale,
-                    scale
+                this.seeker.lookAt(
+                    this.player.position.x,
+                    this.seeker.position.y +
+                        1.6,
+                    this.player.position.z
                 );
+
+                return;
             }
-        };
 
-    /* ========================================================
-       PLAYER CAUGHT
-    ======================================================== */
+            const target =
+                this.player.position;
 
-    Game.playerCaught =
-        function() {
+            const dx =
+                target.x -
+                this.seeker.position.x;
+
+            const dz =
+                target.z -
+                this.seeker.position.z;
+
+            const length =
+                Math.hypot(
+                    dx,
+                    dz
+                );
 
             if (
-                Game.gameOver
+                length > 0.01
+            ) {
+
+                const directionX =
+                    dx / length;
+
+                const directionZ =
+                    dz / length;
+
+                const speed =
+                    this.seekerSpeed *
+                    delta;
+
+                const nextX =
+                    this.seeker.position.x +
+                    directionX *
+                    speed;
+
+                const nextZ =
+                    this.seeker.position.z +
+                    directionZ *
+                    speed;
+
+                if (
+                    this.canMove(
+                        nextX,
+                        this.seeker.position.z,
+                        0.65
+                    )
+                ) {
+                    this.seeker.position.x =
+                        nextX;
+                }
+
+                if (
+                    this.canMove(
+                        this.seeker.position.x,
+                        nextZ,
+                        0.65
+                    )
+                ) {
+                    this.seeker.position.z =
+                        nextZ;
+                }
+
+                this.seeker.rotation.y =
+                    Math.atan2(
+                        directionX,
+                        directionZ
+                    );
+            }
+
+            if (
+                distance <
+                2.2
+            ) {
+                this.playerCaught();
+            }
+        },
+
+        playerCaught() {
+            if (
+                !this.started
             ) {
                 return;
             }
 
-            Game.gameOver =
-                true;
-
-            if (
-                window.SeekerSystem
-            ) {
-
-                window.SeekerSystem
-                    .playerCaught(
-                        "seeker"
-                    );
-            }
+            this.started =
+                false;
 
             window.dispatchEvent(
                 new CustomEvent(
@@ -5418,1469 +3556,560 @@
                     }
                 )
             );
-        };
+        },
 
-    /* ========================================================
-       ESCAPE
-    ======================================================== */
+        /* ======================================================
+           TIMER
+           ====================================================== */
 
-    Game.checkEscape =
-        function() {
+        startSetupTimer() {
+            this.setupRemaining =
+                this.setupDuration;
 
-            if (
-                !Game.gateOpened ||
-                Game.gameOver
-            ) {
-                return;
-            }
-
-            if (
-                Game.player.position.z >
-                46
-            ) {
-
-                Game.gameOver =
-                    true;
-
-                window.dispatchEvent(
-                    new CustomEvent(
-                        "seeker:player-escaped",
-                        {}
-                    )
-                );
-
-                if (
-                    window.SeekerSystem
-                ) {
-
-                    window.SeekerSystem
-                        .playerEscaped?.();
-                }
-            }
-        };
-
-    /* ========================================================
-       LOADING
-    ======================================================== */
-
-    Game.hideLoading =
-        function() {
-
-            const loading =
-                document.getElementById(
-                    "gameLoading"
-                );
-
-            if (!loading) {
-                return;
-            }
-
-            loading.style.opacity =
-                "0";
-
-            loading.style.pointerEvents =
-                "none";
-
-            setTimeout(
-                () => {
-
-                    loading.style.display =
-                        "none";
-
-                },
-                450
-            );
-        };
-
-    /* ========================================================
-       OBJECTIVE MESSAGE
-    ======================================================== */
-
-    Game.showObjectiveMessage =
-        function(
-            text
-        ) {
-
-            let message =
-                document.getElementById(
-                    "gameObjectiveMessage"
-                );
-
-            if (!message) {
-
-                message =
-                    document.createElement(
-                        "div"
-                    );
-
-                message.id =
-                    "gameObjectiveMessage";
-
-                Object.assign(
-                    message.style,
-                    {
-                        position:
-                            "fixed",
-                        left:
-                            "50%",
-                        top:
-                            "11%",
-                        transform:
-                            "translateX(-50%)",
-                        padding:
-                            "12px 20px",
-                        background:
-                            "rgba(5,5,5,.86)",
-                        border:
-                            "1px solid rgba(255,255,255,.14)",
-                        color:
-                            "#eee",
-                        font:
-                            "700 11px system-ui",
-                        letterSpacing:
-                            "2px",
-                        zIndex:
-                            "5000",
-                        pointerEvents:
-                            "none",
-                        opacity:
-                            "0",
-                        transition:
-                            "opacity .2s ease"
-                    }
-                );
-
-                document.body.appendChild(
-                    message
-                );
-            }
-
-            message.textContent =
-                text;
-
-            message.style.opacity =
-                "1";
-
-            clearTimeout(
-                Game.objectiveTimeout
+            clearInterval(
+                this.seekerTimer
             );
 
-            Game.objectiveTimeout =
-                setTimeout(
+            this.seekerTimer =
+                setInterval(
                     () => {
 
-                        message.style.opacity =
-                            "0";
+                        if (
+                            !this.started ||
+                            this.paused
+                        ) {
+                            return;
+                        }
+
+                        this.setupRemaining--;
+
+                        window.dispatchEvent(
+                            new CustomEvent(
+                                "seeker:setup-timer",
+                                {
+                                    detail: {
+                                        seconds:
+                                            this.setupRemaining
+                                    }
+                                }
+                            )
+                        );
+
+                        if (
+                            this.setupRemaining <=
+                            0
+                        ) {
+                            clearInterval(
+                                this.seekerTimer
+                            );
+
+                            this.wakeSeeker();
+                        }
 
                     },
-                    2800
+                    1000
                 );
-        };
+        },
 
-    /* ========================================================
-       MINIMAP
-    ======================================================== */
+        /* ======================================================
+           MINIMAP
+           ====================================================== */
 
-    Game.createMinimap =
-        function() {
-
-            const container =
-                document.createElement(
-                    "div"
+        createMinimap() {
+            this.minimap.world =
+                document.getElementById(
+                    "minimapWorld"
                 );
 
-            container.id =
-                "seekerMinimap";
-
-            Object.assign(
-                container.style,
-                {
-                    position:
-                        "fixed",
-                    top:
-                        "18px",
-                    left:
-                        "18px",
-                    width:
-                        "170px",
-                    height:
-                        "170px",
-                    border:
-                        "1px solid rgba(255,255,255,.22)",
-                    borderRadius:
-                        "12px",
-                    overflow:
-                        "hidden",
-                    background:
-                        "rgba(5,5,5,.72)",
-                    backdropFilter:
-                        "blur(6px)",
-                    zIndex:
-                        "4000",
-                    pointerEvents:
-                        "none"
-                }
-            );
-
-            const canvas =
-                document.createElement(
-                    "canvas"
+            this.minimap.player =
+                document.getElementById(
+                    "playerMarker"
                 );
 
-            canvas.width =
-                340;
-
-            canvas.height =
-                340;
-
-            canvas.style.width =
-                "170px";
-
-            canvas.style.height =
-                "170px";
-
-            container.appendChild(
-                canvas
-            );
-
-            const label =
-                document.createElement(
-                    "div"
+            this.minimap.seeker =
+                document.getElementById(
+                    "seekerMarker"
                 );
+        },
 
-            label.textContent =
-                "MAP";
-
-            Object.assign(
-                label.style,
-                {
-                    position:
-                        "absolute",
-                    top:
-                        "7px",
-                    left:
-                        "8px",
-                    font:
-                        "800 8px system-ui",
-                    letterSpacing:
-                        "2px",
-                    color:
-                        "rgba(255,255,255,.5)"
-                }
-            );
-
-            container.appendChild(
-                label
-            );
-
-            document.body.appendChild(
-                container
-            );
-
-            Game.minimap =
-                container;
-
-            Game.minimapCanvas =
-                canvas;
-
-            Game.minimapContext =
-                canvas.getContext(
-                    "2d"
-                );
-        };
-
-    /* ========================================================
-       DRAW MINIMAP
-    ======================================================== */
-
-    Game.drawMinimap =
-        function() {
-
+        updateMinimap() {
             if (
-                !Game.minimapContext
+                !this.player ||
+                !this.seeker
             ) {
                 return;
             }
 
-            const ctx =
-                Game.minimapContext;
+            const convert =
+                (
+                    value,
+                    min,
+                    max,
+                    size
+                ) => {
+
+                    return (
+                        (value - min) /
+                        (max - min)
+                    ) *
+                    size;
 
-            const w =
-                Game.minimapCanvas
-                    .width;
-
-            const h =
-                Game.minimapCanvas
-                    .height;
-
-            ctx.clearRect(
-                0,
-                0,
-                w,
-                h
-            );
-
-            /*
-             * Map background.
-             */
-
-            ctx.fillStyle =
-                "rgba(9,9,9,.92)";
-
-            ctx.fillRect(
-                0,
-                0,
-                w,
-                h
-            );
-
-            const scale =
-                2.1;
-
-            const originX =
-                w / 2;
-
-            const originY =
-                h / 2;
-
-            /*
-             * Outer boundary.
-             */
-
-            ctx.strokeStyle =
-                "rgba(255,255,255,.17)";
-
-            ctx.lineWidth =
-                2;
-
-            ctx.strokeRect(
-                originX -
-                Game.width *
-                scale /
-                2,
-                originY -
-                Game.depth *
-                scale /
-                2,
-                Game.width *
-                scale,
-                Game.depth *
-                scale
-            );
-
-            /*
-             * Buildings as simple map shapes.
-             */
-
-            const rooms = [
-
-                [-34, -23, 24, 20],
-
-                [0, -20, 34, 26],
-
-                [34, -22, 24, 20],
-
-                [0, 22, 34, 22],
-
-                [-48, 25, 18, 22]
-
-            ];
-
-            ctx.fillStyle =
-                "rgba(185,185,175,.12)";
-
-            ctx.strokeStyle =
-                "rgba(220,220,210,.18)";
-
-            rooms.forEach(
-                room => {
-
-                    const [
-                        x,
-                        z,
-                        rw,
-                        rz
-                    ] = room;
-
-                    const px =
-                        originX +
-                        x *
-                        scale;
-
-                    const pz =
-                        originY +
-                        z *
-                        scale;
-
-                    ctx.fillRect(
-                        px -
-                        rw *
-                        scale /
-                        2,
-                        pz -
-                        rz *
-                        scale /
-                        2,
-                        rw *
-                        scale,
-                        rz *
-                        scale
-                    );
-
-                    ctx.strokeRect(
-                        px -
-                        rw *
-                        scale /
-                        2,
-                        pz -
-                        rz *
-                        scale /
-                        2,
-                        rw *
-                        scale,
-                        rz *
-                        scale
-                    );
-                }
-            );
-
-            /*
-             * Buttons.
-             */
-
-            Game.buttons.forEach(
-                button => {
-
-                    if (
-                        button.userData
-                            .pressed
-                    ) {
-                        return;
-                    }
-
-                    const px =
-                        originX +
-                        button.position.x *
-                        scale;
-
-                    const pz =
-                        originY +
-                        button.position.z *
-                        scale;
-
-                    ctx.fillStyle =
-                        "#c9a227";
-
-                    ctx.beginPath();
-
-                    ctx.arc(
-                        px,
-                        pz,
-                        5,
-                        0,
-                        Math.PI * 2
-                    );
-
-                    ctx.fill();
-                }
-            );
-
-            /*
-             * Key.
-             */
-
-            if (
-                Game.keyObject &&
-                Game.keyObject.visible
-            ) {
-
-                const px =
-                    originX +
-                    Game.keyObject
-                        .position.x *
-                    scale;
-
-                const pz =
-                    originY +
-                    Game.keyObject
-                        .position.z *
-                    scale;
-
-                ctx.fillStyle =
-                    "#e6ddca";
-
-                ctx.beginPath();
-
-                ctx.arc(
-                    px,
-                    pz,
-                    5,
-                    0,
-                    Math.PI * 2
-                );
-
-                ctx.fill();
-            }
-
-            /*
-             * Seeker red marker.
-             */
-
-            if (
-                Game.seeker
-            ) {
-
-                const sx =
-                    originX +
-                    Game.seeker.position.x *
-                    scale;
-
-                const sz =
-                    originY +
-                    Game.seeker.position.z *
-                    scale;
-
-                ctx.fillStyle =
-                    "#b33030";
-
-                ctx.beginPath();
-
-                ctx.arc(
-                    sx,
-                    sz,
-                    7,
-                    0,
-                    Math.PI * 2
-                );
-
-                ctx.fill();
-            }
-
-            /*
-             * Player white arrow.
-             */
-
-            if (
-                Game.player
-            ) {
-
-                const px =
-                    originX +
-                    Game.player.position.x *
-                    scale;
-
-                const pz =
-                    originY +
-                    Game.player.position.z *
-                    scale;
-
-                ctx.save();
-
-                ctx.translate(
-                    px,
-                    pz
-                );
-
-                ctx.rotate(
-                    -Game.yaw
-                );
-
-                ctx.fillStyle =
-                    "#ffffff";
-
-                ctx.beginPath();
-
-                ctx.moveTo(
-                    0,
-                    -11
-                );
-
-                ctx.lineTo(
-                    7,
-                    8
-                );
-
-                ctx.lineTo(
-                    0,
-                    4
-                );
-
-                ctx.lineTo(
-                    -7,
-                    8
-                );
-
-                ctx.closePath();
-
-                ctx.fill();
-
-                ctx.restore();
-            }
-        };
-
-    /* ========================================================
-       CONTROLS
-    ======================================================== */
-
-    Game.createControls =
-        function() {
-
-            window.addEventListener(
-                "keydown",
-                event => {
-
-                    Game.keys[
-                        event.code
-                    ] =
-                        true;
-
-                    if (
-                        event.code ===
-                        "Space"
-                    ) {
-
-                        event.preventDefault();
-
-                        Game.jump();
-                    }
-
-                    if (
-                        event.code ===
-                        "KeyE"
-                    ) {
-
-                        Game.interact();
-                    }
-                }
-            );
-
-            window.addEventListener(
-                "keyup",
-                event => {
-
-                    Game.keys[
-                        event.code
-                    ] =
-                        false;
-                }
-            );
-
-            document.addEventListener(
-                "mousemove",
-                event => {
-
-                    if (
-                        Game.pointerLocked
-                    ) {
-
-                        Game.look(
-                            event.movementX,
-                            event.movementY
-                        );
-                    }
-                }
-            );
-
-            document.addEventListener(
-                "pointerlockchange",
-                () => {
-
-                    Game.pointerLocked =
-                        document.pointerLockElement ===
-                        Game.renderer.domElement;
-                }
-            );
-
-            Game.renderer.domElement
-                .addEventListener(
-                    "click",
-                    () => {
-
-                        if (
-                            !Game.mobile &&
-                            !Game.pointerLocked
-                        ) {
-
-                            Game.renderer.domElement
-                                .requestPointerLock?.();
-                        }
-                    }
-                );
-
-            /*
-             * Mobile controls.
-             */
-
-            if (
-                Game.mobile
-            ) {
-
-                Game.createMobileControls();
-            }
-
-            /*
-             * Flashlight slot integration.
-             */
-
-            window.addEventListener(
-                "seeker:flashlight-selected",
-                () => {
-
-                    if (
-                        window.SeekerDetails
-                    ) {
-
-                        window.SeekerDetails
-                            .showFlashlight?.();
-                    }
-                }
-            );
-        };
-
-    /* ========================================================
-       MOBILE CONTROLS
-    ======================================================== */
-
-    Game.createMobileControls =
-        function() {
-
-            const root =
-                document.createElement(
-                    "div"
-                );
-
-            root.id =
-                "mobileControls";
-
-            Object.assign(
-                root.style,
-                {
-                    position:
-                        "fixed",
-                    inset:
-                        "0",
-                    pointerEvents:
-                        "none",
-                    zIndex:
-                        "5000"
-                }
-            );
-
-            const joystick =
-                document.createElement(
-                    "div"
-                );
-
-            Object.assign(
-                joystick.style,
-                {
-                    position:
-                        "absolute",
-                    left:
-                        "22px",
-                    bottom:
-                        "28px",
-                    width:
-                        "130px",
-                    height:
-                        "130px",
-                    border:
-                        "1px solid rgba(255,255,255,.18)",
-                    borderRadius:
-                        "50%",
-                    background:
-                        "rgba(10,10,10,.38)",
-                    pointerEvents:
-                        "auto",
-                    touchAction:
-                        "none"
-                }
-            );
-
-            const stick =
-                document.createElement(
-                    "div"
-                );
-
-            Object.assign(
-                stick.style,
-                {
-                    position:
-                        "absolute",
-                    left:
-                        "42px",
-                    top:
-                        "42px",
-                    width:
-                        "46px",
-                    height:
-                        "46px",
-                    borderRadius:
-                        "50%",
-                    background:
-                        "rgba(255,255,255,.18)",
-                    border:
-                        "1px solid rgba(255,255,255,.25)"
-                }
-            );
-
-            joystick.appendChild(
-                stick
-            );
-
-            root.appendChild(
-                joystick
-            );
-
-            const action =
-                document.createElement(
-                    "button"
-                );
-
-            action.textContent =
-                "INTERACT";
-
-            Object.assign(
-                action.style,
-                {
-                    position:
-                        "absolute",
-                    right:
-                        "25px",
-                    bottom:
-                        "42px",
-                    width:
-                        "90px",
-                    height:
-                        "90px",
-                    borderRadius:
-                        "50%",
-                    border:
-                        "1px solid rgba(255,255,255,.18)",
-                    background:
-                        "rgba(10,10,10,.58)",
-                    color:
-                        "#eee",
-                    font:
-                        "800 9px system-ui",
-                    letterSpacing:
-                        "1px",
-                    pointerEvents:
-                        "auto",
-                    touchAction:
-                        "none"
-                }
-            );
-
-            root.appendChild(
-                action
-            );
-
-            const flashlight =
-                document.createElement(
-                    "button"
-                );
-
-            flashlight.textContent =
-                "FLASHLIGHT";
-
-            Object.assign(
-                flashlight.style,
-                {
-                    position:
-                        "absolute",
-                    right:
-                        "32px",
-                    bottom:
-                        "145px",
-                    width:
-                        "100px",
-                    height:
-                        "48px",
-                    borderRadius:
-                        "12px",
-                    border:
-                        "1px solid rgba(255,255,255,.18)",
-                    background:
-                        "rgba(10,10,10,.58)",
-                    color:
-                        "#eee",
-                    font:
-                        "800 9px system-ui",
-                    letterSpacing:
-                        "1px",
-                    pointerEvents:
-                        "auto",
-                    touchAction:
-                        "none"
-                }
-            );
-
-            root.appendChild(
-                flashlight
-            );
-
-            document.body.appendChild(
-                root
-            );
-
-            /*
-             * Joystick.
-             */
-
-            const updateJoystick =
-                event => {
-
-                    const rect =
-                        joystick.getBoundingClientRect();
-
-                    const centerX =
-                        rect.left +
-                        rect.width /
-                        2;
-
-                    const centerY =
-                        rect.top +
-                        rect.height /
-                        2;
-
-                    let dx =
-                        event.clientX -
-                        centerX;
-
-                    let dy =
-                        event.clientY -
-                        centerY;
-
-                    const radius =
-                        rect.width /
-                        2;
-
-                    const length =
-                        Math.sqrt(
-                            dx * dx +
-                            dy * dy
-                        );
-
-                    if (
-                        length >
-                        radius
-                    ) {
-
-                        dx =
-                            dx /
-                            length *
-                            radius;
-
-                        dy =
-                            dy /
-                            length *
-                            radius;
-                    }
-
-                    stick.style.transform =
-                        `translate(${dx}px,${dy}px)`;
-
-                    Game.mobileMove.x =
-                        dx /
-                        radius;
-
-                    Game.mobileMove.y =
-                        -dy /
-                        radius;
                 };
 
-            const resetJoystick =
-                () => {
+            const width =
+                190;
 
-                    stick.style.transform =
-                        "translate(0,0)";
+            const height =
+                150;
 
-                    Game.mobileMove.x =
-                        0;
+            const playerX =
+                convert(
+                    this.player.position.x,
+                    -75,
+                    75,
+                    width
+                );
 
-                    Game.mobileMove.y =
-                        0;
-                };
+            const playerY =
+                convert(
+                    this.player.position.z,
+                    -60,
+                    60,
+                    height
+                );
 
-            joystick.addEventListener(
-                "pointerdown",
-                event => {
+            const seekerX =
+                convert(
+                    this.seeker.position.x,
+                    -75,
+                    75,
+                    width
+                );
 
-                    joystick.setPointerCapture?.(
-                        event.pointerId
-                    );
-
-                    updateJoystick(
-                        event
-                    );
-                }
-            );
-
-            joystick.addEventListener(
-                "pointermove",
-                event => {
-
-                    if (
-                        joystick.hasPointerCapture?.(
-                            event.pointerId
-                        )
-                    ) {
-
-                        updateJoystick(
-                            event
-                        );
-                    }
-                }
-            );
-
-            joystick.addEventListener(
-                "pointerup",
-                resetJoystick
-            );
-
-            joystick.addEventListener(
-                "pointercancel",
-                resetJoystick
-            );
-
-            action.addEventListener(
-                "click",
-                () => {
-
-                    Game.interact();
-                }
-            );
-
-            flashlight.addEventListener(
-                "click",
-                () => {
-
-                    if (
-                        window.SeekerDetails
-                    ) {
-
-                        if (
-                            !window.SeekerDetails
-                                .isFlashlightVisible?.()
-                        ) {
-
-                            window.SeekerDetails
-                                .selectFlashlightSlot?.();
-
-                        } else {
-
-                            window.SeekerDetails
-                                .toggleFlashlight?.();
-                        }
-                    }
-                }
-            );
-
-            /*
-             * Right half of screen = look.
-             */
-
-            let lastX = 0;
-            let lastY = 0;
-            let looking = false;
-
-            window.addEventListener(
-                "pointerdown",
-                event => {
-
-                    if (
-                        !Game.mobile
-                    ) {
-                        return;
-                    }
-
-                    if (
-                        event.clientX <
-                        window.innerWidth *
-                        0.45
-                    ) {
-                        return;
-                    }
-
-                    if (
-                        event.target ===
-                        action ||
-                        event.target ===
-                        flashlight
-                    ) {
-                        return;
-                    }
-
-                    looking =
-                        true;
-
-                    lastX =
-                        event.clientX;
-
-                    lastY =
-                        event.clientY;
-                }
-            );
-
-            window.addEventListener(
-                "pointermove",
-                event => {
-
-                    if (
-                        !looking
-                    ) {
-                        return;
-                    }
-
-                    const dx =
-                        event.clientX -
-                        lastX;
-
-                    const dy =
-                        event.clientY -
-                        lastY;
-
-                    lastX =
-                        event.clientX;
-
-                    lastY =
-                        event.clientY;
-
-                    Game.look(
-                        dx,
-                        dy
-                    );
-                }
-            );
-
-            window.addEventListener(
-                "pointerup",
-                () => {
-
-                    looking =
-                        false;
-                }
-            );
-        };
-
-    /* ========================================================
-       SYSTEM CONNECTION
-    ======================================================== */
-
-    Game.connectSystems =
-        function() {
+            const seekerY =
+                convert(
+                    this.seeker.position.z,
+                    -60,
+                    60,
+                    height
+                );
 
             if (
-                window.SeekerSystem
+                this.minimap.player
             ) {
 
-                window.SeekerSystem
-                    .connectWorld?.({
-                        scene:
-                            Game.scene,
-                        camera:
-                            Game.camera,
-                        player:
-                            Game.player,
-                        seeker:
-                            Game.seeker
-                    });
+                this.minimap.player.style.left =
+                    `${playerX}px`;
 
-                window.SeekerSystem
-                    .startGame?.({
-                        map:
-                            "main",
-                        platform:
-                            Game.mobile
-                                ? "mobile"
-                                : "pc",
-                        setupTime:
-                            180
-                    });
+                this.minimap.player.style.top =
+                    `${playerY}px`;
+
+                this.minimap.player.style.transform =
+                    `translate(-50%, -50%) rotate(${-this.yaw}rad)`;
+
             }
 
-            /*
-             * Details system.
-             */
-
             if (
-                window.SeekerDetails
+                this.minimap.seeker
             ) {
 
-                window.SeekerDetails
-                    .setPlayer?.(
-                        Game.player,
-                        Game.camera
-                    );
+                this.minimap.seeker.style.left =
+                    `${seekerX}px`;
+
+                this.minimap.seeker.style.top =
+                    `${seekerY}px`;
+
+                this.minimap.seeker.style.transform =
+                    `translate(-50%, -50%) rotate(0rad)`;
+
             }
-        };
+        },
 
-    /* ========================================================
-       START
-    ======================================================== */
+        /* ======================================================
+           NETWORK
+           ====================================================== */
 
-    Game.start =
-        function() {
-
+        sendNetworkState() {
             if (
-                Game.started
+                !this.multiplayer ||
+                !this.player ||
+                !window.Main
             ) {
                 return;
             }
 
-            Game.started =
-                true;
-
-            Game.startTime =
+            const now =
                 performance.now();
 
-            Game.clock.start();
-
-            /*
-             * First slot flashlight stays hidden until clicked.
-             */
-
-            window.SeekerDetails
-                ?.hideFlashlight?.();
-
-            /*
-             * Start render loop.
-             */
-
-            Game.animate();
-
-            /*
-             * The player gets 180 seconds before the Seeker.
-             */
-
-            setTimeout(
-                () => {
-
-                    if (
-                        !Game.gameOver
-                    ) {
-
-                        Game.wakeSeeker();
-                    }
-
-                },
-                180000
-            );
-        };
-
-    /* ========================================================
-       UPDATE
-    ======================================================== */
-
-    Game.update =
-        function(
-            delta
-        ) {
-
             if (
-                !Game.started ||
-                Game.gameOver
+                now -
+                    this.lastNetworkSend <
+                70
             ) {
                 return;
             }
 
-            Game.updatePlayer(
-                delta
+            this.lastNetworkSend =
+                now;
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:player-state",
+                    {
+                        detail: {
+                            x:
+                                this.player.position.x,
+                            y:
+                                this.player.position.y,
+                            z:
+                                this.player.position.z,
+                            yaw:
+                                this.yaw,
+                            pitch:
+                                this.pitch
+                        }
+                    }
+                )
             );
+        },
 
-            Game.updateObjectives();
+        /* ======================================================
+           REMOTE PLAYERS
+           ====================================================== */
 
-            Game.updateSeeker(
-                delta
-            );
-
-            Game.checkGate();
-
-            Game.checkEscape();
-
-            Game.drawMinimap();
-
-            /*
-             * Connect movement state.
-             */
+        updateRemotePlayer(
+            data
+        ) {
+            const id =
+                data.playerId ||
+                data.id;
 
             if (
-                window.SeekerSystem
+                !id ||
+                id ===
+                    window.Main?.state
+                        ?.localPlayerId
             ) {
-
-                window.SeekerSystem
-                    .setPlayerMoving?.(
-                        Game.player
-                            .userData
-                            .moving,
-                        Game.player
-                            .userData
-                            .speed
-                    );
+                return;
             }
-        };
 
-    /* ========================================================
-       RENDER LOOP
-    ======================================================== */
+            let remote =
+                this.remotePlayers.get(
+                    id
+                );
 
-    Game.animate =
-        function() {
+            if (!remote) {
+
+                const group =
+                    new THREE.Group();
+
+                const body =
+                    new THREE.Mesh(
+                        new THREE.CapsuleGeometry(
+                            0.38,
+                            1.2,
+                            6,
+                            10
+                        ),
+                        this.material(
+                            0x7e8b92,
+                            0.8
+                        )
+                    );
+
+                body.position.y =
+                    1.1;
+
+                const head =
+                    new THREE.Mesh(
+                        new THREE.SphereGeometry(
+                            0.43,
+                            16,
+                            16
+                        ),
+                        this.material(
+                            0x98a1a5,
+                            0.8
+                        )
+                    );
+
+                head.position.y =
+                    2.1;
+
+                group.add(
+                    body,
+                    head
+                );
+
+                this.worldGroup.add(
+                    group
+                );
+
+                remote = {
+                    id,
+                    mesh:
+                        group
+                };
+
+                this.remotePlayers.set(
+                    id,
+                    remote
+                );
+            }
+
+            remote.target =
+                new THREE.Vector3(
+                    Number(
+                        data.x
+                    ) || 0,
+                    Number(
+                        data.y
+                    ) || 1.65,
+                    Number(
+                        data.z
+                    ) || 0
+                );
+
+            remote.targetYaw =
+                Number(
+                    data.yaw
+                ) || 0;
+
+            remote.name =
+                data.name ||
+                "Player";
+        },
+
+        updateRemotePlayers(
+            delta
+        ) {
+            this.remotePlayers.forEach(
+                (remote) => {
+
+                    if (
+                        !remote.target
+                    ) {
+                        return;
+                    }
+
+                    remote.mesh.position.lerp(
+                        remote.target,
+                        Math.min(
+                            1,
+                            delta * 12
+                        )
+                    );
+
+                    if (
+                        Number.isFinite(
+                            remote.targetYaw
+                        )
+                    ) {
+                        remote.mesh.rotation.y =
+                            THREE.MathUtils.lerp(
+                                remote.mesh.rotation.y,
+                                remote.targetYaw,
+                                Math.min(
+                                    1,
+                                    delta * 10
+                                )
+                            );
+                    }
+                }
+            );
+        },
+
+        /* ======================================================
+           LIGHT FLICKER
+           ====================================================== */
+
+        updateLights() {
+            if (
+                !this.flickeringLights
+            ) {
+                return;
+            }
+
+            this.flickeringLights.forEach(
+                (light) => {
+
+                    if (
+                        Math.random() <
+                        0.015
+                    ) {
+
+                        light.intensity =
+                            0.35 +
+                            Math.random() *
+                                1.8;
+
+                    }
+
+                }
+            );
+        },
+
+        /* ======================================================
+           EVENTS
+           ====================================================== */
+
+        bindGameEvents() {
+            window.addEventListener(
+                "seeker:pause",
+                this.pauseFromEventBound =
+                    () => {
+                        this.paused =
+                            true;
+                    }
+            );
+
+            window.addEventListener(
+                "seeker:resume",
+                this.resumeFromEventBound =
+                    () => {
+                        this.paused =
+                            false;
+                    }
+            );
+
+            window.addEventListener(
+                "seeker:mobile-interact",
+                this.mobileInteractBound =
+                    () => {
+                        this.interact();
+                    }
+            );
+
+            window.addEventListener(
+                "seeker:remote-player-state",
+                this.remoteStateBound =
+                    (event) => {
+                        this.updateRemotePlayer(
+                            event.detail || {}
+                        );
+                    }
+            );
+        },
+
+        /* ======================================================
+           RESIZE
+           ====================================================== */
+
+        resize() {
+            if (
+                !this.renderer ||
+                !this.camera
+            ) {
+                return;
+            }
+
+            const width =
+                window.innerWidth;
+
+            const height =
+                window.innerHeight;
+
+            this.camera.aspect =
+                width / height;
+
+            this.camera.updateProjectionMatrix();
+
+            this.renderer.setSize(
+                width,
+                height,
+                false
+            );
+        },
+
+        /* ======================================================
+           LOOP
+           ====================================================== */
+
+        animate() {
+            if (
+                !this.started
+            ) {
+                return;
+            }
 
             requestAnimationFrame(
-                () => Game.animate()
+                () => this.animate()
             );
 
             const delta =
                 Math.min(
                     0.05,
-                    Game.clock.getDelta()
+                    this.clock.getDelta()
                 );
 
-            Game.update(
-                delta
-            );
-
-            Game.renderer.render(
-                Game.scene,
-                Game.camera
-            );
-
             if (
-                window.SeekerSystem
-            ) {
-
-                window.SeekerSystem
-                    .update?.(
-                        delta
-                    );
-            }
-        };
-
-    /* ========================================================
-       RESIZE
-    ======================================================== */
-
-    Game.resize =
-        function() {
-
-            if (
-                !Game.camera ||
-                !Game.renderer
+                this.paused
             ) {
                 return;
             }
 
-            Game.camera.aspect =
-                window.innerWidth /
-                window.innerHeight;
-
-            Game.camera.updateProjectionMatrix();
-
-            Game.renderer.setSize(
-                window.innerWidth,
-                window.innerHeight
+            this.updateMobileLook(
+                delta
             );
-        };
 
-    /* ========================================================
-       GLOBAL ACCESS
-    ======================================================== */
+            this.updatePlayer(
+                delta
+            );
 
-    window.SeekerGame =
-        Game;
+            this.updateSeeker(
+                delta
+            );
+
+            this.updateRemotePlayers(
+                delta
+            );
+
+            this.updateMinimap();
+
+            this.updateLights();
+
+            this.sendNetworkState();
+
+            if (
+                window.SeekerDetails &&
+                typeof
+                    window.SeekerDetails.update ===
+                    "function"
+            ) {
+                window.SeekerDetails.update(
+                    delta,
+                    this.sprinting
+                );
+            }
+
+            this.renderer.render(
+                this.scene,
+                this.camera
+            );
+        },
+
+        stopAudio() {}
+    };
 
     window.Game =
         Game;
 
-    /* ========================================================
-       AUTO START AFTER DOM
-    ======================================================== */
+    window.SeekerGame =
+        Game;
 
-    function boot() {
+    window.addEventListener(
+        "seeker:remote-player-state",
+        (event) => {
 
-        Game.init();
-
-        /*
-         * Start immediately if there isn't a menu controller.
-         */
-
-        const menu =
-            document.getElementById(
-                "mainMenu"
-            );
-
-        const playButton =
-            document.querySelector(
-                "[data-play-game]"
-            ) ||
-            document.getElementById(
-                "playButton"
-            ) ||
-            document.getElementById(
-                "play"
-            );
-
-        if (
-            playButton
-        ) {
-
-            playButton.addEventListener(
-                "click",
-                () => {
-
-                    Game.start();
-
-                },
-                {
-                    once: true
-                }
-            );
-
-        } else if (
-            !menu
-        ) {
-
-            Game.start();
-
-        } else {
-
-            /*
-             * The menu can start the world later.
-             * The scene is still created immediately, so there
-             * is a real 3D world behind the gameplay interface.
-             */
-
-            window.addEventListener(
-                "seeker:play-requested",
-                () => {
-
-                    Game.start();
-                },
-                {
-                    once: true
-                }
-            );
-        }
-    }
-
-    if (
-        document.readyState ===
-        "loading"
-    ) {
-
-        document.addEventListener(
-            "DOMContentLoaded",
-            boot,
-            {
-                once: true
+            if (
+                event.detail
+            ) {
+                Game.updateRemotePlayer(
+                    event.detail
+                );
             }
-        );
 
-    } else {
-
-        boot();
-    }
+        }
+    );
 
 })();
