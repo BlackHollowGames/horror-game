@@ -1,3215 +1,3215 @@
 /* ============================================================
    THE SEEKER
-   BLACKHOLLOW GAMES
+   BlackHollow Games
    main.js
-
-   MENU + INTRO + LOBBY + MODE + AUDIO + UI
-============================================================ */
+   ============================================================ */
 
 (() => {
     "use strict";
 
     const Main = {
+        ws: null,
+        wsState: "CLOSED",
 
-        introStarted: false,
+        pendingCreateLobby: null,
+        pendingJoinLobby: null,
 
-        menuReady: false,
-
-        gameStarted: false,
-
-        selectedPlatform: "pc",
-
-        selectedMap: "facility",
-
-        modalStack: [],
-
-        lobbyMode: null,
-
+        localPlayerId: null,
+        lobbyCode: "",
         lobby: null,
 
-        network: null,
+        currentMap: "abandoned",
+        selectedMode: "singleplayer",
+        selectedPlatform: "pc",
 
-        serverURL:
-            window.SEEKER_SERVER_URL ||
-            "ws://localhost:8080",
+        playerName:
+            localStorage.getItem("seeker_player_name") ||
+            `Player${Math.floor(1000 + Math.random() * 9000)}`,
 
-        audioUnlocked: false,
+        musicEnabled:
+            localStorage.getItem("seeker_music") !== "false",
 
-        menuMusicStarted: false,
+        sfxEnabled:
+            localStorage.getItem("seeker_sfx") !== "false",
 
-        settings: {
+        volume:
+            Number(localStorage.getItem("seeker_volume")) || 0.75,
 
-            masterVolume: 0.82,
+        introFinished: false,
+        menuReady: false,
+        gameStarted: false,
 
-            musicVolume: 0.68,
+        remotePlayers: new Map(),
 
-            effectsVolume: 0.9,
+        dom: {},
 
-            voiceVolume: 0.85,
+        audio: {
+            menu: null,
+            game: null,
+            boom: null,
+            click: null,
+            success: null,
+            error: null,
+            catch: null,
+            voice: null
+        },
 
-            screenEffects: true,
+        /* ======================================================
+           INITIALIZATION
+           ====================================================== */
 
-            reducedMotion: false
-        }
-    };
+        init() {
+            this.cacheDOM();
+            this.bindButtons();
+            this.setupPlatformButtons();
+            this.setupMapButtons();
+            this.setupSettings();
+            this.setupKeyboard();
+            this.setupAudio();
 
-    /* ========================================================
-       HELPERS
-    ======================================================== */
+            this.updatePlayerNameDisplays();
+            this.updateSettingsUI();
 
-    const $ = selector => {
-        return document.querySelector(
-            selector
-        );
-    };
+            window.Main = this;
 
-    const $$ = selector => {
-        return [
-            ...document.querySelectorAll(
-                selector
-            )
-        ];
-    };
+            this.showMenu();
+        },
 
-    const clamp = (
-        value,
-        min = 0,
-        max = 1
-    ) => {
+        cacheDOM() {
+            const ids = [
+                "intro",
+                "introTitle",
+                "introFlash",
 
-        return Math.max(
-            min,
-            Math.min(
-                max,
-                Number(value) || 0
-            )
-        );
-    };
+                "menu",
+                "menuOverlay",
 
-    const random = (
-        min,
-        max
-    ) => {
+                "game",
+                "gameCanvas",
 
-        return min +
-            Math.random() *
-            (max - min);
-    };
+                "singlePlayerModal",
+                "multiplayerModal",
+                "hostModal",
+                "joinModal",
+                "platformModal",
+                "lobbyModal",
+                "settingsModal",
+                "creditsModal",
 
-    /* ========================================================
-       AUDIO
-    ======================================================== */
+                "hostLobby",
+                "joinLobby",
 
-    Main.unlockAudio =
-        async function() {
+                "lobbyCode",
+                "joinCode",
+                "lobbyName",
+                "playerName",
+                "playerCount",
+                "mapSelect",
+                "lobbyPlayers",
+                "lobbyStatus",
 
-            if (
-                Main.audioUnlocked
-            ) {
-                return true;
+                "networkStatus",
+                "serverStatus",
+                "gameStatus",
+
+                "settingsVolume",
+                "volumeValue",
+                "settingMusic",
+                "settingSfx",
+
+                "pauseMenu",
+                "caughtScreen",
+                "loadingScreen",
+                "loadingText",
+                "loadingProgress",
+
+                "inventorySlot1",
+                "voiceButton",
+                "micButton",
+
+                "backToMenu",
+                "resumeButton",
+                "restartButton"
+            ];
+
+            for (const id of ids) {
+                this.dom[id] = document.getElementById(id);
             }
+        },
 
-            Main.audioUnlocked =
-                true;
+        q(selector) {
+            return document.querySelector(selector);
+        },
 
-            try {
+        qa(selector) {
+            return Array.from(
+                document.querySelectorAll(selector)
+            );
+        },
 
-                if (
-                    window.SeekerSystem
-                ) {
+        /* ======================================================
+           MENU BUTTONS
+           ====================================================== */
 
-                    await window.SeekerSystem
-                        .unlockAudio?.();
-                }
+        bindButtons() {
+            this.bindMany(
+                [
+                    "#playButton",
+                    "#playBtn",
+                    "[data-action='play']",
+                    ".play-button"
+                ],
+                () => this.openPlatformChooser("singleplayer")
+            );
 
-            } catch {}
+            this.bindMany(
+                [
+                    "#singlePlayerButton",
+                    "#singlePlayerBtn",
+                    "[data-action='singleplayer']"
+                ],
+                () => this.openPlatformChooser("singleplayer")
+            );
 
-            return true;
-        };
+            this.bindMany(
+                [
+                    "#multiplayerButton",
+                    "#multiplayerBtn",
+                    "[data-action='multiplayer']"
+                ],
+                () => this.openMultiplayer()
+            );
 
-    Main.playClick =
-        function() {
+            this.bindMany(
+                [
+                    "#settingsButton",
+                    "#settingsBtn",
+                    "[data-action='settings']"
+                ],
+                () => this.openModal("settingsModal")
+            );
 
-            if (
-                window.SeekerSystem &&
-                typeof
-                    window.SeekerSystem
-                        .playAudio ===
-                    "function"
-            ) {
+            this.bindMany(
+                [
+                    "#creditsButton",
+                    "#creditsBtn",
+                    "[data-action='credits']"
+                ],
+                () => this.openModal("creditsModal")
+            );
 
-                window.SeekerSystem
-                    .playAudio(
-                        "ui-click",
-                        "click.mp3",
-                        {
-                            volume:
-                                0.3
+            this.bindMany(
+                [
+                    "#closeSettings",
+                    "#settingsClose"
+                ],
+                () => this.closeModal("settingsModal")
+            );
+
+            this.bindMany(
+                [
+                    "#closeCredits",
+                    "#creditsClose"
+                ],
+                () => this.closeModal("creditsModal")
+            );
+
+            this.bindMany(
+                [
+                    "#closePlatform",
+                    "#platformClose"
+                ],
+                () => this.closeModal("platformModal")
+            );
+
+            this.bindMany(
+                [
+                    "#closeMultiplayer",
+                    "#multiplayerClose"
+                ],
+                () => this.closeModal("multiplayerModal")
+            );
+
+            this.bindMany(
+                [
+                    "#closeHost",
+                    "#hostClose"
+                ],
+                () => this.closeModal("hostModal")
+            );
+
+            this.bindMany(
+                [
+                    "#closeJoin",
+                    "#joinClose"
+                ],
+                () => this.closeModal("joinModal")
+            );
+
+            this.bindMany(
+                [
+                    "#closeLobby",
+                    "#lobbyClose"
+                ],
+                () => this.closeModal("lobbyModal")
+            );
+
+            this.bindMany(
+                [
+                    "#hostButton",
+                    "#hostBtn",
+                    "[data-action='host']"
+                ],
+                () => this.openHost()
+            );
+
+            this.bindMany(
+                [
+                    "#joinButton",
+                    "#joinBtn",
+                    "[data-action='join']"
+                ],
+                () => this.openJoin()
+            );
+
+            this.bindMany(
+                [
+                    "#createLobbyButton",
+                    "#createLobbyBtn",
+                    "[data-action='create-lobby']"
+                ],
+                () => this.createHostLobby()
+            );
+
+            this.bindMany(
+                [
+                    "#joinLobbyButton",
+                    "#joinLobbyBtn",
+                    "[data-action='join-lobby']"
+                ],
+                () => this.joinExistingLobby()
+            );
+
+            this.bindMany(
+                [
+                    "#startGameButton",
+                    "#startGameBtn",
+                    "[data-action='start-game']"
+                ],
+                () => this.startHostedGame()
+            );
+
+            this.bindMany(
+                [
+                    "#leaveLobbyButton",
+                    "#leaveLobbyBtn",
+                    "[data-action='leave-lobby']"
+                ],
+                () => this.leaveLobby()
+            );
+
+            this.bindMany(
+                [
+                    "#copyLobbyCode",
+                    "#copyCodeButton"
+                ],
+                () => this.copyLobbyCode()
+            );
+
+            this.bindMany(
+                [
+                    "#backToMenu",
+                    "#menuButton",
+                    "[data-action='menu']"
+                ],
+                () => this.returnToMenu()
+            );
+
+            this.bindMany(
+                [
+                    "#resumeButton",
+                    "#resumeBtn"
+                ],
+                () => this.resumeGame()
+            );
+
+            this.bindMany(
+                [
+                    "#restartButton",
+                    "#restartBtn"
+                ],
+                () => this.restartGame()
+            );
+
+            this.bindMany(
+                [
+                    "#voiceButton",
+                    "#micButton"
+                ],
+                () => this.toggleVoice()
+            );
+        },
+
+        bindMany(selectors, handler) {
+            for (const selector of selectors) {
+                this.qa(selector).forEach((element) => {
+                    if (
+                        element.dataset.mainBound ===
+                        "true"
+                    ) {
+                        return;
+                    }
+
+                    element.dataset.mainBound = "true";
+
+                    element.addEventListener(
+                        "click",
+                        (event) => {
+                            event.preventDefault();
+                            handler(event);
                         }
                     );
+                });
+            }
+        },
 
+        /* ======================================================
+           INTRO
+           ====================================================== */
+
+        showMenu() {
+            this.gameStarted = false;
+
+            this.hideElement(this.dom.game);
+            this.hideAllModals();
+
+            if (!this.dom.intro) {
+                this.finishIntro();
                 return;
             }
 
-            /*
-             * Procedural click fallback.
-             */
+            this.showElement(this.dom.intro);
+            this.hideElement(this.dom.menu);
 
-            const AC =
-                window.AudioContext ||
-                window.webkitAudioContext;
+            this.playMenuMusic();
 
-            if (!AC) {
+            if (this.introFinished) {
+                this.finishIntro();
                 return;
             }
 
-            try {
+            this.runIntroSequence();
+        },
 
-                const context =
-                    Main._fallbackAudio ||
-                    (
-                        Main._fallbackAudio =
-                        new AC()
-                    );
-
-                if (
-                    context.state ===
-                    "suspended"
-                ) {
-
-                    context.resume()
-                        .catch(
-                            () => {}
-                        );
-                }
-
-                const oscillator =
-                    context.createOscillator();
-
-                const gain =
-                    context.createGain();
-
-                oscillator.type =
-                    "square";
-
-                oscillator.frequency.value =
-                    560;
-
-                gain.gain.setValueAtTime(
-                    .0001,
-                    context.currentTime
-                );
-
-                gain.gain.exponentialRampToValueAtTime(
-                    .045,
-                    context.currentTime +
-                    .005
-                );
-
-                gain.gain.exponentialRampToValueAtTime(
-                    .0001,
-                    context.currentTime +
-                    .055
-                );
-
-                oscillator.connect(
-                    gain
-                );
-
-                gain.connect(
-                    context.destination
-                );
-
-                oscillator.start();
-
-                oscillator.stop(
-                    context.currentTime +
-                    .07
-                );
-
-            } catch {}
-        };
-
-    Main.playHover =
-        function() {
-
-            const AC =
-                window.AudioContext ||
-                window.webkitAudioContext;
-
-            if (!AC) {
-                return;
-            }
-
-            try {
-
-                const context =
-                    Main._hoverAudio ||
-                    (
-                        Main._hoverAudio =
-                        new AC()
-                    );
-
-                const oscillator =
-                    context.createOscillator();
-
-                const gain =
-                    context.createGain();
-
-                oscillator.type =
-                    "sine";
-
-                oscillator.frequency.value =
-                    820;
-
-                gain.gain.setValueAtTime(
-                    .0001,
-                    context.currentTime
-                );
-
-                gain.gain.exponentialRampToValueAtTime(
-                    .025,
-                    context.currentTime +
-                    .005
-                );
-
-                gain.gain.exponentialRampToValueAtTime(
-                    .0001,
-                    context.currentTime +
-                    .04
-                );
-
-                oscillator.connect(
-                    gain
-                );
-
-                gain.connect(
-                    context.destination
-                );
-
-                oscillator.start();
-
-                oscillator.stop(
-                    context.currentTime +
-                    .05
-                );
-
-            } catch {}
-        };
-
-    /* ========================================================
-       CINEMATIC INTRO
-    ======================================================== */
-
-    Main.playIntro =
-        async function() {
-
-            if (
-                Main.introStarted
-            ) {
-                return;
-            }
-
-            Main.introStarted =
-                true;
-
-            const intro =
-                $("#introScreen");
+        runIntroSequence() {
+            const intro = this.dom.intro;
+            const title = this.dom.introTitle;
+            const flash = this.dom.introFlash;
 
             if (!intro) {
-                Main.showMenu();
+                this.finishIntro();
                 return;
             }
 
-            /*
-             * Try to unlock audio from the initial user gesture
-             * when possible.
-             */
-
-            await Main.unlockAudio();
-
-            /*
-             * Intro boom.
-             *
-             * If boom.mp3 exists, it plays.
-             * If not, a procedural cinematic boom is used.
-             */
-
-            setTimeout(
-                () => {
-
-                    Main.playBoom();
-
-                },
-                2680
+            intro.classList.remove(
+                "intro-active",
+                "intro-finished",
+                "intro-boom"
             );
 
-            /*
-             * Screen impact.
-             */
+            if (title) {
+                title.classList.remove(
+                    "intro-text-visible"
+                );
+            }
 
-            setTimeout(
-                () => {
+            if (flash) {
+                flash.classList.remove(
+                    "flash-active"
+                );
+            }
 
-                    document.body
-                        .classList.add(
-                            "intro-impact"
+            void intro.offsetWidth;
+
+            intro.classList.add("intro-active");
+
+            setTimeout(() => {
+                if (title) {
+                    title.classList.add(
+                        "intro-text-visible"
+                    );
+                }
+            }, 450);
+
+            setTimeout(() => {
+                intro.classList.add("intro-boom");
+
+                if (flash) {
+                    flash.classList.add(
+                        "flash-active"
+                    );
+                }
+
+                this.playSound("boom");
+
+                setTimeout(() => {
+                    if (flash) {
+                        flash.classList.remove(
+                            "flash-active"
                         );
-
-                },
-                2750
-            );
-
-            setTimeout(
-                () => {
-
-                    Main.finishIntro();
-
-                },
-                4100
-            );
-        };
-
-    Main.playBoom =
-        function() {
-
-            const audio =
-                $("#introBoomAudio");
-
-            if (
-                audio &&
-                audio.src
-            ) {
-
-                audio.currentTime =
-                    0;
-
-                audio.volume =
-                    Main.settings
-                        .effectsVolume *
-                    Main.settings
-                        .masterVolume;
-
-                audio.play().catch(
-                    () => {
-
-                        Main.proceduralBoom();
                     }
+                }, 450);
+            }, 1450);
+
+            setTimeout(() => {
+                this.finishIntro();
+            }, 2850);
+        },
+
+        finishIntro() {
+            this.introFinished = true;
+
+            if (this.dom.intro) {
+                this.dom.intro.classList.remove(
+                    "intro-active",
+                    "intro-boom"
                 );
 
+                this.dom.intro.classList.add(
+                    "intro-finished"
+                );
+            }
+
+            setTimeout(() => {
+                this.hideElement(this.dom.intro);
+                this.showElement(this.dom.menu);
+                this.menuReady = true;
+            }, 450);
+        },
+
+        /* ======================================================
+           PLATFORM SELECTOR
+           ====================================================== */
+
+        openPlatformChooser(mode = "singleplayer") {
+            this.selectedMode = mode;
+
+            if (!this.dom.platformModal) {
+                this.startSelectedPlatform("pc");
                 return;
             }
 
-            Main.proceduralBoom();
-        };
+            this.showElement(this.dom.platformModal);
+            this.playClick();
+        },
 
-    /* ========================================================
-       BIG PROCEDURAL BOOM
-    ======================================================== */
+        setupPlatformButtons() {
+            const buttons = this.qa(
+                "[data-platform], .platform-choice, .platform-button"
+            );
 
-    Main.proceduralBoom =
-        function() {
-
-            const AC =
-                window.AudioContext ||
-                window.webkitAudioContext;
-
-            if (!AC) {
-                return;
-            }
-
-            try {
-
-                const context =
-                    Main._boomAudio ||
-                    (
-                        Main._boomAudio =
-                        new AC()
-                    );
-
+            buttons.forEach((button) => {
                 if (
-                    context.state ===
-                    "suspended"
+                    button.dataset.platformBound ===
+                    "true"
                 ) {
-
-                    context.resume()
-                        .catch(
-                            () => {}
-                        );
+                    return;
                 }
 
-                const oscillator =
-                    context.createOscillator();
-
-                const sub =
-                    context.createOscillator();
-
-                const gain =
-                    context.createGain();
-
-                const subGain =
-                    context.createGain();
-
-                const filter =
-                    context.createBiquadFilter();
-
-                oscillator.type =
-                    "sawtooth";
-
-                sub.type =
-                    "sine";
-
-                oscillator.frequency.setValueAtTime(
-                    90,
-                    context.currentTime
-                );
-
-                oscillator.frequency.exponentialRampToValueAtTime(
-                    27,
-                    context.currentTime +
-                    .8
-                );
-
-                sub.frequency.setValueAtTime(
-                    45,
-                    context.currentTime
-                );
-
-                sub.frequency.exponentialRampToValueAtTime(
-                    19,
-                    context.currentTime +
-                    1.05
-                );
-
-                filter.type =
-                    "lowpass";
-
-                filter.frequency.value =
-                    260;
-
-                gain.gain.setValueAtTime(
-                    .0001,
-                    context.currentTime
-                );
-
-                gain.gain.exponentialRampToValueAtTime(
-                    .36,
-                    context.currentTime +
-                    .02
-                );
-
-                gain.gain.exponentialRampToValueAtTime(
-                    .0001,
-                    context.currentTime +
-                    1.1
-                );
-
-                subGain.gain.setValueAtTime(
-                    .0001,
-                    context.currentTime
-                );
-
-                subGain.gain.exponentialRampToValueAtTime(
-                    .22,
-                    context.currentTime +
-                    .02
-                );
-
-                subGain.gain.exponentialRampToValueAtTime(
-                    .0001,
-                    context.currentTime +
-                    1.4
-                );
-
-                oscillator.connect(
-                    filter
-                );
-
-                filter.connect(
-                    gain
-                );
-
-                sub.connect(
-                    subGain
-                );
-
-                gain.connect(
-                    context.destination
-                );
-
-                subGain.connect(
-                    context.destination
-                );
-
-                oscillator.start();
-
-                sub.start();
-
-                oscillator.stop(
-                    context.currentTime +
-                    1.2
-                );
-
-                sub.stop(
-                    context.currentTime +
-                    1.5
-                );
-
-            } catch {}
-        };
-
-    Main.finishIntro =
-        function() {
-
-            const intro =
-                $("#introScreen");
-
-            if (!intro) {
-                Main.showMenu();
-                return;
-            }
-
-            intro.classList.add(
-                "is-done"
-            );
-
-            setTimeout(
-                () => {
-
-                    Main.showMenu();
-
-                },
-                650
-            );
-
-            Main.startMenuMusic();
-        };
-
-    /* ========================================================
-       MENU MUSIC
-    ======================================================== */
-
-    Main.startMenuMusic =
-        function() {
-
-            if (
-                Main.menuMusicStarted
-            ) {
-                return;
-            }
-
-            Main.menuMusicStarted =
-                true;
-
-            const audio =
-                $("#menuMusicAudio");
-
-            if (!audio) {
-                return;
-            }
-
-            audio.volume =
-                Main.settings
-                    .musicVolume *
-                Main.settings
-                    .masterVolume *
-                .45;
-
-            audio.play().catch(
-                () => {
-
-                    /*
-                     * Browser autoplay may reject
-                     * until the player clicks.
-                     */
-                }
-            );
-        };
-
-    Main.stopMenuMusic =
-        function() {
-
-            const audio =
-                $("#menuMusicAudio");
-
-            if (!audio) {
-                return;
-            }
-
-            audio.pause();
-
-            audio.currentTime =
-                0;
-
-            Main.menuMusicStarted =
-                false;
-        };
-
-    /* ========================================================
-       MENU
-    ======================================================== */
-
-    Main.showMenu =
-        function() {
-
-            const menu =
-                $("#mainMenu");
-
-            if (!menu) {
-                return;
-            }
-
-            menu.classList.remove(
-                "hidden"
-            );
-
-            document.body.classList.remove(
-                "game-active"
-            );
-
-            document.body.classList.remove(
-                "mobile-mode"
-            );
-
-            Main.closeAllModals();
-
-            Main.updateMenuPlatform();
-
-            Main.menuReady =
-                true;
-        };
-
-    /* ========================================================
-       MODALS
-    ======================================================== */
-
-    Main.openModal =
-        function(id) {
-
-            const modal =
-                document.getElementById(
-                    id
-                );
-
-            if (!modal) {
-                return;
-            }
-
-            Main.playClick();
-
-            modal.classList.add(
-                "open"
-            );
-
-            modal.setAttribute(
-                "aria-hidden",
-                "false"
-            );
-
-            Main.modalStack.push(
-                id
-            );
-
-            document.body.classList.add(
-                "modal-open"
-            );
-        };
-
-    Main.closeModal =
-        function(id) {
-
-            const modal =
-                document.getElementById(
-                    id
-                );
-
-            if (!modal) {
-                return;
-            }
-
-            modal.classList.remove(
-                "open"
-            );
-
-            modal.setAttribute(
-                "aria-hidden",
-                "true"
-            );
-
-            Main.modalStack =
-                Main.modalStack.filter(
-                    value =>
-                        value !== id
-                );
-
-            if (
-                Main.modalStack.length ===
-                0
-            ) {
-
-                document.body.classList.remove(
-                    "modal-open"
-                );
-            }
-        };
-
-    Main.closeAllModals =
-        function() {
-
-            $$(".modal-screen").forEach(
-                modal => {
-
-                    modal.classList.remove(
-                        "open"
+                button.dataset.platformBound =
+                    "true";
+
+                button.addEventListener("click", () => {
+                    const platform =
+                        button.dataset.platform ||
+                        button.getAttribute(
+                            "data-mode"
+                        ) ||
+                        button.textContent
+                            .trim()
+                            .toLowerCase();
+
+                    this.startSelectedPlatform(
+                        platform.includes("mobile")
+                            ? "mobile"
+                            : "pc"
                     );
+                });
+            });
+        },
 
-                    modal.setAttribute(
-                        "aria-hidden",
-                        "true"
-                    );
-                }
-            );
-
-            Main.modalStack =
-                [];
-
-            document.body.classList.remove(
-                "modal-open"
-            );
-        };
-
-    /* ========================================================
-       MODE SELECTION
-    ======================================================== */
-
-    Main.selectPlatform =
-        function(platform) {
-
-            Main.selectedPlatform =
+        startSelectedPlatform(platform) {
+            this.selectedPlatform =
                 platform === "mobile"
                     ? "mobile"
                     : "pc";
 
-            Main.closeModal(
-                "modeModal"
-            );
-
-            Main.beginGameLoading(
-                Main.selectedPlatform,
-                "singleplayer"
-            );
-        };
-
-    Main.updateMenuPlatform =
-        function() {
-
-            document.body.dataset.platform =
-                Main.selectedPlatform;
-        };
-
-    /* ========================================================
-       START SINGLEPLAYER
-    ======================================================== */
-
-    Main.startSingleplayer =
-        function() {
-
-            Main.openModal(
-                "modeModal"
-            );
-        };
-
-    /* ========================================================
-       GAME LOADING
-    ======================================================== */
-
-    Main.beginGameLoading =
-        function(
-            platform,
-            mode
-        ) {
-
-            Main.selectedPlatform =
-                platform;
-
-            Main.updateMenuPlatform();
-
-            Main.closeAllModals();
-
-            document.body.classList.add(
-                "game-loading-active"
-            );
+            this.closeModal("platformModal");
 
             if (
-                platform ===
-                "mobile"
+                this.selectedMode ===
+                "multiplayer"
             ) {
-
-                document.body.classList.add(
-                    "mobile-mode"
-                );
-
-            } else {
-
-                document.body.classList.remove(
-                    "mobile-mode"
-                );
-            }
-
-            const loading =
-                $("#gameLoading");
-
-            if (loading) {
-
-                loading.classList.add(
-                    "visible"
-                );
-
-                loading.classList.remove(
-                    "done"
-                );
-            }
-
-            Main.setLoadingStatus(
-                "LOADING 3D WORLD"
-            );
-
-            Main.stopMenuMusic();
-
-            /*
-             * Start the actual game.
-             */
-
-            setTimeout(
-                () => {
-
-                    Main.setLoadingStatus(
-                        "BUILDING FACILITY"
-                    );
-
-                },
-                300
-            );
-
-            setTimeout(
-                () => {
-
-                    Main.setLoadingStatus(
-                        "CONNECTING SYSTEMS"
-                    );
-
-                },
-                650
-            );
-
-            setTimeout(
-                () => {
-
-                    Main.startActualGame(
-                        platform,
-                        mode
-                    );
-
-                },
-                900
-            );
-        };
-
-    Main.setLoadingStatus =
-        function(text) {
-
-            const status =
-                $("#loadingStatus");
-
-            if (status) {
-
-                status.textContent =
-                    text;
-            }
-        };
-
-    Main.startActualGame =
-        function(
-            platform,
-            mode
-        ) {
-
-            Main.gameStarted =
-                true;
-
-            if (
-                window.SeekerGame
-            ) {
-
-                window.SeekerGame.mobile =
-                    platform === "mobile";
-
-                window.SeekerGame.start?.();
-            }
-
-            document.body.classList.add(
-                "game-active"
-            );
-
-            const menu =
-                $("#mainMenu");
-
-            if (menu) {
-
-                menu.classList.add(
-                    "hidden"
-                );
-            }
-
-            const loading =
-                $("#gameLoading");
-
-            if (loading) {
-
-                loading.classList.add(
-                    "done"
-                );
-
-                setTimeout(
-                    () => {
-
-                        loading.classList.remove(
-                            "visible"
-                        );
-
-                    },
-                    650
-                );
-            }
-
-            Main.updateGameUI();
-
-            if (
-                window.SeekerSystem
-            ) {
-
-                window.SeekerSystem
-                    .startGame?.({
-                        map:
-                            Main.selectedMap,
-                        platform,
-                        mode,
-                        setupTime:
-                            180
-                    });
-            }
-        };
-
-    /* ========================================================
-       HOST LOBBY
-    ======================================================== */
-
-    Main.openHost =
-        function() {
-
-            Main.lobbyMode =
-                "host";
-
-            Main.openModal(
-                "hostModal"
-            );
-        };
-
-    Main.createHostLobby =
-        async function() {
-
-            await Main.unlockAudio();
-
-            const playerName =
-                (
-                    $("#hostNameInput")
-                        ?.value ||
-                    "PLAYER"
-                )
-                    .trim()
-                    .slice(
-                        0,
-                        20
-                    );
-
-            const lobbyName =
-                (
-                    $("#lobbyNameInput")
-                        ?.value ||
-                    "THE SEEKER LOBBY"
-                )
-                    .trim()
-                    .slice(
-                        0,
-                        28
-                    );
-
-            const maxPlayers =
-                Number(
-                    $("#hostPlayerCount")
-                        ?.value ||
-                    4
-                );
-
-            const map =
-                Main.selectedMap ||
-                "facility";
-
-            /*
-             * IMPORTANT:
-             * This does NOT create a fake second lobby.
-             *
-             * We create the host lobby once.
-             * If a real server is connected, the server owns
-             * the actual lobby code and player state.
-             */
-
-            Main.setLobbyStatus(
-                "CREATING REAL LOBBY"
-            );
-
-            if (
-                Main.network?.readyState ===
-                WebSocket.OPEN
-            ) {
-
-                Main.sendNetwork({
-                    type:
-                        "create_lobby",
-                    playerName,
-                    lobbyName,
-                    maxPlayers,
-                    map
-                });
-
+                this.openMultiplayer();
                 return;
             }
 
-            /*
-             * No server:
-             * tell the user clearly instead of pretending.
-             */
+            this.startSingleplayer();
+        },
 
-            Main.showLobbyNetworkError(
-                "SERVER OFFLINE — START server.js TO HOST MULTIPLAYER"
+        /* ======================================================
+           SINGLEPLAYER
+           ====================================================== */
+
+        startSingleplayer() {
+            this.playClick();
+
+            this.showLoading(
+                "Loading singleplayer..."
             );
-        };
 
-    /* ========================================================
-       MAP SELECT
-    ======================================================== */
+            setTimeout(() => {
+                this.hideElement(this.dom.menu);
+                this.hideAllModals();
+                this.showElement(this.dom.game);
 
-    Main.setupMapButtons =
-        function() {
+                this.startGameEngine({
+                    multiplayer: false,
+                    platform:
+                        this.selectedPlatform,
+                    map: "abandoned"
+                });
+            }, 350);
+        },
 
-            $$(
-                "[data-map]"
-            ).forEach(
-                button => {
+        /* ======================================================
+           MULTIPLAYER MENU
+           ====================================================== */
 
-                    button.addEventListener(
-                        "click",
-                        () => {
+        openMultiplayer() {
+            this.selectedMode = "multiplayer";
 
-                            Main.selectedMap =
-                                button.dataset.map;
+            this.playClick();
 
-                            $$(
-                                "[data-map]"
-                            ).forEach(
-                                option => {
-
-                                    option.classList.toggle(
-                                        "active",
-                                        option.dataset.map ===
-                                        Main.selectedMap
-                                    );
-                                }
-                            );
-
-                            Main.playClick();
-                        }
-                    );
-                }
+            this.showElement(
+                this.dom.multiplayerModal
             );
-        };
 
-    /* ========================================================
-       NETWORK
-    ======================================================== */
+            this.connectServer();
+        },
 
-    Main.connectServer =
-        function() {
+        openHost() {
+            this.playClick();
 
-            if (
-                typeof WebSocket ===
-                "undefined"
-            ) {
+            this.closeModal(
+                "multiplayerModal"
+            );
 
-                return false;
+            this.showElement(
+                this.dom.hostModal
+            );
+
+            this.setLobbyStatus(
+                "CONNECTING TO SERVER"
+            );
+
+            this.connectServer();
+
+            if (this.wsState === "OPEN") {
+                this.setLobbyStatus("READY");
             }
+        },
 
+        openJoin() {
+            this.playClick();
+
+            this.closeModal(
+                "multiplayerModal"
+            );
+
+            this.showElement(
+                this.dom.joinModal
+            );
+
+            this.setLobbyStatus(
+                "CONNECTING TO SERVER"
+            );
+
+            this.connectServer();
+
+            setTimeout(() => {
+                if (this.dom.joinCode) {
+                    this.dom.joinCode.focus();
+                }
+            }, 100);
+        },
+
+        /* ======================================================
+           SERVER CONNECTION
+           ====================================================== */
+
+        getServerURL() {
+            return (
+                window.SEEKER_SERVER_URL ||
+                localStorage.getItem(
+                    "seeker_server_url"
+                ) ||
+                "ws://localhost:8080"
+            );
+        },
+
+        connectServer() {
             if (
-                Main.network &&
+                this.ws &&
                 (
-                    Main.network.readyState ===
+                    this.ws.readyState ===
                     WebSocket.OPEN ||
-                    Main.network.readyState ===
+                    this.ws.readyState ===
                     WebSocket.CONNECTING
                 )
             ) {
-
-                return true;
+                return;
             }
 
+            const url =
+                this.getServerURL();
+
+            this.setNetworkStatus(
+                "CONNECTING"
+            );
+
             try {
+                this.ws =
+                    new WebSocket(url);
 
-                Main.network =
-                    new WebSocket(
-                        Main.serverURL
-                    );
+                this.wsState =
+                    "CONNECTING";
 
-                Main.network.addEventListener(
+                this.ws.addEventListener(
                     "open",
                     () => {
+                        this.wsState =
+                            "OPEN";
 
-                        Main.setLobbyStatus(
-                            "CONNECTED TO SERVER"
+                        this.setNetworkStatus(
+                            "ONLINE"
                         );
-
-                        Main.networkReady =
-                            true;
-
-                        Main.updateLobbyControls();
-
-                    }
-                );
-
-                Main.network.addEventListener(
-                    "message",
-                    event => {
-
-                        Main.handleNetworkMessage(
-                            event.data
-                        );
-
-                    }
-                );
-
-                Main.network.addEventListener(
-                    "close",
-                    () => {
-
-                        Main.networkReady =
-                            false;
 
                         if (
-                            Main.lobbyMode
+                            this.pendingCreateLobby
                         ) {
+                            const request =
+                                this.pendingCreateLobby;
 
-                            Main.setLobbyStatus(
+                            this.pendingCreateLobby =
+                                null;
+
+                            this.send(request);
+                        }
+
+                        if (
+                            this.pendingJoinLobby
+                        ) {
+                            const request =
+                                this.pendingJoinLobby;
+
+                            this.pendingJoinLobby =
+                                null;
+
+                            this.send(request);
+                        }
+                    }
+                );
+
+                this.ws.addEventListener(
+                    "message",
+                    (event) => {
+                        this.handleServerMessage(
+                            event.data
+                        );
+                    }
+                );
+
+                this.ws.addEventListener(
+                    "close",
+                    () => {
+                        this.wsState =
+                            "CLOSED";
+
+                        this.setNetworkStatus(
+                            "OFFLINE"
+                        );
+
+                        if (this.lobby) {
+                            this.setLobbyStatus(
                                 "SERVER DISCONNECTED"
                             );
                         }
                     }
                 );
 
-                Main.network.addEventListener(
+                this.ws.addEventListener(
                     "error",
-                    () => {
+                    (error) => {
+                        console.error(
+                            "[THE SEEKER] WebSocket error",
+                            error
+                        );
 
-                        Main.networkReady =
-                            false;
+                        this.wsState =
+                            "ERROR";
+
+                        this.setNetworkStatus(
+                            "ERROR"
+                        );
+
+                        if (
+                            this.lobby
+                        ) {
+                            this.setLobbyStatus(
+                                "SERVER CONNECTION ERROR"
+                            );
+                        }
                     }
+                );
+            } catch (error) {
+                console.error(
+                    "[THE SEEKER] Could not connect",
+                    error
+                );
+
+                this.ws = null;
+                this.wsState = "ERROR";
+
+                this.setNetworkStatus(
+                    "ERROR"
+                );
+            }
+        },
+
+        send(payload) {
+            if (
+                !this.ws ||
+                this.ws.readyState !==
+                    WebSocket.OPEN
+            ) {
+                return false;
+            }
+
+            try {
+                this.ws.send(
+                    JSON.stringify(payload)
                 );
 
                 return true;
-
             } catch (error) {
-
                 console.error(
-                    "[THE SEEKER] WebSocket error",
+                    "[THE SEEKER] Send failed",
                     error
                 );
 
                 return false;
             }
-        };
+        },
 
-    Main.sendNetwork =
-        function(data) {
-
-            if (
-                !Main.network ||
-                Main.network.readyState !==
-                WebSocket.OPEN
-            ) {
-
-                Main.showLobbyNetworkError(
-                    "NOT CONNECTED TO THE MULTIPLAYER SERVER"
-                );
-
-                return false;
-            }
-
-            try {
-
-                Main.network.send(
-                    JSON.stringify(
-                        data
-                    )
-                );
-
-                return true;
-
-            } catch {
-
-                return false;
-            }
-        };
-
-    /* ========================================================
-       NETWORK MESSAGE HANDLER
-    ======================================================== */
-
-    Main.handleNetworkMessage =
-        function(raw) {
-
-            let data;
-
-            try {
-
-                data =
-                    JSON.parse(
-                        raw
-                    );
-
-            } catch {
-
+        disconnectServer() {
+            if (!this.ws) {
                 return;
             }
 
-            switch (
-                data.type
-            ) {
+            try {
+                this.ws.close();
+            } catch (_) {}
 
-                case "lobby_created":
+            this.ws = null;
+            this.wsState = "CLOSED";
+        },
 
-                    Main.receiveCreatedLobby(
-                        data
-                    );
+        /* ======================================================
+           CREATE REAL LOBBY
+           ====================================================== */
 
-                    break;
+        createHostLobby() {
+            const lobbyName =
+                this.readValue(
+                    this.dom.lobbyName,
+                    "The Seeker Lobby"
+                ).trim();
 
-                case "lobby_joined":
+            const playerName =
+                this.readValue(
+                    this.dom.playerName,
+                    this.playerName
+                ).trim();
 
-                    Main.receiveJoinedLobby(
-                        data
-                    );
+            const map =
+                this.getSelectedMap();
 
-                    break;
+            this.playerName =
+                playerName ||
+                this.playerName;
 
-                case "lobby_updated":
+            localStorage.setItem(
+                "seeker_player_name",
+                this.playerName
+            );
 
-                    Main.updateLobbyFromServer(
-                        data
-                    );
-
-                    break;
-
-                case "game_started":
-
-                    Main.receiveGameStarted(
-                        data
-                    );
-
-                    break;
-
-                case "lobby_error":
-
-                    Main.showLobbyNetworkError(
-                        data.message ||
-                        "LOBBY ERROR"
-                    );
-
-                    break;
-
-                case "player_joined":
-
-                    Main.updateLobbyFromServer(
-                        data
-                    );
-
-                    break;
-
-                case "player_left":
-
-                    Main.updateLobbyFromServer(
-                        data
-                    );
-
-                    break;
-
-                case "voice_signal":
-
-                    Main.handleVoiceSignal(
-                        data
-                    );
-
-                    break;
-
-                default:
-
-                    console.log(
-                        "[THE SEEKER] Network message:",
-                        data
-                    );
-            }
-        };
-
-    /* ========================================================
-       CREATED LOBBY
-    ======================================================== */
-
-    Main.receiveCreatedLobby =
-        function(data) {
-
-            Main.lobby =
-                data.lobby ||
-                null;
+            const request = {
+                type: "create_lobby",
+                lobbyName:
+                    lobbyName ||
+                    "The Seeker Lobby",
+                playerName:
+                    this.playerName,
+                maxPlayers: 4,
+                map
+            };
 
             if (
-                !Main.lobby
+                this.wsState !==
+                "OPEN"
             ) {
+                this.pendingCreateLobby =
+                    request;
+
+                this.setLobbyStatus(
+                    "WAITING FOR SERVER..."
+                );
+
+                this.connectServer();
                 return;
             }
 
-            Main.lobbyMode =
-                "host";
-
-            Main.closeModal(
-                "hostModal"
+            this.setLobbyStatus(
+                "CREATING REAL LOBBY..."
             );
 
-            Main.openModal(
-                "hostedLobbyModal"
-            );
+            this.send(request);
+        },
 
-            Main.renderHostedLobby();
+        /* ======================================================
+           JOIN EXISTING REAL LOBBY
+           ====================================================== */
 
-            Main.setLobbyStatus(
-                "CONNECTED — LOBBY READY"
-            );
-
-            Main.updateLobbyControls();
-
-            Main.playClick();
-        };
-
-    /* ========================================================
-       JOIN
-    ======================================================== */
-
-    Main.openJoin =
-        function() {
-
-            Main.lobbyMode =
-                "join";
-
-            const message =
-                $("#joinLobbyMessage");
-
-            if (message) {
-                message.textContent =
-                    "";
-            }
-
-            Main.openModal(
-                "joinModal"
-            );
-        };
-
-    Main.joinLobby =
-        function() {
-
-            const name =
-                (
-                    $("#joinNameInput")
-                        ?.value ||
-                    "PLAYER"
-                )
-                    .trim()
-                    .slice(
-                        0,
-                        20
-                    );
-
+        joinExistingLobby() {
             const code =
-                (
-                    $("#joinCodeInput")
-                        ?.value ||
+                this.readValue(
+                    this.dom.joinCode,
                     ""
                 )
                     .trim()
                     .toUpperCase();
 
-            if (
-                code.length !==
-                6
-            ) {
+            const playerName =
+                this.readValue(
+                    this.dom.playerName,
+                    this.playerName
+                ).trim();
 
-                Main.setJoinMessage(
-                    "ENTER A 6-CHARACTER LOBBY CODE"
+            if (!code) {
+                this.setLobbyStatus(
+                    "ENTER A LOBBY CODE"
+                );
+
+                this.shakeElement(
+                    this.dom.joinCode
                 );
 
                 return;
             }
 
-            /*
-             * IMPORTANT:
-             * Joining NEVER creates a new lobby.
-             *
-             * We send join_lobby with the exact code.
-             */
+            if (code.length < 4) {
+                this.setLobbyStatus(
+                    "INVALID LOBBY CODE"
+                );
 
-            if (
-                !Main.network ||
-                Main.network.readyState !==
-                WebSocket.OPEN
-            ) {
-
-                Main.connectServer();
-
-                setTimeout(
-                    () => {
-
-                        if (
-                            Main.network?.readyState ===
-                            WebSocket.OPEN
-                        ) {
-
-                            Main.sendNetwork({
-                                type:
-                                    "join_lobby",
-                                code,
-                                playerName:
-                                    name
-                            });
-
-                        } else {
-
-                            Main.setJoinMessage(
-                                "SERVER OFFLINE — THIS CODE CANNOT BE JOINED YET"
-                            );
-                        }
-
-                    },
-                    250
+                this.shakeElement(
+                    this.dom.joinCode
                 );
 
                 return;
             }
 
-            Main.sendNetwork({
-                type:
-                    "join_lobby",
+            this.playerName =
+                playerName ||
+                this.playerName;
+
+            localStorage.setItem(
+                "seeker_player_name",
+                this.playerName
+            );
+
+            const request = {
+                type: "join_lobby",
                 code,
                 playerName:
-                    name
-            });
-        };
-
-    /* ========================================================
-       JOINED LOBBY
-    ======================================================== */
-
-    Main.receiveJoinedLobby =
-        function(data) {
-
-            Main.lobby =
-                data.lobby ||
-                null;
+                    this.playerName
+            };
 
             if (
-                !Main.lobby
+                this.wsState !==
+                "OPEN"
             ) {
+                this.pendingJoinLobby =
+                    request;
 
-                Main.setJoinMessage(
-                    "LOBBY WAS NOT FOUND"
+                this.setLobbyStatus(
+                    "WAITING FOR SERVER..."
                 );
 
+                this.connectServer();
                 return;
             }
 
-            Main.lobbyMode =
-                "join";
-
-            Main.closeModal(
-                "joinModal"
+            this.setLobbyStatus(
+                "JOINING LOBBY..."
             );
 
-            Main.openModal(
-                "joinedLobbyModal"
-            );
+            this.send(request);
+        },
 
-            Main.renderJoinedLobby();
+        /* ======================================================
+           HOST START
+           ====================================================== */
 
-            Main.playClick();
-        };
-
-    /* ========================================================
-       LOBBY UPDATE
-    ======================================================== */
-
-    Main.updateLobbyFromServer =
-        function(data) {
-
-            if (
-                data.lobby
-            ) {
-
-                Main.lobby =
-                    data.lobby;
-            }
-
-            if (
-                !Main.lobby
-            ) {
+        startHostedGame() {
+            if (!this.lobby) {
+                this.setLobbyStatus(
+                    "NO LOBBY CONNECTED"
+                );
                 return;
             }
 
-            if (
-                Main.lobbyMode ===
-                "host"
-            ) {
-
-                Main.renderHostedLobby();
-
-            } else if (
-                Main.lobbyMode ===
-                "join"
-            ) {
-
-                Main.renderJoinedLobby();
-            }
-
-            Main.updateLobbyControls();
-        };
-
-    /* ========================================================
-       RENDER HOST LOBBY
-    ======================================================== */
-
-    Main.renderHostedLobby =
-        function() {
+            const hostId =
+                this.lobby.hostId ||
+                this.lobby.host;
 
             if (
-                !Main.lobby
+                hostId &&
+                this.localPlayerId &&
+                hostId !==
+                    this.localPlayerId
             ) {
+                this.setLobbyStatus(
+                    "ONLY THE HOST CAN START"
+                );
                 return;
             }
 
-            Main.setText(
-                "#hostedLobbyCode",
-                Main.lobby.code ||
-                Main.lobby.id ||
-                "------"
-            );
+            const code =
+                this.lobby.code ||
+                this.lobbyCode;
 
-            Main.setText(
-                "#hostedLobbyName",
-                Main.lobby.name ||
-                "THE SEEKER LOBBY"
-            );
-
-            Main.setText(
-                "#hostedLobbyMap",
-                Main.mapLabel(
-                    Main.lobby.map
-                )
-            );
-
-            const players =
-                Main.lobby.players ||
-                [];
-
-            Main.setText(
-                "#hostedPlayerCount",
-                `${players.length} / ${
-                    Main.lobby.maxPlayers ||
-                    4
-                }`
-            );
-
-            const list =
-                $("#hostedPlayerList");
-
-            if (!list) {
+            if (!code) {
+                this.setLobbyStatus(
+                    "LOBBY CODE MISSING"
+                );
                 return;
             }
 
-            list.innerHTML =
-                players.map(
-                    player => {
+            const map =
+                this.lobby.map ||
+                this.currentMap ||
+                "abandoned";
 
-                        return `
-                            <div class="player-list-item">
-                                <span>
-                                    ${Main.escapeHTML(
-                                        player.name ||
-                                        "PLAYER"
-                                    )}
-                                </span>
-
-                                ${
-                                    player.host
-                                    ? `
-                                        <span class="player-host-label">
-                                            HOST
-                                        </span>
-                                    `
-                                    : ""
-                                }
-                            </div>
-                        `;
-                    }
-                ).join("");
-        };
-
-    /* ========================================================
-       RENDER JOINED LOBBY
-    ======================================================== */
-
-    Main.renderJoinedLobby =
-        function() {
-
-            if (
-                !Main.lobby
-            ) {
-                return;
-            }
-
-            Main.setText(
-                "#joinedLobbyCode",
-                Main.lobby.code ||
-                Main.lobby.id ||
-                "------"
+            this.setLobbyStatus(
+                "STARTING GAME..."
             );
 
-            Main.setText(
-                "#joinedLobbyName",
-                Main.lobby.name ||
-                "THE SEEKER LOBBY"
-            );
+            this.playClick();
 
-            Main.setText(
-                "#joinedLobbyMap",
-                Main.mapLabel(
-                    Main.lobby.map
-                )
-            );
+            const sent =
+                this.send({
+                    type: "start_game",
+                    code,
+                    map
+                });
 
-            const players =
-                Main.lobby.players ||
-                [];
-
-            Main.setText(
-                "#joinedPlayerCount",
-                `${players.length} / ${
-                    Main.lobby.maxPlayers ||
-                    4
-                }`
-            );
-
-            const list =
-                $("#joinedPlayerList");
-
-            if (!list) {
-                return;
+            if (!sent) {
+                this.setLobbyStatus(
+                    "SERVER CONNECTION LOST"
+                );
             }
+        },
 
-            list.innerHTML =
-                players.map(
-                    player => {
+        /* ======================================================
+           LEAVE LOBBY
+           ====================================================== */
 
-                        return `
-                            <div class="player-list-item">
-                                <span>
-                                    ${Main.escapeHTML(
-                                        player.name ||
-                                        "PLAYER"
-                                    )}
-                                </span>
+        leaveLobby() {
+            const code =
+                this.lobby?.code ||
+                this.lobbyCode;
 
-                                ${
-                                    player.host
-                                    ? `
-                                        <span class="player-host-label">
-                                            HOST
-                                        </span>
-                                    `
-                                    : ""
-                                }
-                            </div>
-                        `;
-                    }
-                ).join("");
-        };
-
-    /* ========================================================
-       LOBBY CONTROLS
-    ======================================================== */
-
-    Main.updateLobbyControls =
-        function() {
-
-            const start =
-                $("#hostStartGameButton");
-
-            if (!start) {
-                return;
-            }
-
-            const players =
-                Main.lobby?.players ||
-                [];
-
-            const canStart =
-                Main.lobbyMode ===
-                    "host" &&
-                Main.network?.readyState ===
-                    WebSocket.OPEN &&
-                players.length >= 1;
-
-            start.disabled =
-                !canStart;
-
-            if (
-                canStart
-            ) {
-
-                start.textContent =
-                    "START GAME";
-
-            } else {
-
-                start.textContent =
-                    Main.network?.readyState ===
-                    WebSocket.OPEN
-                        ? "WAITING FOR SERVER"
-                        : "SERVER OFFLINE";
-            }
-        };
-
-    Main.startHostedGame =
-        function() {
-
-            if (
-                Main.lobbyMode !==
-                "host"
-            ) {
-
-                return;
-            }
-
-            if (
-                !Main.lobby
-            ) {
-                return;
-            }
-
-            /*
-             * ACTUAL multiplayer flow:
-             * host sends the start command to server.
-             * The server broadcasts game_started to everyone.
-             */
-
-            Main.sendNetwork({
-                type:
-                    "start_game",
-                code:
-                    Main.lobby.code ||
-                    Main.lobby.id,
-                map:
-                    Main.lobby.map ||
-                    Main.selectedMap
-            });
-        };
-
-    Main.receiveGameStarted =
-        function(data) {
-
-            Main.selectedMap =
-                data.map ||
-                Main.lobby?.map ||
-                "facility";
-
-            const mode =
-                "multiplayer";
-
-            Main.closeAllModals();
-
-            Main.beginGameLoading(
-                Main.selectedPlatform,
-                mode
-            );
-        };
-
-    /* ========================================================
-       LEAVE LOBBY
-    ======================================================== */
-
-    Main.leaveLobby =
-        function() {
-
-            if (
-                Main.network?.readyState ===
-                WebSocket.OPEN &&
-                Main.lobby
-            ) {
-
-                Main.sendNetwork({
-                    type:
-                        "leave_lobby",
-                    code:
-                        Main.lobby.code ||
-                        Main.lobby.id
+            if (code) {
+                this.send({
+                    type: "leave_lobby",
+                    code
                 });
             }
 
-            Main.lobby =
-                null;
+            this.lobby = null;
+            this.lobbyCode = "";
+            this.remotePlayers.clear();
 
-            Main.lobbyMode =
-                null;
-
-            Main.closeModal(
-                "hostedLobbyModal"
+            this.closeModal(
+                "lobbyModal"
             );
 
-            Main.closeModal(
-                "joinedLobbyModal"
+            this.showElement(
+                this.dom.multiplayerModal
             );
 
-            Main.showMenu();
-        };
+            this.setLobbyStatus(
+                "LEFT LOBBY"
+            );
 
-    /* ========================================================
-       VOICE CHAT
-    ======================================================== */
+            this.playClick();
+        },
 
-    Main.enableVoice =
-        async function(button) {
+        /* ======================================================
+           SERVER MESSAGE ROUTER
+           ====================================================== */
 
-            const success =
-                await window.SeekerSystem
-                    ?.startVoiceChat?.();
+        handleServerMessage(raw) {
+            let message;
 
-            if (
-                success
-            ) {
-
-                button.classList.add(
-                    "active"
+            try {
+                message =
+                    typeof raw === "string"
+                        ? JSON.parse(raw)
+                        : raw;
+            } catch (error) {
+                console.error(
+                    "[THE SEEKER] Invalid server message",
+                    raw
                 );
-
-                button.textContent =
-                    "MIC ACTIVE";
-
-            } else {
-
-                button.classList.remove(
-                    "active"
-                );
-
-                button.textContent =
-                    "ENABLE MIC";
-            }
-        };
-
-    /* ========================================================
-       WEBRTC VOICE SIGNAL
-    ======================================================== */
-
-    Main.handleVoiceSignal =
-        async function(data) {
-
-            /*
-             * This is the signaling bridge.
-             * Real media transfer remains WebRTC.
-             */
-
-            if (
-                !window.SeekerSystem
-            ) {
                 return;
             }
 
             if (
-                typeof
-                    window.SeekerSystem
-                        .handleVoiceSignal ===
-                    "function"
+                !message ||
+                typeof message !==
+                    "object"
             ) {
+                return;
+            }
 
-                await window.SeekerSystem
-                    .handleVoiceSignal(
-                        data
+            switch (message.type) {
+                case "connected":
+                    this.handleConnected(
+                        message
+                    );
+                    break;
+
+                case "lobby_created":
+                    this.handleLobbyCreated(
+                        message
+                    );
+                    break;
+
+                case "lobby_joined":
+                    this.handleLobbyJoined(
+                        message
+                    );
+                    break;
+
+                case "lobby_state":
+                case "lobby_updated":
+                    this.handleLobbyState(
+                        message
+                    );
+                    break;
+
+                case "game_started":
+                    this.handleGameStarted(
+                        message
+                    );
+                    break;
+
+                case "player_state":
+                    this.handleRemotePlayerState(
+                        message
+                    );
+                    break;
+
+                case "game_event":
+                    this.handleGameEvent(
+                        message
+                    );
+                    break;
+
+                case "voice_signal":
+                    this.handleVoiceSignal(
+                        message
+                    );
+                    break;
+
+                case "error":
+                    this.handleServerError(
+                        message
+                    );
+                    break;
+
+                case "pong":
+                    break;
+
+                default:
+                    console.debug(
+                        "[THE SEEKER] Unknown server message",
+                        message
                     );
             }
-        };
+        },
 
-    /* ========================================================
-       SETTINGS
-    ======================================================== */
+        /* ======================================================
+           SERVER CONNECTED
+           ====================================================== */
 
-    Main.loadSettings =
-        function() {
+        handleConnected(message) {
+            if (message.playerId) {
+                this.localPlayerId =
+                    message.playerId;
+            }
 
-            try {
+            this.setNetworkStatus(
+                "ONLINE"
+            );
+        },
 
-                const saved =
-                    JSON.parse(
-                        localStorage.getItem(
-                            "the-seeker-main-settings"
-                        ) ||
-                        "null"
+        /* ======================================================
+           LOBBY CREATED
+           ====================================================== */
+
+        handleLobbyCreated(message) {
+            this.lobbyCode =
+                message.code ||
+                message.lobby?.code ||
+                "";
+
+            this.lobby =
+                message.lobby ||
+                {
+                    code:
+                        this.lobbyCode,
+                    lobbyName:
+                        message.lobbyName ||
+                        "The Seeker Lobby",
+                    players: []
+                };
+
+            this.lobby.localPlayerId =
+                message.playerId ||
+                this.localPlayerId;
+
+            this.currentMap =
+                message.map ||
+                this.lobby.map ||
+                "abandoned";
+
+            this.renderLobby();
+
+            this.closeModal(
+                "hostModal"
+            );
+
+            this.closeModal(
+                "joinModal"
+            );
+
+            this.showElement(
+                this.dom.lobbyModal
+            );
+
+            this.setLobbyStatus(
+                `LOBBY CREATED — ${this.lobbyCode}`
+            );
+
+            this.playSuccess();
+        },
+
+        /* ======================================================
+           LOBBY JOINED
+           ====================================================== */
+
+        handleLobbyJoined(message) {
+            this.lobbyCode =
+                message.code ||
+                message.lobby?.code ||
+                this.readValue(
+                    this.dom.joinCode,
+                    ""
+                ).toUpperCase();
+
+            this.lobby =
+                message.lobby ||
+                {
+                    code:
+                        this.lobbyCode,
+                    players: []
+                };
+
+            this.lobby.localPlayerId =
+                message.playerId ||
+                this.localPlayerId;
+
+            this.currentMap =
+                message.map ||
+                this.lobby.map ||
+                "abandoned";
+
+            this.renderLobby();
+
+            this.closeModal(
+                "hostModal"
+            );
+
+            this.closeModal(
+                "joinModal"
+            );
+
+            this.showElement(
+                this.dom.lobbyModal
+            );
+
+            this.setLobbyStatus(
+                `CONNECTED TO ${this.lobbyCode}`
+            );
+
+            this.playSuccess();
+        },
+
+        /* ======================================================
+           LOBBY STATE
+           ====================================================== */
+
+        handleLobbyState(message) {
+            const incoming =
+                message.lobby ||
+                message;
+
+            if (
+                incoming &&
+                typeof incoming ===
+                    "object"
+            ) {
+                this.lobby = {
+                    ...(this.lobby || {}),
+                    ...incoming
+                };
+            }
+
+            if (
+                message.code &&
+                !this.lobbyCode
+            ) {
+                this.lobbyCode =
+                    message.code;
+            }
+
+            if (
+                message.playerId
+            ) {
+                this.localPlayerId =
+                    message.playerId;
+            }
+
+            this.currentMap =
+                this.lobby?.map ||
+                this.currentMap;
+
+            this.renderLobby();
+
+            if (
+                this.lobby &&
+                this.lobby.started ===
+                    true
+            ) {
+                this.handleGameStarted({
+                    type:
+                        "game_started",
+                    code:
+                        this.lobby.code ||
+                        this.lobbyCode,
+                    map:
+                        this.lobby.map ||
+                        this.currentMap
+                });
+            }
+        },
+
+        /* ======================================================
+           GAME STARTED
+           ====================================================== */
+
+        handleGameStarted(message) {
+            const map =
+                message.map ||
+                this.lobby?.map ||
+                this.currentMap ||
+                "abandoned";
+
+            this.currentMap = map;
+
+            if (this.lobby) {
+                this.lobby.started =
+                    true;
+
+                this.lobby.map = map;
+            }
+
+            this.closeModal(
+                "lobbyModal"
+            );
+
+            this.closeModal(
+                "multiplayerModal"
+            );
+
+            this.hideAllModals();
+
+            this.hideElement(
+                this.dom.menu
+            );
+
+            this.showLoading(
+                "Entering the facility..."
+            );
+
+            setTimeout(() => {
+                this.hideElement(
+                    this.dom.loadingScreen
+                );
+
+                this.showElement(
+                    this.dom.game
+                );
+
+                this.gameStarted =
+                    true;
+
+                this.startGameEngine({
+                    multiplayer: true,
+                    platform:
+                        this.selectedPlatform,
+                    map,
+                    lobby:
+                        this.lobby
+                });
+
+                this.playGameMusic();
+            }, 450);
+        },
+
+        /* ======================================================
+           LOBBY RENDERING
+           ====================================================== */
+
+        renderLobby() {
+            const lobby =
+                this.lobby || {};
+
+            const players =
+                Array.isArray(
+                    lobby.players
+                )
+                    ? lobby.players
+                    : [];
+
+            const code =
+                lobby.code ||
+                this.lobbyCode ||
+                "------";
+
+            this.lobbyCode =
+                code;
+
+            if (
+                this.dom.lobbyCode
+            ) {
+                this.dom.lobbyCode.textContent =
+                    code;
+            }
+
+            this.qa(
+                "[data-lobby-code]"
+            ).forEach(
+                (element) => {
+                    if (
+                        element.tagName ===
+                        "INPUT"
+                    ) {
+                        element.value =
+                            code;
+                    } else {
+                        element.textContent =
+                            code;
+                    }
+                }
+            );
+
+            if (
+                this.dom.playerCount
+            ) {
+                const max =
+                    lobby.maxPlayers ||
+                    4;
+
+                this.dom.playerCount.textContent =
+                    `${players.length}/${max}`;
+            }
+
+            this.renderLobbyPlayers(
+                players,
+                lobby
+            );
+
+            this.updateHostStartButton(
+                lobby,
+                players
+            );
+        },
+
+        renderLobbyPlayers(
+            players,
+            lobby
+        ) {
+            if (
+                !this.dom.lobbyPlayers
+            ) {
+                return;
+            }
+
+            this.dom.lobbyPlayers.innerHTML =
+                "";
+
+            players.forEach(
+                (player) => {
+                    const row =
+                        document.createElement(
+                            "div"
+                        );
+
+                    row.className =
+                        "lobby-player";
+
+                    const localId =
+                        lobby.localPlayerId ||
+                        this.localPlayerId;
+
+                    if (
+                        player.id &&
+                        localId &&
+                        player.id ===
+                            localId
+                    ) {
+                        row.classList.add(
+                            "local-player"
+                        );
+                    }
+
+                    const indicator =
+                        document.createElement(
+                            "span"
+                        );
+
+                    indicator.className =
+                        "player-indicator";
+
+                    const name =
+                        document.createElement(
+                            "span"
+                        );
+
+                    name.className =
+                        "player-name";
+
+                    name.textContent =
+                        player.name ||
+                        "Player";
+
+                    const role =
+                        document.createElement(
+                            "span"
+                        );
+
+                    role.className =
+                        "player-role";
+
+                    const hostId =
+                        lobby.hostId ||
+                        lobby.host;
+
+                    role.textContent =
+                        player.id &&
+                        hostId &&
+                        player.id ===
+                            hostId
+                            ? "HOST"
+                            : "PLAYER";
+
+                    row.appendChild(
+                        indicator
+                    );
+
+                    row.appendChild(
+                        name
+                    );
+
+                    row.appendChild(
+                        role
+                    );
+
+                    this.dom.lobbyPlayers.appendChild(
+                        row
+                    );
+                }
+            );
+        },
+
+        updateHostStartButton(
+            lobby,
+            players
+        ) {
+            const button =
+                this.q(
+                    "#startGameButton, #startGameBtn, [data-action='start-game']"
+                );
+
+            if (!button) {
+                return;
+            }
+
+            const hostId =
+                lobby.hostId ||
+                lobby.host;
+
+            const localId =
+                lobby.localPlayerId ||
+                this.localPlayerId;
+
+            const isHost =
+                !hostId ||
+                !localId ||
+                hostId === localId;
+
+            button.disabled =
+                !isHost ||
+                players.length < 1 ||
+                lobby.started === true;
+
+            button.textContent =
+                lobby.started === true
+                    ? "GAME STARTING"
+                    : isHost
+                    ? "START GAME"
+                    : "WAITING FOR HOST";
+        },
+
+        /* ======================================================
+           NETWORK PLAYER STATE
+           ====================================================== */
+
+        handleRemotePlayerState(
+            message
+        ) {
+            const playerId =
+                message.playerId ||
+                message.id;
+
+            if (
+                !playerId ||
+                playerId ===
+                    this.localPlayerId
+            ) {
+                return;
+            }
+
+            this.remotePlayers.set(
+                playerId,
+                {
+                    id: playerId,
+                    name:
+                        message.name ||
+                        "Player",
+                    x:
+                        Number(
+                            message.x
+                        ) || 0,
+                    y:
+                        Number(
+                            message.y
+                        ) || 0,
+                    z:
+                        Number(
+                            message.z
+                        ) || 0,
+                    yaw:
+                        Number(
+                            message.yaw
+                        ) || 0,
+                    pitch:
+                        Number(
+                            message.pitch
+                        ) || 0,
+                    timestamp:
+                        Date.now()
+                }
+            );
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:remote-player-state",
+                    {
+                        detail:
+                            message
+                    }
+                )
+            );
+        },
+
+        sendPlayerState(state) {
+            if (
+                !this.lobby ||
+                !this.gameStarted
+            ) {
+                return;
+            }
+
+            this.send({
+                type: "player_state",
+                code:
+                    this.lobby.code ||
+                    this.lobbyCode,
+                playerId:
+                    this.localPlayerId,
+                name:
+                    this.playerName,
+                ...state
+            });
+        },
+
+        /* ======================================================
+           GAME EVENTS
+           ====================================================== */
+
+        handleGameEvent(message) {
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:network-game-event",
+                    {
+                        detail:
+                            message
+                    }
+                )
+            );
+        },
+
+        sendGameEvent(eventName, data = {}) {
+            if (
+                !this.lobby ||
+                !this.gameStarted
+            ) {
+                return;
+            }
+
+            this.send({
+                type: "game_event",
+                code:
+                    this.lobby.code ||
+                    this.lobbyCode,
+                playerId:
+                    this.localPlayerId,
+                event:
+                    eventName,
+                data
+            });
+        },
+
+        /* ======================================================
+           WEBRTC VOICE SIGNALING
+           ====================================================== */
+
+        handleVoiceSignal(message) {
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:voice-signal",
+                    {
+                        detail:
+                            message
+                    }
+                )
+            );
+
+            if (
+                window.SeekerVoice &&
+                typeof
+                    window.SeekerVoice.handleSignal ===
+                    "function"
+            ) {
+                window.SeekerVoice.handleSignal(
+                    message
+                );
+            }
+        },
+
+        sendVoiceSignal(
+            targetPlayerId,
+            signal
+        ) {
+            this.send({
+                type: "voice_signal",
+                code:
+                    this.lobby?.code ||
+                    this.lobbyCode,
+                target:
+                    targetPlayerId,
+                playerId:
+                    this.localPlayerId,
+                signal
+            });
+        },
+
+        async toggleVoice() {
+            if (
+                window.SeekerVoice &&
+                typeof
+                    window.SeekerVoice.toggle ===
+                    "function"
+            ) {
+                try {
+                    await window.SeekerVoice.toggle();
+                    this.updateVoiceUI();
+                    return;
+                } catch (error) {
+                    console.error(
+                        "[THE SEEKER] Voice error",
+                        error
+                    );
+                }
+            }
+
+            this.setVoiceButtonState(
+                false,
+                "VOICE UNAVAILABLE"
+            );
+        },
+
+        updateVoiceUI() {
+            let active = false;
+
+            if (
+                window.SeekerVoice &&
+                typeof
+                    window.SeekerVoice.isActive ===
+                    "function"
+            ) {
+                active =
+                    !!window.SeekerVoice.isActive();
+            }
+
+            this.setVoiceButtonState(
+                active,
+                active
+                    ? "MIC ON"
+                    : "MIC OFF"
+            );
+        },
+
+        setVoiceButtonState(
+            active,
+            text
+        ) {
+            const buttons = this.qa(
+                "#voiceButton, #micButton, [data-action='voice']"
+            );
+
+            buttons.forEach(
+                (button) => {
+                    button.classList.toggle(
+                        "active",
+                        active
+                    );
+
+                    if (
+                        button.dataset.defaultText ===
+                        undefined
+                    ) {
+                        button.dataset.defaultText =
+                            button.textContent.trim();
+                    }
+
+                    if (
+                        text &&
+                        button.querySelector(
+                            ".voice-label"
+                        )
+                    ) {
+                        button.querySelector(
+                            ".voice-label"
+                        ).textContent =
+                            text;
+                    } else if (
+                        text &&
+                        button.childElementCount === 0
+                    ) {
+                        button.textContent =
+                            text;
+                    }
+                }
+            );
+        },
+
+        /* ======================================================
+           SERVER ERRORS
+           ====================================================== */
+
+        handleServerError(message) {
+            const error =
+                message.message ||
+                "SERVER ERROR";
+
+            this.setLobbyStatus(
+                String(error).toUpperCase()
+            );
+
+            this.showNetworkError(
+                error
+            );
+
+            this.playError();
+        },
+
+        /* ======================================================
+           MAP SELECTION
+           ====================================================== */
+
+        setupMapButtons() {
+            const buttons = this.qa(
+                "[data-map]"
+            );
+
+            buttons.forEach(
+                (button) => {
+                    button.addEventListener(
+                        "click",
+                        () => {
+                            this.currentMap =
+                                button.dataset.map;
+
+                            buttons.forEach(
+                                (item) => {
+                                    item.classList.toggle(
+                                        "selected",
+                                        item ===
+                                            button
+                                    );
+                                }
+                            );
+                        }
+                    );
+                }
+            );
+        },
+
+        getSelectedMap() {
+            if (
+                this.dom.mapSelect
+            ) {
+                if (
+                    this.dom.mapSelect
+                        .value
+                ) {
+                    return this.dom.mapSelect.value;
+                }
+
+                const selected =
+                    this.dom.mapSelect.querySelector(
+                        "option:checked"
                     );
 
                 if (
-                    saved &&
-                    typeof saved ===
-                    "object"
+                    selected &&
+                    selected.value
                 ) {
+                    return selected.value;
+                }
+            }
 
-                    Object.assign(
-                        Main.settings,
-                        saved
+            const selectedButton =
+                this.q(
+                    "[data-map].selected"
+                );
+
+            if (
+                selectedButton
+            ) {
+                return selectedButton.dataset.map;
+            }
+
+            return (
+                this.currentMap ||
+                "abandoned"
+            );
+        },
+
+        /* ======================================================
+           GAME ENGINE
+           ====================================================== */
+
+        startGameEngine(options) {
+            this.gameStarted =
+                true;
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:start",
+                    {
+                        detail:
+                            options
+                    }
+                )
+            );
+
+            if (
+                window.Game &&
+                typeof
+                    window.Game.start ===
+                    "function"
+            ) {
+                try {
+                    window.Game.start(
+                        options
+                    );
+                } catch (error) {
+                    console.error(
+                        "[THE SEEKER] Game.start failed",
+                        error
                     );
                 }
-
-            } catch {}
-        };
-
-    Main.saveSettings =
-        function() {
-
-            try {
-
-                localStorage.setItem(
-                    "the-seeker-main-settings",
-                    JSON.stringify(
-                        Main.settings
-                    )
-                );
-
-            } catch {}
-        };
-
-    Main.setupSettings =
-        function() {
-
-            const master =
-                $("#masterVolume");
-
-            const music =
-                $("#musicVolume");
-
-            const effects =
-                $("#effectsVolume");
-
-            const voice =
-                $("#voiceVolume");
-
-            const screenEffects =
-                $("#screenEffectsToggle");
-
-            const reducedMotion =
-                $("#reducedMotionToggle");
-
-            if (master) {
-
-                master.value =
-                    Main.settings
-                        .masterVolume;
-
-                master.addEventListener(
-                    "input",
-                    () => {
-
-                        Main.settings
-                            .masterVolume =
-                            Number(
-                                master.value
-                            );
-
-                        Main.applyVolumes();
-                    }
-                );
-            }
-
-            if (music) {
-
-                music.value =
-                    Main.settings
-                        .musicVolume;
-
-                music.addEventListener(
-                    "input",
-                    () => {
-
-                        Main.settings
-                            .musicVolume =
-                            Number(
-                                music.value
-                            );
-
-                        Main.applyVolumes();
-                    }
-                );
-            }
-
-            if (effects) {
-
-                effects.value =
-                    Main.settings
-                        .effectsVolume;
-
-                effects.addEventListener(
-                    "input",
-                    () => {
-
-                        Main.settings
-                            .effectsVolume =
-                            Number(
-                                effects.value
-                            );
-
-                        Main.applyVolumes();
-                    }
-                );
-            }
-
-            if (voice) {
-
-                voice.value =
-                    Main.settings
-                        .voiceVolume;
-
-                voice.addEventListener(
-                    "input",
-                    () => {
-
-                        Main.settings
-                            .voiceVolume =
-                            Number(
-                                voice.value
-                            );
-
-                        Main.applyVolumes();
-                    }
-                );
             }
 
             if (
-                screenEffects
+                window.SeekerGame &&
+                typeof
+                    window.SeekerGame.start ===
+                    "function"
             ) {
-
-                screenEffects.checked =
-                    Main.settings
-                        .screenEffects;
-
-                screenEffects.addEventListener(
-                    "change",
-                    () => {
-
-                        Main.settings
-                            .screenEffects =
-                            screenEffects.checked;
-
-                        Main.saveSettings();
-                    }
-                );
-            }
-
-            if (
-                reducedMotion
-            ) {
-
-                reducedMotion.checked =
-                    Main.settings
-                        .reducedMotion;
-
-                reducedMotion.addEventListener(
-                    "change",
-                    () => {
-
-                        Main.settings
-                            .reducedMotion =
-                            reducedMotion.checked;
-
-                        document.documentElement
-                            .style
-                            .setProperty(
-                                "scroll-behavior",
-                                reducedMotion.checked
-                                    ? "auto"
-                                    : "smooth"
-                            );
-
-                        Main.saveSettings();
-                    }
-                );
-            }
-
-            Main.applyVolumes();
-        };
-
-    Main.applyVolumes =
-        function() {
-
-            if (
-                window.SeekerSystem
-            ) {
-
-                window.SeekerSystem
-                    .setVolume?.(
-                        "master",
-                        Main.settings
-                            .masterVolume
+                try {
+                    window.SeekerGame.start(
+                        options
                     );
-
-                window.SeekerSystem
-                    .setVolume?.(
-                        "music",
-                        Main.settings
-                            .musicVolume
+                } catch (error) {
+                    console.error(
+                        "[THE SEEKER] SeekerGame.start failed",
+                        error
                     );
-
-                window.SeekerSystem
-                    .setVolume?.(
-                        "effects",
-                        Main.settings
-                            .effectsVolume
-                    );
-
-                window.SeekerSystem
-                    .setVolume?.(
-                        "voice",
-                        Main.settings
-                            .voiceVolume
-                    );
-            }
-
-            const music =
-                $("#menuMusicAudio");
-
-            if (music) {
-
-                music.volume =
-                    Main.settings
-                        .musicVolume *
-                    Main.settings
-                        .masterVolume *
-                    .45;
-            }
-
-            Main.saveSettings();
-        };
-
-    /* ========================================================
-       UI
-    ======================================================== */
-
-    Main.setText =
-        function(selector, value) {
-
-            const element =
-                $(selector);
-
-            if (
-                element
-            ) {
-
-                element.textContent =
-                    String(
-                        value ??
-                        ""
-                    );
-            }
-        };
-
-    Main.mapLabel =
-        function(map) {
-
-            const labels = {
-
-                facility:
-                    "FACILITY",
-
-                basement:
-                    "BASEMENT",
-
-                forest:
-                    "FOREST"
-            };
-
-            return labels[
-                map
-            ] ||
-                String(
-                    map ||
-                    "FACILITY"
-                ).toUpperCase();
-        };
-
-    Main.setJoinMessage =
-        function(message) {
-
-            Main.setText(
-                "#joinLobbyMessage",
-                message
-            );
-        };
-
-    Main.setLobbyStatus =
-        function(message) {
-
-            Main.setText(
-                "#hostedLobbyStatus",
-                message
-            );
-
-            Main.setText(
-                "#joinedLobbyStatus",
-                message
-            );
-        };
-
-    Main.showLobbyNetworkError =
-        function(message) {
-
-            Main.setJoinMessage(
-                message
-            );
-
-            Main.setLobbyStatus(
-                message
-            );
-
-            Main.showNotification(
-                message
-            );
-        };
-
-    Main.escapeHTML =
-        function(value) {
-
-            return String(
-                value
-            ).replace(
-                /[&<>"']/g,
-                character => {
-
-                    const map = {
-
-                        "&":
-                            "&amp;",
-
-                        "<":
-                            "&lt;",
-
-                        ">":
-                            "&gt;",
-
-                        '"':
-                            "&quot;",
-
-                        "'":
-                            "&#039;"
-                    };
-
-                    return map[
-                        character
-                    ];
                 }
-            );
-        };
-
-    Main.showNotification =
-        function(message) {
-
-            const notification =
-                $("#gameNotification");
-
-            if (!notification) {
-                return;
             }
 
-            notification.textContent =
-                message;
-
-            notification.classList.add(
-                "visible"
-            );
-
-            clearTimeout(
-                Main.notificationTimer
-            );
-
-            Main.notificationTimer =
-                setTimeout(
-                    () => {
-
-                        notification.classList.remove(
-                            "visible"
-                        );
-
-                    },
-                    2500
-                );
-        };
-
-    /* ========================================================
-       GAME HUD
-    ======================================================== */
-
-    Main.updateGameUI =
-        function() {
-
-            const hud =
-                $("#gameHUD");
-
-            if (!hud) {
-                return;
-            }
-
-            document.body.dataset.platform =
-                Main.selectedPlatform;
-
-            document.body.classList.toggle(
-                "mobile-mode",
-                Main.selectedPlatform ===
+            if (
+                this.selectedPlatform ===
                 "mobile"
+            ) {
+                document.body.classList.add(
+                    "mobile-version"
+                );
+
+                document.body.classList.remove(
+                    "pc-version"
+                );
+            } else {
+                document.body.classList.add(
+                    "pc-version"
+                );
+
+                document.body.classList.remove(
+                    "mobile-version"
+                );
+            }
+
+            if (
+                options.multiplayer
+            ) {
+                this.setupMultiplayerGame(
+                    options
+                );
+            }
+
+            this.hideElement(
+                this.dom.loadingScreen
             );
 
-            const mapName =
-                $(".hud-map-name");
-
-            if (mapName) {
-
-                mapName.textContent =
-                    Main.mapLabel(
-                        Main.selectedMap
-                    );
-            }
-        };
-
-    /* ========================================================
-       FLASHLIGHT SLOT
-    ======================================================== */
-
-    Main.setupFlashlight =
-        function() {
-
-            const slot =
-                $("#inventorySlot1");
-
-            const mobile =
-                $("#mobileFlashlightButton");
-
-            if (slot) {
-
-                slot.addEventListener(
-                    "click",
-                    event => {
-
-                        event.stopPropagation();
-
-                        Main.playClick();
-
-                        window.SeekerDetails
-                            ?.selectFlashlightSlot?.();
-
-                        slot.classList.add(
-                            "active"
-                        );
-                    }
-                );
-            }
-
-            if (mobile) {
-
-                mobile.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        if (
-                            !window.SeekerDetails
-                        ) {
-                            return;
-                        }
-
-                        const visible =
-                            window.SeekerDetails
-                                .isFlashlightVisible?.();
-
-                        if (
-                            !visible
-                        ) {
-
-                            window.SeekerDetails
-                                .selectFlashlightSlot?.();
-
-                        } else {
-
-                            window.SeekerDetails
-                                .toggleFlashlight?.();
-                        }
-                    }
-                );
-            }
-
-            window.addEventListener(
-                "seeker:flashlight-selected",
-                () => {
-
-                    Main.setText(
-                        "#flashlightBattery",
-                        "READY"
-                    );
-                }
+            this.showElement(
+                this.dom.game
             );
-        };
 
-    /* ========================================================
-       BUTTON BINDINGS
-    ======================================================== */
+            this.playGameMusic();
+        },
 
-    Main.bindButtons =
-        function() {
-
-            const play =
-                $("#playButton");
-
-            const multiplayer =
-                $("#multiplayerButton");
-
-            const settings =
-                $("#settingsButton");
-
-            const credits =
-                $("#creditsButton");
-
-            if (play) {
-
-                play.addEventListener(
-                    "click",
-                    async () => {
-
-                        await Main.unlockAudio();
-
-                        Main.playClick();
-
-                        Main.startSingleplayer();
+        setupMultiplayerGame(options) {
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:multiplayer-start",
+                    {
+                        detail:
+                            options
                     }
-                );
-            }
-
-            if (multiplayer) {
-
-                multiplayer.addEventListener(
-                    "click",
-                    async () => {
-
-                        await Main.unlockAudio();
-
-                        Main.playClick();
-
-                        Main.connectServer();
-
-                        Main.openModal(
-                            "multiplayerModal"
-                        );
-                    }
-                );
-            }
-
-            if (settings) {
-
-                settings.addEventListener(
-                    "click",
-                    async () => {
-
-                        await Main.unlockAudio();
-
-                        Main.playClick();
-
-                        Main.openModal(
-                            "settingsModal"
-                        );
-                    }
-                );
-            }
-
-            if (credits) {
-
-                credits.addEventListener(
-                    "click",
-                    async () => {
-
-                        await Main.unlockAudio();
-
-                        Main.playClick();
-
-                        Main.openModal(
-                            "creditsModal"
-                        );
-                    }
-                );
-            }
-
-            $("#pcModeButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        Main.selectPlatform(
-                            "pc"
-                        );
-                    }
-                );
-
-            $("#mobileModeButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        Main.selectPlatform(
-                            "mobile"
-                        );
-                    }
-                );
-
-            $("#hostLobbyButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.openHost();
-
-                    }
-                );
-
-            $("#joinLobbyButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.openJoin();
-
-                    }
-                );
-
-            $("#createLobbyButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.createHostLobby();
-
-                    }
-                );
-
-            $("#joinConfirmButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.joinLobby();
-
-                    }
-                );
-
-            $("#hostStartGameButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        Main.startHostedGame();
-
-                    }
-                );
-
-            $("#hostLeaveButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        Main.leaveLobby();
-
-                    }
-                );
-
-            $("#joinedLeaveButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        Main.leaveLobby();
-
-                    }
-                );
-
-            $("#hostVoiceButton")
-                ?.addEventListener(
-                    "click",
-                    event => {
-
-                        Main.enableVoice(
-                            event.currentTarget
-                        );
-                    }
-                );
-
-            $("#joinedVoiceButton")
-                ?.addEventListener(
-                    "click",
-                    event => {
-
-                        Main.enableVoice(
-                            event.currentTarget
-                        );
-                    }
-                );
-
-            $("#closeSettingsButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        Main.closeModal(
-                            "settingsModal"
-                        );
-                    }
-                );
-
-            $$(".modal-close")
-                .forEach(
-                    button => {
-
-                        if (
-                            button.id ===
-                            "hostLeaveButton" ||
-                            button.id ===
-                            "joinedLeaveButton"
-                        ) {
-                            return;
-                        }
-
-                        button.addEventListener(
-                            "click",
-                            () => {
-
-                                Main.playClick();
-
-                                const id =
-                                    button.dataset
-                                        .closeModal;
-
-                                if (id) {
-
-                                    Main.closeModal(
-                                        id
-                                    );
-                                }
-                            }
-                        );
-                    }
-                );
-        };
-
-    /* ========================================================
-       HOVER AUDIO
-    ======================================================== */
-
-    Main.setupHoverAudio =
-        function() {
-
-            $$(".menu-button, .large-action-button, .mode-card, .map-option, .modal-primary-button")
-                .forEach(
-                    button => {
-
-                        button.addEventListener(
-                            "mouseenter",
-                            () => {
-
-                                if (
-                                    !button.dataset
-                                        .hoverPlayed
-                                ) {
-
-                                    Main.playHover();
-
-                                    button.dataset
-                                        .hoverPlayed =
-                                        "1";
-                                }
-
-                                setTimeout(
-                                    () => {
-
-                                        delete button
-                                            .dataset
-                                            .hoverPlayed;
-
-                                    },
-                                    350
-                                );
-                            }
-                        );
-                    }
-                );
-        };
-
-    /* ========================================================
-       ESC KEY
-    ======================================================== */
-
-    Main.setupEscape =
-        function() {
-
-            document.addEventListener(
-                "keydown",
-                event => {
-
-                    if (
-                        event.key !==
-                        "Escape"
-                    ) {
-                        return;
-                    }
-
-                    if (
-                        Main.modalStack.length
-                    ) {
-
-                        const last =
-                            Main.modalStack[
-                                Main.modalStack
-                                    .length - 1
-                            ];
-
-                        Main.closeModal(
-                            last
-                        );
-
-                        return;
-                    }
-
-                    if (
-                        Main.gameStarted &&
-                        window.SeekerSystem
-                    ) {
-
-                        window.SeekerSystem
-                            .togglePause?.();
-                    }
-                }
+                )
             );
-        };
 
-    /* ========================================================
-       ENTER KEY FOR JOIN CODE
-    ======================================================== */
+            this.setupStateRelay();
+        },
 
-    Main.setupJoinEnter =
-        function() {
-
-            const input =
-                $("#joinCodeInput");
-
-            if (!input) {
+        setupStateRelay() {
+            if (
+                this.stateRelayBound
+            ) {
                 return;
             }
 
-            input.addEventListener(
-                "input",
-                () => {
+            this.stateRelayBound =
+                true;
 
-                    input.value =
-                        input.value
-                            .replace(
-                                /[^a-z0-9]/gi,
-                                ""
-                            )
-                            .toUpperCase()
-                            .slice(
-                                0,
-                                6
-                            );
-                }
-            );
-
-            input.addEventListener(
-                "keydown",
-                event => {
-
+            window.addEventListener(
+                "seeker:player-state",
+                (event) => {
                     if (
-                        event.key ===
-                        "Enter"
+                        !this.gameStarted ||
+                        !this.lobby
                     ) {
-
-                        event.preventDefault();
-
-                        Main.joinLobby();
+                        return;
                     }
-                }
-            );
-        };
 
-    /* ========================================================
-       INPUT BRIDGE
-    ======================================================== */
+                    const state =
+                        event.detail ||
+                        {};
 
-    Main.setupGameButtons =
-        function() {
-
-            $("#resumeButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        window.SeekerSystem
-                            ?.resume?.();
-                    }
-                );
-
-            $("#pauseMenuButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        window.SeekerSystem
-                            ?.returnToMenu?.();
-
-                        Main.leaveGame();
-                    }
-                );
-
-            $("#retryButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        Main.leaveGame();
-
-                        setTimeout(
-                            () => {
-
-                                Main.startSingleplayer();
-
-                            },
-                            100
-                        );
-                    }
-                );
-
-            $("#caughtMenuButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        Main.leaveGame();
-                    }
-                );
-
-            $("#mobileInteractButton")
-                ?.addEventListener(
-                    "click",
-                    () => {
-
-                        Main.playClick();
-
-                        window.SeekerGame
-                            ?.interact?.();
-                    }
-                );
-
-            window.addEventListener(
-                "seeker:state-changed",
-                event => {
-
-                    Main.handleStateChange(
-                        event.detail
+                    this.sendPlayerState(
+                        state
                     );
                 }
             );
 
             window.addEventListener(
-                "seeker:button-found",
-                event => {
+                "seeker:game-event",
+                (event) => {
+                    if (
+                        !this.gameStarted ||
+                        !this.lobby
+                    ) {
+                        return;
+                    }
 
-                    const count =
-                        event.detail?.count ||
-                        0;
+                    const detail =
+                        event.detail ||
+                        {};
 
-                    Main.setText(
-                        "#objectiveText",
-                        count >= 3
-                            ? "FIND THE KEY"
-                            : `FIND THE THREE BUTTONS — ${count}/3`
+                    this.sendGameEvent(
+                        detail.event ||
+                            "unknown",
+                        detail.data ||
+                            {}
                     );
                 }
             );
+        },
 
-            window.addEventListener(
-                "seeker:key-collected",
-                () => {
+        /* ======================================================
+           LOADING SCREEN
+           ====================================================== */
 
-                    Main.setText(
-                        "#objectiveText",
-                        "FIND THE EXIT GATE"
-                    );
-                }
+        showLoading(message) {
+            if (
+                !this.dom.loadingScreen
+            ) {
+                return;
+            }
+
+            this.showElement(
+                this.dom.loadingScreen
             );
-
-            window.addEventListener(
-                "seeker:gate-unlocked",
-                () => {
-
-                    Main.setText(
-                        "#objectiveText",
-                        "ESCAPE THE FACILITY"
-                    );
-                }
-            );
-
-            window.addEventListener(
-                "seeker:hunting-started",
-                () => {
-
-                    Main.setText(
-                        "#objectiveText",
-                        "THE SEEKER IS HUNTING YOU"
-                    );
-                }
-            );
-        };
-
-    /* ========================================================
-       STATE HANDLING
-    ======================================================== */
-
-    Main.handleStateChange =
-        function(data = {}) {
-
-            const state =
-                data.state;
-
-            const pause =
-                $("#pauseScreen");
-
-            const caught =
-                $("#caughtScreen");
 
             if (
-                state ===
-                "paused"
+                this.dom.loadingText
             ) {
-
-                pause?.classList.add(
-                    "open"
-                );
-
-            } else {
-
-                pause?.classList.remove(
-                    "open"
-                );
+                this.dom.loadingText.textContent =
+                    message ||
+                    "Loading...";
             }
 
             if (
-                state ===
-                "caught"
+                this.dom.loadingProgress
             ) {
+                this.dom.loadingProgress.style.width =
+                    "0%";
 
-                caught?.classList.add(
-                    "open"
-                );
-
-            } else if (
-                state ===
-                "escaped"
-            ) {
-
-                Main.showNotification(
-                    "YOU ESCAPED"
+                requestAnimationFrame(
+                    () => {
+                        this.dom.loadingProgress.style.width =
+                            "100%";
+                    }
                 );
             }
-        };
+        },
 
-    /* ========================================================
-       LEAVE GAME
-    ======================================================== */
+        /* ======================================================
+           PAUSE
+           ====================================================== */
 
-    Main.leaveGame =
-        function() {
+        pauseGame() {
+            if (
+                !this.gameStarted
+            ) {
+                return;
+            }
 
-            Main.gameStarted =
+            this.showElement(
+                this.dom.pauseMenu
+            );
+
+            document.body.classList.add(
+                "game-paused"
+            );
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:pause"
+                )
+            );
+
+            if (
+                window.Game &&
+                typeof
+                    window.Game.pause ===
+                    "function"
+            ) {
+                window.Game.pause();
+            }
+        },
+
+        resumeGame() {
+            this.hideElement(
+                this.dom.pauseMenu
+            );
+
+            document.body.classList.remove(
+                "game-paused"
+            );
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:resume"
+                )
+            );
+
+            if (
+                window.Game &&
+                typeof
+                    window.Game.resume ===
+                    "function"
+            ) {
+                window.Game.resume();
+            }
+        },
+
+        restartGame() {
+            this.hideElement(
+                this.dom.caughtScreen
+            );
+
+            this.hideElement(
+                this.dom.pauseMenu
+            );
+
+            document.body.classList.remove(
+                "game-paused"
+            );
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:restart"
+                )
+            );
+
+            if (
+                window.Game &&
+                typeof
+                    window.Game.restart ===
+                    "function"
+            ) {
+                window.Game.restart();
+                return;
+            }
+
+            this.startGameEngine({
+                multiplayer:
+                    !!this.lobby,
+                platform:
+                    this.selectedPlatform,
+                map:
+                    this.currentMap,
+                lobby:
+                    this.lobby
+            });
+        },
+
+        /* ======================================================
+           RETURN TO MENU
+           ====================================================== */
+
+        returnToMenu() {
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:stop"
+                )
+            );
+
+            if (
+                window.Game &&
+                typeof
+                    window.Game.stop ===
+                    "function"
+            ) {
+                try {
+                    window.Game.stop();
+                } catch (_) {}
+            }
+
+            this.gameStarted =
                 false;
 
+            this.hideElement(
+                this.dom.game
+            );
+
+            this.hideElement(
+                this.dom.pauseMenu
+            );
+
+            this.hideElement(
+                this.dom.caughtScreen
+            );
+
+            this.hideElement(
+                this.dom.loadingScreen
+            );
+
+            this.hideAllModals();
+
             document.body.classList.remove(
-                "game-active"
+                "game-paused"
             );
 
-            document.body.classList.remove(
-                "mobile-mode"
+            this.showElement(
+                this.dom.menu
             );
 
-            Main.stopMenuMusic();
+            this.playMenuMusic();
+        },
 
-            Main.showMenu();
+        /* ======================================================
+           SETTINGS
+           ====================================================== */
 
-            const caught =
-                $("#caughtScreen");
-
-            const pause =
-                $("#pauseScreen");
-
-            caught?.classList.remove(
-                "open"
-            );
-
-            pause?.classList.remove(
-                "open"
-            );
-
+        setupSettings() {
             if (
-                window.SeekerSystem
+                this.dom.settingsVolume
             ) {
+                this.dom.settingsVolume.value =
+                    this.volume;
 
-                window.SeekerSystem
-                    .stopAllAudio?.();
+                this.dom.settingsVolume.addEventListener(
+                    "input",
+                    () => {
+                        this.volume =
+                            Number(
+                                this.dom.settingsVolume.value
+                            );
+
+                        localStorage.setItem(
+                            "seeker_volume",
+                            String(
+                                this.volume
+                            )
+                        );
+
+                        this.updateSettingsUI();
+                        this.updateAudioVolume();
+                    }
+                );
             }
 
             if (
-                window.SeekerGame
+                this.dom.settingMusic
             ) {
+                this.dom.settingMusic.checked =
+                    this.musicEnabled;
 
-                window.SeekerGame.gameOver =
-                    false;
+                this.dom.settingMusic.addEventListener(
+                    "change",
+                    () => {
+                        this.musicEnabled =
+                            !!this.dom
+                                .settingMusic
+                                .checked;
+
+                        localStorage.setItem(
+                            "seeker_music",
+                            String(
+                                this.musicEnabled
+                            )
+                        );
+
+                        if (
+                            this.musicEnabled
+                        ) {
+                            if (
+                                this.gameStarted
+                            ) {
+                                this.playGameMusic();
+                            } else {
+                                this.playMenuMusic();
+                            }
+                        } else {
+                            this.stopAllMusic();
+                        }
+                    }
+                );
             }
 
-            Main.startMenuMusic();
-        };
+            if (
+                this.dom.settingSfx
+            ) {
+                this.dom.settingSfx.checked =
+                    this.sfxEnabled;
 
-    /* ========================================================
-       FLASHLIGHT FIRST SLOT
-    ======================================================== */
+                this.dom.settingSfx.addEventListener(
+                    "change",
+                    () => {
+                        this.sfxEnabled =
+                            !!this.dom
+                                .settingSfx
+                                .checked;
 
-    Main.bindInventory =
-        function() {
+                        localStorage.setItem(
+                            "seeker_sfx",
+                            String(
+                                this.sfxEnabled
+                            )
+                        );
+                    }
+                );
+            }
+        },
 
-            const slot =
-                $("#inventorySlot1");
+        updateSettingsUI() {
+            if (
+                this.dom.settingsVolume
+            ) {
+                this.dom.settingsVolume.value =
+                    this.volume;
+            }
 
-            if (!slot) {
+            if (
+                this.dom.volumeValue
+            ) {
+                this.dom.volumeValue.textContent =
+                    `${Math.round(
+                        this.volume *
+                            100
+                    )}%`;
+            }
+
+            if (
+                this.dom.settingMusic
+            ) {
+                this.dom.settingMusic.checked =
+                    this.musicEnabled;
+            }
+
+            if (
+                this.dom.settingSfx
+            ) {
+                this.dom.settingSfx.checked =
+                    this.sfxEnabled;
+            }
+        },
+
+        /* ======================================================
+           KEYBOARD
+           ====================================================== */
+
+        setupKeyboard() {
+            document.addEventListener(
+                "keydown",
+                (event) => {
+                    if (
+                        event.code ===
+                        "Escape"
+                    ) {
+                        if (
+                            this.gameStarted
+                        ) {
+                            if (
+                                this.isPaused()
+                            ) {
+                                this.resumeGame();
+                            } else {
+                                this.pauseGame();
+                            }
+
+                            return;
+                        }
+
+                        this.closeTopModal();
+                    }
+                }
+            );
+        },
+
+        isPaused() {
+            return (
+                document.body.classList.contains(
+                    "game-paused"
+                )
+            );
+        },
+
+        /* ======================================================
+           AUDIO
+           ====================================================== */
+
+        setupAudio() {
+            this.audio.menu =
+                this.createAudio(
+                    "audio/menu.mp3"
+                );
+
+            this.audio.game =
+                this.createAudio(
+                    "audio/ambience.mp3"
+                );
+
+            this.audio.boom =
+                this.createAudio(
+                    "audio/boom.mp3"
+                );
+
+            this.audio.click =
+                this.createAudio(
+                    "audio/click.mp3"
+                );
+
+            this.audio.success =
+                this.createAudio(
+                    "audio/success.mp3"
+                );
+
+            this.audio.error =
+                this.createAudio(
+                    "audio/warning.mp3"
+                );
+
+            this.audio.catch =
+                this.createAudio(
+                    "audio/caught.mp3"
+                );
+
+            this.updateAudioVolume();
+        },
+
+        createAudio(src) {
+            const audio =
+                new Audio();
+
+            audio.src = src;
+            audio.preload = "auto";
+
+            return audio;
+        },
+
+        setupAudioEvents() {
+            window.addEventListener(
+                "seeker:menu-click",
+                () => {
+                    this.playClick();
+                }
+            );
+
+            window.addEventListener(
+                "seeker:caught",
+                () => {
+                    this.playCaught();
+                }
+            );
+        },
+
+        playMenuMusic() {
+            if (
+                !this.musicEnabled
+            ) {
                 return;
             }
 
-            slot.addEventListener(
-                "dblclick",
-                () => {
+            this.stopGameMusic();
 
-                    window.SeekerDetails
-                        ?.toggleFlashlight?.();
+            if (
+                !this.audio.menu
+            ) {
+                return;
+            }
+
+            this.audio.menu.loop =
+                true;
+
+            this.audio.menu.volume =
+                Math.min(
+                    1,
+                    this.volume *
+                        0.45
+                );
+
+            this.safePlay(
+                this.audio.menu
+            );
+        },
+
+        playGameMusic() {
+            if (
+                !this.musicEnabled
+            ) {
+                return;
+            }
+
+            this.stopMenuMusic();
+
+            if (
+                !this.audio.game
+            ) {
+                return;
+            }
+
+            this.audio.game.loop =
+                true;
+
+            this.audio.game.volume =
+                Math.min(
+                    1,
+                    this.volume *
+                        0.35
+                );
+
+            this.safePlay(
+                this.audio.game
+            );
+        },
+
+        stopMenuMusic() {
+            if (
+                this.audio.menu
+            ) {
+                this.audio.menu.pause();
+
+                try {
+                    this.audio.menu.currentTime =
+                        0;
+                } catch (_) {}
+            }
+        },
+
+        stopGameMusic() {
+            if (
+                this.audio.game
+            ) {
+                this.audio.game.pause();
+
+                try {
+                    this.audio.game.currentTime =
+                        0;
+                } catch (_) {}
+            }
+        },
+
+        stopAllMusic() {
+            this.stopMenuMusic();
+            this.stopGameMusic();
+        },
+
+        playSound(name) {
+            if (
+                !this.sfxEnabled
+            ) {
+                return;
+            }
+
+            const original =
+                this.audio[name];
+
+            if (!original) {
+                return;
+            }
+
+            let sound;
+
+            try {
+                sound =
+                    original.cloneNode(
+                        true
+                    );
+            } catch (_) {
+                sound =
+                    original;
+            }
+
+            sound.volume =
+                Math.min(
+                    1,
+                    this.volume
+                );
+
+            this.safePlay(
+                sound
+            );
+        },
+
+        playClick() {
+            this.playSound("click");
+        },
+
+        playSuccess() {
+            this.playSound("success");
+        },
+
+        playError() {
+            this.playSound("error");
+        },
+
+        playCaught() {
+            this.stopAllMusic();
+
+            this.playSound("catch");
+
+            this.showElement(
+                this.dom.caughtScreen
+            );
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "seeker:caught-screen"
+                )
+            );
+        },
+
+        safePlay(audio) {
+            if (!audio) {
+                return;
+            }
+
+            const promise =
+                audio.play();
+
+            if (
+                promise &&
+                typeof promise.catch ===
+                    "function"
+            ) {
+                promise.catch(() => {
+                    /*
+                     Browser autoplay protection.
+                     Playback will begin after the
+                     user's next interaction.
+                    */
+                });
+            }
+        },
+
+        updateAudioVolume() {
+            const musicVolume =
+                Math.min(
+                    1,
+                    this.volume *
+                        0.45
+                );
+
+            const gameVolume =
+                Math.min(
+                    1,
+                    this.volume *
+                        0.35
+                );
+
+            if (
+                this.audio.menu
+            ) {
+                this.audio.menu.volume =
+                    musicVolume;
+            }
+
+            if (
+                this.audio.game
+            ) {
+                this.audio.game.volume =
+                    gameVolume;
+            }
+
+            if (
+                this.audio.boom
+            ) {
+                this.audio.boom.volume =
+                    this.volume;
+            }
+
+            if (
+                this.audio.click
+            ) {
+                this.audio.click.volume =
+                    this.volume;
+            }
+
+            if (
+                this.audio.success
+            ) {
+                this.audio.success.volume =
+                    this.volume;
+            }
+
+            if (
+                this.audio.error
+            ) {
+                this.audio.error.volume =
+                    this.volume;
+            }
+
+            if (
+                this.audio.catch
+            ) {
+                this.audio.catch.volume =
+                    this.volume;
+            }
+        },
+
+        /* ======================================================
+           PLAYER NAME
+           ====================================================== */
+
+        updatePlayerNameDisplays() {
+            this.qa(
+                "[data-player-name]"
+            ).forEach(
+                (element) => {
+                    element.textContent =
+                        this.playerName;
                 }
             );
-        };
 
-    /* ========================================================
-       INITIALIZATION
-    ======================================================== */
+            const inputs =
+                this.qa(
+                    "#playerName"
+                );
 
-    Main.init =
-        async function() {
+            inputs.forEach(
+                (input) => {
+                    if (
+                        !input.value
+                    ) {
+                        input.value =
+                            this.playerName;
+                    }
+                }
+            );
+        },
 
-            Main.loadSettings();
+        /* ======================================================
+           UI STATUS
+           ====================================================== */
 
-            Main.bindButtons();
+        setNetworkStatus(status) {
+            const value =
+                String(
+                    status
+                ).toUpperCase();
 
-            Main.setupMapButtons();
+            [
+                this.dom.networkStatus,
+                this.dom.serverStatus
+            ].forEach(
+                (element) => {
+                    if (!element) {
+                        return;
+                    }
 
-            Main.setupSettings();
+                    element.textContent =
+                        value;
 
-            Main.setupFlashlight();
+                    element.dataset.status =
+                        value.toLowerCase();
+                }
+            );
+        },
 
-            Main.setupGameButtons();
+        setLobbyStatus(status) {
+            const value =
+                String(
+                    status
+                );
 
-            Main.setupJoinEnter();
+            if (
+                this.dom.lobbyStatus
+            ) {
+                this.dom.lobbyStatus.textContent =
+                    value;
+            }
 
-            Main.setupEscape();
+            if (
+                this.dom.gameStatus
+            ) {
+                this.dom.gameStatus.textContent =
+                    value;
+            }
+        },
 
-            Main.bindInventory();
+        showNetworkError(message) {
+            const box =
+                this.q(
+                    "#networkError, #serverError"
+                );
 
-            Main.setupHoverAudio();
+            if (!box) {
+                return;
+            }
 
-            Main.connectServer();
+            box.textContent =
+                message;
 
-            Main.updateMenuPlatform();
+            this.showElement(
+                box
+            );
 
-            Main.playIntro();
-        };
+            setTimeout(() => {
+                this.hideElement(
+                    box
+                );
+            }, 5000);
+        },
 
-    window.SeekerMain =
-        Main;
+        /* ======================================================
+           MODALS
+           ====================================================== */
 
-    window.Main =
-        Main;
+        openModal(id) {
+            const element =
+                this.dom[id] ||
+                document.getElementById(
+                    id
+                );
+
+            if (!element) {
+                return;
+            }
+
+            this.showElement(
+                element
+            );
+
+            this.playClick();
+        },
+
+        closeModal(id) {
+            const element =
+                this.dom[id] ||
+                document.getElementById(
+                    id
+                );
+
+            if (!element) {
+                return;
+            }
+
+            this.hideElement(
+                element
+            );
+        },
+
+        hideAllModals() {
+            [
+                "singlePlayerModal",
+                "multiplayerModal",
+                "hostModal",
+                "joinModal",
+                "platformModal",
+                "lobbyModal",
+                "settingsModal",
+                "creditsModal"
+            ].forEach(
+                (id) => {
+                    this.hideElement(
+                        this.dom[id]
+                    );
+                }
+            );
+        },
+
+        hideAllModalsExceptGame() {
+            this.hideAllModals();
+        },
+
+        closeTopModal() {
+            const modalIds = [
+                "creditsModal",
+                "settingsModal",
+                "lobbyModal",
+                "joinModal",
+                "hostModal",
+                "platformModal",
+                "multiplayerModal",
+                "singlePlayerModal"
+            ];
+
+            for (const id of modalIds) {
+                const element =
+                    this.dom[id];
+
+                if (
+                    element &&
+                    this.isVisible(
+                        element
+                    )
+                ) {
+                    this.hideElement(
+                        element
+                    );
+                    return;
+                }
+            }
+        },
+
+        /* ======================================================
+           CLIPBOARD
+           ====================================================== */
+
+        async copyLobbyCode() {
+            const code =
+                this.lobbyCode;
+
+            if (!code) {
+                return;
+            }
+
+            try {
+                if (
+                    navigator.clipboard &&
+                    navigator.clipboard.writeText
+                ) {
+                    await navigator.clipboard.writeText(
+                        code
+                    );
+                } else {
+                    const temp =
+                        document.createElement(
+                            "textarea"
+                        );
+
+                    temp.value =
+                        code;
+
+                    temp.style.position =
+                        "fixed";
+
+                    temp.style.opacity =
+                        "0";
+
+                    document.body.appendChild(
+                        temp
+                    );
+
+                    temp.select();
+
+                    document.execCommand(
+                        "copy"
+                    );
+
+                    temp.remove();
+                }
+
+                this.setLobbyStatus(
+                    "LOBBY CODE COPIED"
+                );
+
+                this.playSuccess();
+            } catch (error) {
+                console.error(
+                    "[THE SEEKER] Clipboard error",
+                    error
+                );
+
+                this.setLobbyStatus(
+                    "COPY FAILED"
+                );
+            }
+        },
+
+        /* ======================================================
+           DOM HELPERS
+           ====================================================== */
+
+        showElement(element) {
+            if (!element) {
+                return;
+            }
+
+            element.hidden = false;
+            element.classList.remove(
+                "hidden"
+            );
+
+            if (
+                element.dataset &&
+                element.dataset.previousDisplay
+            ) {
+                element.style.display =
+                    element.dataset.previousDisplay;
+
+                return;
+            }
+
+            if (
+                element.style.display ===
+                "none"
+            ) {
+                element.style.display =
+                    "";
+            }
+        },
+
+        hideElement(element) {
+            if (!element) {
+                return;
+            }
+
+            if (
+                element.style.display !==
+                "none"
+            ) {
+                element.dataset.previousDisplay =
+                    element.style.display ||
+                    "";
+            }
+
+            element.hidden = true;
+            element.classList.add(
+                "hidden"
+            );
+
+            element.style.display =
+                "none";
+        },
+
+        isVisible(element) {
+            if (!element) {
+                return false;
+            }
+
+            return (
+                !element.hidden &&
+                element.style.display !==
+                    "none" &&
+                !element.classList.contains(
+                    "hidden"
+                )
+            );
+        },
+
+        readValue(
+            element,
+            fallback = ""
+        ) {
+            if (!element) {
+                return fallback;
+            }
+
+            if (
+                typeof element.value ===
+                "string"
+            ) {
+                return element.value;
+            }
+
+            return (
+                element.textContent ||
+                fallback
+            );
+        },
+
+        shakeElement(element) {
+            if (!element) {
+                return;
+            }
+
+            element.classList.remove(
+                "input-shake"
+            );
+
+            void element.offsetWidth;
+
+            element.classList.add(
+                "input-shake"
+            );
+
+            setTimeout(() => {
+                element.classList.remove(
+                    "input-shake"
+                );
+            }, 450);
+        }
+    };
+
+    /* ============================================================
+       GLOBAL EVENTS
+       ============================================================ */
+
+    window.addEventListener(
+        "seeker:seeker-caught-player",
+        () => {
+            Main.playCaught();
+        }
+    );
+
+    window.addEventListener(
+        "seeker:player-caught",
+        () => {
+            Main.playCaught();
+        }
+    );
+
+    window.addEventListener(
+        "seeker:return-menu",
+        () => {
+            Main.returnToMenu();
+        }
+    );
+
+    window.addEventListener(
+        "seeker:voice-state",
+        () => {
+            Main.updateVoiceUI();
+        }
+    );
+
+    /* ============================================================
+       DOM READY
+       ============================================================ */
 
     if (
         document.readyState ===
         "loading"
     ) {
-
         document.addEventListener(
             "DOMContentLoaded",
-            () => {
-
-                Main.init();
-
-            },
-            {
-                once: true
-            }
+            () => Main.init(),
+            { once: true }
         );
-
     } else {
-
         Main.init();
     }
-
 })();
