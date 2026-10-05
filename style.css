@@ -3480,3 +3480,53 @@ select:focus-visible {
             .01ms !important;
     }
 }
+
+
+/* ========================================================================
+   THE SEEKER - EXTRA STATMETERS HUD OVERLAYS
+   ======================================================================== */
+
+#gameplay-meters-hud {
+    position: absolute;
+    top: 24px;
+    right: 28px;
+    font-family: monospace;
+    text-align: right;
+    pointer-events: none;
+    z-index: 100;
+}
+
+#battery-ui-readout {
+    font-size: 11px;
+    font-weight: bold;
+    color: #d4af37;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    text-shadow: 0 0 4px #000;
+}
+
+#stamina-ui-container {
+    width: 140px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 1px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+#stamina-ui-bar {
+    height: 100%;
+    background: rgba(212, 175, 55, 0.85); /* Matches thematic gold */
+    box-shadow: 0 0 6px rgba(212, 175, 55, 0.4);
+    transition: width 0.05s linear;
+}
+
+#timer-ui-display {
+    font-size: 20px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: #ffffff;
+    text-shadow: 0 0 6px #000;
+    margin-top: 4px;
+}

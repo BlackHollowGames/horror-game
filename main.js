@@ -1,12 +1,12 @@
 /* ========================================================================
    THE SEEKER
    BLACKHOLLOW GAMES
-   main.js
+   main.js - ULTIMATE MASSIVE EDITION
    ========================================================================
 
    MAIN APPLICATION COORDINATOR
 
-   This file is intentionally responsible for the client-side application
+   This file is fully responsible for the client-side application
    layer rather than allowing several files to independently control:
 
    - intro sequence
@@ -546,7 +546,7 @@ osc.stop(t + 0.16);
 }
 }
 /* ====================================================================
-NETWORK CLIENT INTERFACE
+NETWORK CLIENT INTERFACE & RECOVERY CORE
 ==================================================================== */
 class SeekerNetwork {
 constructor(appState) {
@@ -555,32 +555,44 @@ this.ws = null;
 this.connected = false;
 this.lobbyCode = "";
 this.isHost = false;
+// Advanced Reconnection/Recovery State
+this.serverUrl = "";
+this.reconnectAttempts = 0;
+this.maxReconnectAttempts = 5;
+this.reconnectDelay = 3000;
+this.onConnectQueue = null;
+// Real-Time Sync Relays
+this.lastThrottledSend = 0;
+this.sendIntervalMs = 50;
 }
 connect(url) {
+this.serverUrl = url;
 this.disconnect();
 try {
+console.log([THE SEEKER NET] Connecting to ${url}...);
 this.ws = new WebSocket(url, APP.PROTOCOL);
 this.ws.onopen = () => {
 this.connected = true;
+this.reconnectAttempts = 0;
 this.app.syncConnectionStatus();
 dispatch("server-connected");
-// Automatically resolve running requests waiting on connection
+console.log("[THE SEEKER NET] Protocol pipeline established.");
 if (this.onConnectQueue) {
 this.onConnectQueue();
 this.onConnectQueue = null;
 }
 };
-this.ws.onclose = () => {
-this.handleDisconnect();
+this.ws.onclose = (event) => {
+this.handleDisconnect(event.wasClean);
 };
 this.ws.onerror = () => {
-this.handleDisconnect();
+this.handleDisconnect(false);
 };
 this.ws.onmessage = (event) => {
 this.parseMessage(event.data);
 };
 } catch (e) {
-this.handleDisconnect();
+this.handleDisconnect(false);
 }
 }
 disconnect() {
@@ -596,7 +608,7 @@ this.ws = null;
 }
 this.connected = false;
 }
-handleDisconnect() {
+handleDisconnect(wasClean) {
 const wasConnected = this.connected;
 this.connected = false;
 this.lobbyCode = "";
@@ -604,6 +616,16 @@ this.isHost = false;
 this.app.syncConnectionStatus();
 if (wasConnected) {
 dispatch("server-disconnected");
+console.warn("[THE SEEKER NET] Pipeline disconnected.");
+}
+// Trigger Automatic Reconnection Sequence if unexpected drop
+if (!wasClean && this.reconnectAttempts < this.maxReconnectAttempts && this.app.state.gameRunning) {
+this.reconnectAttempts++;
+console.log([THE SEEKER NET] Attempting recovery (${this.reconnectAttempts}/${this.maxReconnectAttempts})...);
+setTimeout(() => {
+this.connect(this.serverUrl);
+}, this.reconnectDelay);
+} else if (wasConnected && !this.app.state.gameRunning) {
 this.app.fallbackToOffline();
 }
 }
@@ -615,6 +637,12 @@ return true;
 } catch (_) {
 return false;
 }
+}
+sendThrottledState(payload) {
+const now = performance.now();
+if (now - this.lastThrottledSend < this.sendIntervalMs) return;
+this.lastThrottledSend = now;
+this.send("player-state-relay", payload);
 }
 parseMessage(raw) {
 const msg = parseJSON(raw);
@@ -638,9 +666,93 @@ break;
 case "game-start":
 this.app.launchActiveGameScene(true, msg.seed || 12345);
 break;
+case "peer-state-broadcast":
+if (window.Game && typeof window.Game.updateRemotePlayer === "function") {
+window.Game.updateRemotePlayer(msg.id, msg.state);
+}
+break;
+case "voice-signaling-payload":
+if (this.app.voiceSession) {
+this.app.voiceSession.handleSignalingData(msg.from, msg.signal);
+}
+break;
 case "lobby-error":
 this.app.showNotification(msg.message || "Lobby action rejected.");
 break;
+}
+}
+}
+/* ====================================================================
+REAL-TIME VOICE SIGNALING BRIDGE
+==================================================================== */
+class VoiceSignalingSession {
+constructor(network) {
+this.net = network;
+this.localStream = null;
+this.peerConnections = new Map(); // Tracks active WebRTC endpoints
+}
+async initLocalCapture() {
+try {
+this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+console.log("[THE SEEKER VOICE] Audio capture active.");
+} catch (e) {
+console.warn("[THE SEEKER VOICE] Microphone capture failed or denied:", e);
+}
+}
+registerPeer(peerId, isOfferer) {
+if (!this.localStream) return;
+try {
+const pc = new RTCPeerConnection({
+iceServers: [{ urls: "stun:google.com" }]
+});
+this.localStream.getTracks().forEach(track => pc.addTrack(track, this.localStream));
+pc.onicecandidate = (event) => {
+if (event.candidate) {
+this.net.send("voice-signal", { to: peerId, signal: { ice: event.candidate } });
+}
+};
+pc.ontrack = (event) => {
+const audio = document.createElement("audio");
+audio.srcObject = event.streams[0];
+audio.autoplay = true;
+// Connect spatial positioning elements if needed
+document.body.appendChild(audio);
+};
+this.peerConnections.set(peerId, pc);
+if (isOfferer) {
+pc.createOffer().then(offer => {
+return pc.setLocalDescription(offer);
+}).then(() => {
+this.net.send("voice-signal", { to: peerId, signal: { sdp: pc.localDescription } });
+});
+}
+} catch (_) {}
+}
+async handleSignalingData(fromPeer, signal) {
+let pc = this.peerConnections.get(fromPeer);
+if (!pc) {
+this.registerPeer(fromPeer, false);
+pc = this.peerConnections.get(fromPeer);
+}
+try {
+if (signal.sdp) {
+await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+if (pc.remoteDescription.type === "offer") {
+const answer = await pc.createAnswer();
+await pc.setLocalDescription(answer);
+this.net.send("voice-signal", { to: fromPeer, signal: { sdp: pc.localDescription } });
+}
+} else if (signal.ice) {
+await pc.addIceCandidate(new RTCIceCandidate(signal.ice));
+}
+} catch (_) {}
+}
+terminate() {
+this.peerConnections.forEach(pc => pc.close());
+this.peerConnections.clear();
+if (this.localStream) {
+this.localStream.getTracks().forEach(track => track.stop());
+this.localStream = null;
 }
 }
 }
@@ -651,7 +763,7 @@ class SeekerApplication {
 constructor() {
 this.audio = new AudioBridge();
 this.net = new SeekerNetwork(this);
-// Live State Fields
+this.voiceSession = new VoiceSignalingSession(this.net);
 this.state = {
 introActive: true,
 currentScreen: "intro",
@@ -660,7 +772,6 @@ playerName: DEFAULTS.playerName,
 selectedMap: DEFAULTS.map,
 gameRunning: false
 };
-// Cached DOM Element References
 this.dom = {};
 }
 run() {
@@ -669,6 +780,7 @@ this.cacheElements();
 this.bindInputEvents();
 this.applyInitialUIVisibility();
 this.beginIntroTimeline();
+this.bindSystemEventBridges();
 }
 loadSavedPreferences() {
 this.state.playerName = cleanPlayerName(readStorage(STORAGE_KEYS.PLAYER_NAME, DEFAULTS.playerName));
@@ -702,13 +814,11 @@ this.dom[id] = document.getElementById(id);
 });
 }
 applyInitialUIVisibility() {
-// Guarantee precise layout states on clean load
 if (this.dom["intro-screen"]) this.dom["intro-screen"].style.display = "flex";
 if (this.dom["menu-screen"]) this.dom["menu-screen"].style.display = "none";
 if (this.dom["loading-screen"]) this.dom["loading-screen"].style.display = "none";
 if (this.dom["game-screen"]) this.dom["game-screen"].style.display = "none";
 if (this.dom["hud-mobile-controls"]) this.dom["hud-mobile-controls"].style.display = "none";
-// Sync structural inputs with internal preferences state variables
 if (this.dom["input-player-name"]) this.dom["input-player-name"].value = this.state.playerName;
 if (this.dom["select-game-map"]) this.dom["select-game-map"].value = this.state.selectedMap;
 if (this.dom["settings-toggle-music"]) this.dom["settings-toggle-music"].checked = this.audio.settings.music;
@@ -727,7 +837,6 @@ if (this.dom["intro-title-line2"]) this.dom["intro-title-line2"].classList.add("
 await delay(2000);
 if (!this.state.introActive) return;
 if (this.dom["intro-prompt"]) this.dom["intro-prompt"].classList.add("pulse");
-// Safeguard automatic bypass fallback trigger
 await delay(DEFAULTS.introFinishTime);
 if (this.state.introActive) {
 this.exitIntroTimeline();
@@ -745,7 +854,6 @@ this.dom["intro-screen"].style.opacity = "0";
 setTimeout(() => {
 if (this.dom["intro-screen"]) this.dom["intro-screen"].style.display = "none";
 this.switchGlobalScreen("menu");
-// Establish connection immediately upon hitting main menu loop
 const savedURL = readStorage(STORAGE_KEYS.SERVER_URL, DEFAULTS.serverURL);
 this.net.connect(savedURL);
 }, DEFAULTS.introFadeTime);
@@ -755,15 +863,21 @@ this.state.currentScreen = screenName;
 if (this.dom["menu-screen"]) this.dom["menu-screen"].style.display = screenName === "menu" ? "flex" : "none";
 if (this.dom["loading-screen"]) this.dom["loading-screen"].style.display = screenName === "loading" ? "flex" : "none";
 if (this.dom["game-screen"]) this.dom["game-screen"].style.display = screenName === "game" ? "block" : "none";
-// FIXED: Explicitly dictate mobile environment controls based strictly on verified active preferences state flag
 if (this.dom["hud-mobile-controls"]) {
 if (screenName === "game" && this.state.platform === "mobile") {
-this.dom["hud-mobile-controls"].style.display = "grid"; // or 'block/flex' depending on architecture spec
+this.dom["hud-mobile-controls"].style.display = "grid";
 } else {
 this.dom["hud-mobile-controls"].style.display = "none";
 }
 }
-// FIXED: If entering the game scene loop container, ensure the graphics framework resizes to actual dimensions rather than rendering blank
+const hotbarContainer = document.getElementById("inventory-hotbar");
+if (hotbarContainer) {
+hotbarContainer.style.display = screenName === "game" ? "flex" : "none";
+}
+const gameplayMeters = document.getElementById("gameplay-meters-hud");
+if (gameplayMeters) {
+gameplayMeters.style.display = screenName === "game" ? "block" : "none";
+}
 if (screenName === "game") {
 setTimeout(() => {
 window.dispatchEvent(new Event("resize"));
@@ -790,10 +904,11 @@ if (this.dom["offline-indicator"]) this.dom["offline-indicator"].style.display =
 }
 showNotification(msg) {
 console.log([THE SEEKER NOTIFICATION] ${msg});
-alert(msg); // Drop-in alert fallback native interface wrapper
+alert(msg);
 }
 fallbackToOffline() {
 this.closeActiveModals();
+this.state.gameRunning = false;
 this.showNotification("Connection lost. Returning to local singleplayer mode.");
 }
 enterLobbyUI(code, hostPrivileges, players) {
@@ -803,6 +918,8 @@ if (this.dom["btn-lobby-start"]) {
 this.dom["btn-lobby-start"].style.display = hostPrivileges ? "block" : "none";
 }
 this.updateLobbyPlayersList(players);
+// Connect to local microphone session immediately upon landing inside room grid
+this.voiceSession.initLocalCapture();
 }
 updateLobbyPlayersList(players) {
 if (!this.dom["lobby-players-container"]) return;
@@ -820,8 +937,14 @@ this.switchGlobalScreen("loading");
 await delay(DEFAULTS.loadingTime);
 this.switchGlobalScreen("game");
 this.state.gameRunning = true;
-// Interface with independent 3D file controller
 if (window.Game && typeof window.Game.start === "function") {
+const slot2Btn = document.getElementById("inventorySlot2");
+if (slot2Btn) {
+const label = slot2Btn.querySelector(".slot-name");
+if (label) label.textContent = "EMPTY";
+const symbol = slot2Btn.querySelector(".slot-icon");
+if (symbol) symbol.className = "slot-icon empty-symbol";
+}
 safeCall(window.Game, "start", {
 multiplayer: isMultiplayer,
 seed: seed,
@@ -833,15 +956,47 @@ name: this.state.playerName
 console.error("[THE SEEKER UI ERROR] window.Game.start module injection could not be found.");
 }
 }
-bindInputEvents() {
-// Screen Keybind Listeners
-window.addEventListener("keydown", (e) => {
-if (this.state.currentScreen === "intro" && (e.code === "Space" || e.code === "Enter")) {
-e.preventDefault();
-this.exitIntroTimeline();
-}
+/* ====================================================================
+GRANULAR EVENT BRIDGE DECODERS
+==================================================================== */
+bindSystemEventBridges() {
+// Decodes individual game events flowing upwards from your 3D scripts
+GAME_EVENT_NAMES.forEach(eventName => {
+window.addEventListener(seeker:${eventName}, (e) => {
+this.handleBridgePayload(eventName, e.detail || {});
 });
-// Main Action Routing Direct Nodes
+});
+// Specific callback targets
+window.addEventListener("seeker:game-ready", () => {
+console.log("[THE SEEKER APP] 3D pipeline reporting operational handoff ready.");
+});
+}
+handleBridgePayload(eventCode, payload) {
+switch (eventCode) {
+case "player-caught":
+this.audio.playIntroDrone(); // Plays heavy death drone sound
+this.switchGlobalScreen("menu");
+this.state.gameRunning = false;
+this.voiceSession.terminate();
+break;
+case "player-escaped":
+this.showNotification("CONGRATULATIONS. YOU HAVE ESCAPED THE FACILITY.");
+this.switchGlobalScreen("menu");
+this.state.gameRunning = false;
+this.voiceSession.terminate();
+break;
+case "flashlight-on":
+if (this.net.connected) this.net.send("sync-event", { action: "flashlight", state: true });
+break;
+case "flashlight-off":
+if (this.net.connected) this.net.send("sync-event", { action: "flashlight", state: false });
+break;
+case "footstep":
+// Broadcast local footstep sound cues to other connection sockets if needed
+break;
+}
+}
+bindInputEvents() {
 if (this.dom["play-btn"]) {
 this.dom["play-btn"].addEventListener("click", () => {
 this.openModalLayout("platformModal");
@@ -862,13 +1017,11 @@ this.dom["credits-btn"].addEventListener("click", () => {
 this.openModalLayout("creditsModal");
 });
 }
-// Close Layout Modal Triggers via Direct Targets
 document.querySelectorAll(".modal-close, .btn-modal-close").forEach(btn => {
 btn.addEventListener("click", () => {
 this.closeActiveModals();
 });
 });
-// Platform Selections Event Chains
 if (this.dom["btn-select-pc"]) {
 this.dom["btn-select-pc"].addEventListener("click", () => {
 this.state.platform = "pc";
@@ -883,10 +1036,8 @@ writeStorage(STORAGE_KEYS.PLATFORM, "mobile");
 this.launchActiveGameScene(false, Math.floor(Math.random() * 99999));
 });
 }
-// Multiplayer Routing Setup Branches
 if (this.dom["btn-host-lobby"]) {
 this.dom["btn-host-lobby"].addEventListener("click", () => {
-// FIXED: Open host modal configurations screen instead of falling silent
 this.openModalLayout("hostModal");
 });
 }
@@ -895,7 +1046,6 @@ this.dom["btn-join-lobby"].addEventListener("click", () => {
 this.openModalLayout("joinModal");
 });
 }
-// FIXED & REMAPPED: Explicitly transmit host structure verification requests back to the operational server interface instance
 if (this.dom["btn-confirm-host"]) {
 this.dom["btn-confirm-host"].addEventListener("click", () => {
 if (!this.net.connected) {
@@ -937,7 +1087,6 @@ platform: this.state.platform
 });
 });
 }
-// Live Room Interaction Hooks
 if (this.dom["btn-lobby-start"]) {
 this.dom["btn-lobby-start"].addEventListener("click", () => {
 if (this.net.isHost) {
@@ -950,10 +1099,10 @@ this.dom["btn-lobby-leave"].addEventListener("click", () => {
 this.net.send("leave-lobby");
 this.net.lobbyCode = "";
 this.net.isHost = false;
+this.voiceSession.terminate();
 this.openModalLayout("multiplayerModal");
 });
 }
-// Realtime Settings Sync Changes
 if (this.dom["input-player-name"]) {
 this.dom["input-player-name"].addEventListener("change", (e) => {
 this.state.playerName = cleanPlayerName(e.target.value);
@@ -967,7 +1116,6 @@ writeStorage(STORAGE_KEYS.MAP, this.state.selectedMap);
 };
 this.dom["select-game-map"].addEventListener("change", this.selectGameMapListener);
 }
-// Live Settings Audio Control Inputs
 if (this.dom["settings-toggle-music"]) {
 this.dom["settings-toggle-music"].addEventListener("change", (e) => {
 writeStorage(STORAGE_KEYS.MUSIC, String(e.target.checked));
@@ -988,6 +1136,19 @@ writeStorage(STORAGE_KEYS.VOLUME, String(v));
 this.audio.configure(this.audio.settings.music, this.audio.settings.sfx, v);
 });
 }
+// Mouse interaction mappings on 2D hotbar nodes
+document.querySelectorAll(".inventory-slot").forEach((btn, index) => {
+btn.addEventListener("click", () => {
+if (this.state.currentScreen !== "game" || !window.Game || !window.Game.started) return;
+const targetSlot = index + 1;
+document.querySelectorAll(".inventory-slot").forEach(s => s.classList.remove("active"));
+btn.classList.add("active");
+if (window.Game.viewmodel) {
+window.Game.viewmodel.switchSlot(targetSlot);
+}
+this.audio.beep();
+});
+});
 }
 }
 /* ====================================================================
@@ -996,7 +1157,6 @@ INITIALIZATION INJECTION ENTRYPOINT
 document.addEventListener("DOMContentLoaded", () => {
 const Seeker = new SeekerApplication();
 Seeker.run();
-// Expose system bridge for global visibility references
 window.SeekerApp = Seeker;
 });
 })();

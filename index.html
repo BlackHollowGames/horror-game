@@ -484,8 +484,8 @@
             </div>
 
 
-            <button
-                id="createLobbyButton"
+           <button
+                id="btn-confirm-host"
                 class="modal-action-button primary"
                 type="button"
             >
@@ -545,12 +545,12 @@
 
             <div class="form-group">
 
-                <label for="joinCode">
+                <label for="join-code-input">
                     LOBBY CODE
                 </label>
 
                 <input
-                    id="joinCode"
+                    id="join-code-input"
                     class="text-input lobby-code-input"
                     maxlength="8"
                     autocomplete="off"
@@ -570,7 +570,7 @@
 
 
             <button
-                id="joinLobbyButton"
+                id="btn-confirm-join"
                 class="modal-action-button primary"
                 type="button"
             >
@@ -617,7 +617,7 @@
                     LOBBY CODE
                 </span>
 
-                <strong id="lobbyCode">
+                <strong id="lobby-code-display">
                     ------
                 </strong>
 
@@ -657,7 +657,7 @@
 
 
             <div
-                id="lobbyPlayers"
+                id="lobby-players-container"
                 class="lobby-player-list"
             ></div>
 
@@ -673,7 +673,7 @@
             <div class="lobby-actions">
 
                 <button
-                    id="startGameButton"
+                    id="btn-lobby-start"
                     class="modal-action-button primary"
                     type="button"
                 >
@@ -681,7 +681,7 @@
                 </button>
 
                 <button
-                    id="leaveLobbyButton"
+                    id="btn-lobby-leave"
                     class="modal-action-button"
                     type="button"
                 >
@@ -1047,7 +1047,7 @@
                     </span>
 
                     <strong id="threatText">
-                        DORMANT
+                        Bot132342
                     </strong>
 
                 </div>
@@ -1059,7 +1059,7 @@
 
                 <div class="inventory">
 
-                    <button
+                                        <button
                         id="inventorySlot1"
                         class="inventory-slot active"
                         type="button"
@@ -1078,6 +1078,67 @@
                         </span>
 
                     </button>
+
+                    <button
+                        id="inventorySlot2"
+                        class="inventory-slot"
+                        type="button"
+                    >
+
+                        <span class="slot-number">
+                            2
+                        </span>
+
+                        <span class="slot-icon keycard-symbol">
+                            <span></span>
+                        </span>
+
+                        <span class="slot-name">
+                            KEYCARD
+                        </span>
+
+                    </button>
+
+                    <button
+                        id="inventorySlot3"
+                        class="inventory-slot"
+                        type="button"
+                    >
+
+                        <span class="slot-number">
+                            3
+                        </span>
+
+                        <span class="slot-icon empty-symbol">
+                            <span></span>
+                        </span>
+
+                        <span class="slot-name">
+                            EMPTY
+                        </span>
+
+                    </button>
+
+                    <button
+                        id="inventorySlot4"
+                        class="inventory-slot"
+                        type="button"
+                    >
+
+                        <span class="slot-number">
+                            4
+                        </span>
+
+                        <span class="slot-icon empty-symbol">
+                            <span></span>
+                        </span>
+
+                        <span class="slot-name">
+                            EMPTY
+                        </span>
+
+                    </button>
+
 
                 </div>
 
