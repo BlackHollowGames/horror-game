@@ -15,7 +15,7 @@ const state = {
   room: "", playerId: crypto.randomUUID?.() ?? String(Math.random()).slice(2),
   keys: new Set(), yaw: 0, pitch: 0, sensitivity: Number(ui.sensitivity.value),
   battery: 100, flashlightOn: true, lastNetSend: 0, socket: null,
-  remotes: new Map(), colliders: [], doors: [], interactable: null, quality: "medium"
+  remotes: new Map(), colliders: [], doors: [], interactable: null, quality: "medium", keysFound: new Set(), keyObjects: [], monsterAttackCooldown: 0
 };
 
 let scene, camera, renderer, clock, playerRig, flashlight, flashlightTarget, ambientLight;
@@ -131,114 +131,157 @@ function addBox(name, x, y, z, sx, sy, sz, material, collision = false) {
   return mesh;
 }
 function buildWorld() {
-  const concrete = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(), color: 0xb2b1a7, roughness: 1 });
-  const darkConcrete = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(), color: 0x51544f, roughness: 1 });
-  const floorMat = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(), color: 0x777970, roughness: 1 });
-  const metal = mat(0x333a38, 0.55, 0.65), rusty = new THREE.MeshStandardMaterial({ map: makeRustTexture(), color: 0xb0a092, roughness: .98, metalness: .25 });
-  // Long abandoned facility: generated geometry, no external models.
-  addBox("floor", 0, -0.18, -7, 16, 0.35, 40, floorMat);
-  addBox("ceiling", 0, 4.2, -7, 16, 0.3, 40, darkConcrete);
-  addBox("left wall", -8, 2, -7, 0.35, 4.3, 40, concrete, true);
-  addBox("right wall", 8, 2, -7, 0.35, 4.3, 40, concrete, true);
-  // Repeating support columns, wall panels and overhead pipes.
-  for (let z = 10; z >= -25; z -= 5) {
-    for (const x of [-5.5, 5.5]) {
-      addBox("support", x, 2, z, 0.55, 4, 0.55, darkConcrete, true);
-      addBox("column band", x, 2.7, z, 0.62, 0.12, 0.62, metal);
+  const concreteTex = makeConcreteTexture();
+  const concrete = new THREE.MeshStandardMaterial({ map: concreteTex, color: 0xb2b1a7, roughness: 1 });
+  const darkConcrete = new THREE.MeshStandardMaterial({ map: concreteTex, color: 0x444842, roughness: 1 });
+  const floorMat = new THREE.MeshStandardMaterial({ map: concreteTex, color: 0x656a62, roughness: 1 });
+  const metal = mat(0x242b29, .58, .62), rusty = new THREE.MeshStandardMaterial({ map: makeRustTexture(), color: 0xb0a092, roughness: .98, metalness: .25 });
+  const black = mat(0x080a09, 1), stain = mat(0x202722, 1);
+
+  // Main passage plus six proper side rooms. The wall gaps are real walkable entrances.
+  addBox("main floor", 0, -.18, -7, 10, .35, 54, floorMat);
+  addBox("main ceiling", 0, 4.2, -7, 10, .3, 54, darkConcrete);
+  const roomCenters = [5, -5, -15, -25];
+  for (const side of [-1, 1]) {
+    let cursor = 20;
+    for (const cz of roomCenters) {
+      const openingHalf = 1.25;
+      const segLen = cursor - (cz + openingHalf);
+      if (segLen > 0) addBox("corridor wall", side * 5, 2, (cursor + cz + openingHalf) / 2, .35, 4.3, segLen, concrete, true);
+      cursor = cz - openingHalf;
     }
-    addBox("overhead pipe", 0, 3.75, z, 0.13, 0.13, 15, rusty);
-    // Flickering ceiling lamps.
-    const lamp = new THREE.PointLight(0x9aa9a1, 0.6, 6, 2);
-    lamp.position.set(0, 3.8, z - 1.8);
-    scene.add(lamp);
-    if (Math.random() > 0.45) {
-      const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.16), new THREE.MeshBasicMaterial({ color: 0x9caaa0 }));
-      bulb.position.copy(lamp.position); scene.add(bulb);
-    }
+    const segLen = cursor - (-34);
+    if (segLen > 0) addBox("corridor wall", side * 5, 2, (cursor - 34) / 2, .35, 4.3, segLen, concrete, true);
   }
-  // More industrial decay: parallel corroded pipes, broken hanging sections and wall-mounted conduit.
-  for (const x of [-2.7,-1.9,2.3,3.1]) {
-    addBox("rusted ceiling pipe",x,3.82,-7,.09,.09,38, rusty);
-    for(const z of [-20,-10,0,8]) addBox("pipe clamp",x,3.8,z,.2,.16,.18,metal);
-  }
-  for(const [x,y,z,rot] of [[-7.65,3.1,-3,.25],[7.65,2.7,-12,-.4],[-7.65,3.4,-20,.5],[7.65,3.3,4,-.2]]) {
-    const broken=addBox("broken hanging pipe",x,y,z,.12,1.35,.13, rusty);broken.rotation.z=rot;
-    addBox("pipe leak stain",x+(x<0?.12:-.12),1.9,z,.025,1.2,.5,mat(0x242b26));
-  }
-  // Flaking plaster slabs and exposed dark masonry on the wall faces.
-  for(let i=0;i<68;i++) {
-    const side=Math.random()>.5?-1:1, z=-25+Math.random()*35, y=.45+Math.random()*3.15;
-    const w=.18+Math.random()*.8,h=.08+Math.random()*.42;
-    const flake=new THREE.Mesh(new THREE.BoxGeometry(.025,h,w),mat(Math.random()>.5?0x55564f:0x242824));
-    flake.position.set(side*7.81,y,z);flake.rotation.z=(Math.random()-.5)*.18;scene.add(flake);
-    if(Math.random()>.45){const dark=new THREE.Mesh(new THREE.BoxGeometry(.028,h*.7,w*.65),mat(0x171a18));dark.position.set(side*7.79,y-.015,z+.03);scene.add(dark);}
-  }
-  // Rebar, broken ceiling panels, floor rubble and damp patches.
-  for(let i=0;i<18;i++){
-    const z=8-Math.random()*32, x=(Math.random()>.5?1:-1)*(4.7+Math.random()*2.5);
-    const bar=addBox("exposed rebar",x,3.95,z,.035,.035,1.1+Math.random()*1.8,mat(0x3d3027,.8,.6));bar.rotation.x=(Math.random()-.5)*.12;
-  }
-  for(const [x,z] of [[-5,1],[4,-4],[-3,-9],[5,-15],[-5,-21],[2,-24],[6,6]]) addRubble(x,z,7);
-  // Broken wall conduit and junction boxes.
-  for(const [x,z] of [[-7.72,5],[7.72,-7],[-7.72,-16],[7.72,-22]]){
-    addBox("electrical junction box",x,2.2,z,.16,.42,.38,metal);
-    addBox("dangling cable",x+(x<0?.08:-.08),1.55,z+.12,.025,1.05,.025,mat(0x101211));
-  }
-  // Side rooms and door frames.
-  for (const z of [4, -5, -14, -23]) {
-    for (const side of [-1, 1]) {
-      const x = side * 6.3;
-      addBox("side room wall", x, 1.8, z, 3.4, 3.7, 0.25, concrete, true);
-      addBox("side room end", side * 6.3, 1.8, z - 3.5, 3.4, 3.7, 0.25, darkConcrete, true);
-      const door = addBox("door", side * 6.3, 1.35, z + 1.8, 1.7, 2.7, 0.16, rusty, true);
-      door.userData = { isDoor: true, open: false, originalX: door.position.x, originalZ: door.position.z };
+  // Rooms are deep enough to explore and have doorways directly off the main corridor.
+  const keyRooms = [
+    { side: -1, z: -5, color: 0x54d9ff, name: "MAINTENANCE KEY" },
+    { side: 1, z: -15, color: 0xffc34d, name: "SECURITY KEY" },
+    { side: -1, z: -25, color: 0xff4949, name: "CELLAR KEY" }
+  ];
+  for (const side of [-1, 1]) {
+    for (const cz of roomCenters) {
+      const outerX = side * 12;
+      const innerX = side * 5.15;
+      const roomCenterX = side * 8.55;
+      // Side room floor and ceiling.
+      addBox("side room floor", roomCenterX, -.18, cz, 6.9, .35, 7.4, floorMat);
+      addBox("side room ceiling", roomCenterX, 4.2, cz, 6.9, .3, 7.4, darkConcrete);
+      addBox("outer room wall", outerX, 2, cz, .35, 4.3, 7.4, concrete, true);
+      addBox("room end wall A", roomCenterX, 2, cz + 3.7, 6.9, 4.3, .35, concrete, true);
+      addBox("room end wall B", roomCenterX, 2, cz - 3.7, 6.9, 4.3, concrete, true);
+      // Torn, bent door panels are pushed aside so players can actually enter.
+      const door = addBox("room door", side * 5.05, 1.35, cz - .65, .12, 2.7, 1.55, rusty, false);
+      door.rotation.y = side * .15;
+      door.userData = { isDoor: true, open: true, originalX: door.position.x, originalZ: door.position.z };
       state.doors.push(door);
-      addBox("door frame", side * 6.3, 2.75, z + 1.8, 1.95, 0.16, 0.28, metal);
+      addBox("door lintel", side * 5.05, 2.85, cz, .3, .18, 2.55, metal);
+      addBox("door jamb", side * 5.05, 1.4, cz + 1.2, .25, 2.8, .2, metal);
+      addBox("door jamb", side * 5.05, 1.4, cz - 1.2, .25, 2.8, .2, metal);
+      // Room-specific broken furniture and grime.
+      addBox("rusted cabinet", side * 10.2, .8, cz + 1.6, 1.05, 1.6, .8, rusty, true);
+      addBox("broken desk", side * 7.6, .65, cz - 2.4, 1.65, .12, .7, mat(0x29251f), true);
+      for (let i = 0; i < 13; i++) {
+        const shard = new THREE.Mesh(new THREE.DodecahedronGeometry(.16 + Math.random() * .18, 0), mat(Math.random() > .5 ? 0x343631 : 0x151917));
+        shard.position.set(side * (6 + Math.random() * 5.2), .03 + Math.random() * .08, cz + (Math.random() - .5) * 6.4);
+        shard.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3); shard.scale.y = .3; scene.add(shard);
+      }
+      const lamp = new THREE.PointLight(0x796f58, .32, 6, 2); lamp.position.set(roomCenterX, 3.4, cz); scene.add(lamp);
     }
   }
-  // Debris crates.
-  for (const [x,y,z,s] of [[-2,0,-3,1.1],[2.5,0,-10,1.3],[-3.2,0,-18,0.9],[3.5,0,3,1.0]]) {
-    addBox("crate", x, 0.45, z, s, 0.9, s, mat(0x29231e), true);
-    const stripe = addBox("crate band", x, 0.48, z, s+0.015, 0.08, s+0.015, rusty);
+
+  // Large concrete supports, rusty overhead pipes, leaks, broken cable trays and exposed rebar.
+  for (let z = 17; z >= -31; z -= 5) {
+    for (const x of [-4.25, 4.25]) {
+      addBox("concrete support", x, 2, z, .45, 4, .5, darkConcrete, true);
+      addBox("support collar", x, 2.75, z, .55, .12, .6, metal);
+    }
+    for (const x of [-2.8, -2.1, 2.1, 2.8]) addBox("ceiling pipe", x, 3.82, z, .09, .09, 4.5, rusty);
+    const lamp = new THREE.PointLight(0x89958a, Math.random() > .5 ? .48 : .12, 7, 2); lamp.position.set(0, 3.8, z - 1); scene.add(lamp);
+    const bulb = new THREE.Mesh(new THREE.BoxGeometry(.72, .05, .14), new THREE.MeshBasicMaterial({ color: 0x66766b })); bulb.position.copy(lamp.position); scene.add(bulb);
   }
-  // Exit light and locked exit.
-  addBox("exit wall", 0, 2, -27, 7, 4, 0.5, concrete, true);
-  const exit = addBox("EXIT DOOR", 0, 1.4, -26.68, 1.8, 2.8, 0.18, metal, true);
+  for (const [x,y,z,rot] of [[-4.7,3,-1,.4],[4.7,2.7,-11,-.5],[-4.7,3.2,-21,.55],[4.7,2.9,-30,-.3]]) {
+    const broken = addBox("dangling broken pipe", x, y, z, .12, 1.5, .13, rusty); broken.rotation.z = rot;
+    addBox("water leak streak", x + (x < 0 ? .1 : -.1), 1.85, z, .025, 1.5, .42, stain);
+  }
+  // Wall flakes, black mold patches, cracks, rubble and dangling cables.
+  for (let i = 0; i < 130; i++) {
+    const side = Math.random() > .5 ? -1 : 1, z = -33 + Math.random() * 52, y = .35 + Math.random() * 3.4;
+    const w = .18 + Math.random() * .9, h = .06 + Math.random() * .48;
+    const flake = new THREE.Mesh(new THREE.BoxGeometry(.028, h, w), mat(Math.random() > .5 ? 0x55574e : 0x222722));
+    flake.position.set(side * 4.81, y, z); flake.rotation.z = (Math.random() - .5) * .2; scene.add(flake);
+    if (Math.random() > .45) { const mold = new THREE.Mesh(new THREE.BoxGeometry(.03, h * .75, w * .7), stain); mold.position.set(side * 4.79, y - .02, z + .02); scene.add(mold); }
+  }
+  for (let i = 0; i < 35; i++) {
+    const x = (Math.random() - .5) * 8, z = 18 - Math.random() * 51;
+    const bar = addBox("exposed rebar", x, 3.98, z, .035, .035, 1 + Math.random() * 2, mat(0x3d3027, .8, .6)); bar.rotation.x = (Math.random() - .5) * .18;
+  }
+  for (let i = 0; i < 85; i++) {
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(.08 + Math.random() * .2, 0), mat(Math.random() > .5 ? 0x343631 : 0x171a18));
+    rock.position.set((Math.random() - .5) * 9, .015 + Math.random() * .08, 18 - Math.random() * 51); rock.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3); rock.scale.y=.35; scene.add(rock);
+  }
+  for (const [x,z] of [[-4.7,9],[4.7,-8],[-4.7,-18],[4.7,-28]]) {
+    addBox("junction box", x, 2.2, z, .16, .42, .38, metal);
+    const cable = addBox("dangling cable", x + (x < 0 ? .08 : -.08), 1.55, z + .12, .025, 1.05, .025, black); cable.rotation.z = (Math.random()-.5)*.12;
+  }
+
+  // Three physical keys with rings, colored glow, and clear pickup positions.
+  state.keysFound = new Set(); state.keyObjects = [];
+  keyRooms.forEach((keyData, i) => {
+    const x = keyData.side * 8.45, z = keyData.z;
+    const group = new THREE.Group(); group.position.set(x, .95, z); group.userData = { keyId: i, keyName: keyData.name, collected: false };
+    const glowMat = new THREE.MeshStandardMaterial({ color: keyData.color, emissive: keyData.color, emissiveIntensity: 1.7, metalness: .65, roughness: .28 });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,.48,10), glowMat); shaft.rotation.z = Math.PI/2; group.add(shaft);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.14,.035,8,18), glowMat); ring.position.x = -.2; group.add(ring);
+    for (let n=0;n<2;n++){const tooth=new THREE.Mesh(new THREE.BoxGeometry(.08,.09,.07),glowMat);tooth.position.set(.17+n*.1,-.1,0);group.add(tooth);}
+    const light = new THREE.PointLight(keyData.color, 1.7, 4); light.position.set(0,.15,0); group.add(light);
+    scene.add(group); state.keyObjects.push(group);
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(.8,.16,.55), mat(0x292d29)); plinth.position.set(x,.28,z); scene.add(plinth);
+    const label = new THREE.Mesh(new THREE.BoxGeometry(.72,.08,.08), new THREE.MeshBasicMaterial({color:keyData.color})); label.position.set(x,.38,z-.2); scene.add(label);
+  });
+
+  // Locked exit. The three keys are required to escape.
+  addBox("exit bulkhead", 0, 2, -34, 10, 4.3, .4, concrete, false);
+  addBox("exit left block", -3.1, 1.6, -33.72, 3.8, 3.2, .18, darkConcrete, true);
+  addBox("exit right block", 3.1, 1.6, -33.72, 3.8, 3.2, .18, darkConcrete, true);
+  const exit = addBox("EXIT DOOR", 0, 1.5, -33.72, 1.8, 3, .2, rusty, false);
   exit.userData = { isExit: true };
-  const exitLight = new THREE.PointLight(0x9c2520, 1.4, 8);
-  exitLight.position.set(0, 3.3, -26.3); scene.add(exitLight);
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.25, 0.08), new THREE.MeshBasicMaterial({ color: 0x7c211d }));
-  sign.position.set(0, 3.1, -26.3); scene.add(sign);
+  const exitLight = new THREE.PointLight(0xb21f18, 2.3, 10); exitLight.position.set(0, 3.25, -32.9); scene.add(exitLight);
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(1.25,.28,.08), new THREE.MeshBasicMaterial({color:0x9b211c})); sign.position.set(0,3.2,-32.9); scene.add(sign);
 
-  // THE SEEKER: a tall, unnaturally thin silhouette with long arms and unmistakable glowing eyes.
+  // THE SEEKER: taller, asymmetrical, long-limbed, with a split jaw and bright wet eyes.
   const monster = new THREE.Group();
-  const flesh = mat(0x080909, .98), wetDark = mat(0x111413, .5, .15);
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(.31,1.35,5,10),flesh);torso.position.y=1.38;monster.add(torso);
-  const chest = new THREE.Mesh(new THREE.SphereGeometry(.34,12,10),flesh);chest.scale.set(.72,1.05,.68);chest.position.set(0,1.55,0);monster.add(chest);
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(.25,16,12),wetDark);skull.scale.set(.83,1.25,.72);skull.position.set(0,2.45,0);monster.add(skull);
-  const jaw = new THREE.Mesh(new THREE.BoxGeometry(.19,.25,.2),flesh);jaw.position.set(0,2.19,-.035);monster.add(jaw);
-  const eyeMat = new THREE.MeshBasicMaterial({color:0xff201a});
-  for(const x of [-.105,.105]){
-    const eye=new THREE.Mesh(new THREE.SphereGeometry(.045,12,10),eyeMat);eye.position.set(x,2.48,-.19);monster.add(eye);
-    const glow=new THREE.PointLight(0xff160d, .55, 2.5);glow.position.set(x,2.48,-.25);monster.add(glow);
+  const flesh = new THREE.MeshStandardMaterial({color:0x030404, roughness:.92, metalness:.08});
+  const wetDark = new THREE.MeshStandardMaterial({color:0x111514, roughness:.3, metalness:.18});
+  const bone = mat(0x292b27,.8);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(.34,1.42,6,12),flesh); torso.position.y=1.65; monster.add(torso);
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(.42,16,12),flesh); chest.scale.set(.76,1.15,.72); chest.position.set(0,1.78,0); monster.add(chest);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.09,.16,.5,9),flesh); neck.position.set(0,2.55,0); monster.add(neck);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(.3,18,14),wetDark); skull.scale.set(.8,1.2,.75); skull.position.set(0,2.88,0); monster.add(skull);
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(.27,.31,.23),flesh); jaw.position.set(0,2.57,-.06); monster.add(jaw);
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(.2,.035,.025),new THREE.MeshBasicMaterial({color:0x9d0907})); mouth.position.set(0,2.68,-.26); monster.add(mouth);
+  const eyeMat = new THREE.MeshBasicMaterial({color:0xff1208});
+  for (const x of [-.125,.125]) { const eye = new THREE.Mesh(new THREE.SphereGeometry(.055,14,10),eyeMat); eye.position.set(x,2.93,-.218); monster.add(eye); const glow = new THREE.PointLight(0xff0800,1.2,3); glow.position.set(x,2.93,-.28); monster.add(glow); }
+  for (const side of [-1,1]) {
+    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(.17,10,8),flesh); shoulder.position.set(side*.37,2.13,0); monster.add(shoulder);
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(.085,1.35,5,8),flesh); arm.position.set(side*.52,1.35,-.02); arm.rotation.z=side*-.16; monster.add(arm);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(.12,9,7),wetDark); hand.position.set(side*.57,.61,-.03); monster.add(hand);
+    for(let c=0;c<3;c++){const claw=new THREE.Mesh(new THREE.ConeGeometry(.035,.25,5),bone);claw.position.set(side*(.55+(c-1)*.07),.43,-.08);claw.rotation.x=Math.PI;monster.add(claw);}
+    const leg=new THREE.Mesh(new THREE.CapsuleGeometry(.11,.9,5,8),flesh);leg.position.set(side*.16,.54,.02);monster.add(leg);
   }
-  for(const side of [-1,1]){
-    const arm=new THREE.Mesh(new THREE.CapsuleGeometry(.075,.95,4,7),flesh);arm.position.set(side*.38,1.35,-.015);arm.rotation.z=side*-.13;monster.add(arm);
-    const claw=new THREE.Mesh(new THREE.ConeGeometry(.055,.34,6),wetDark);claw.position.set(side*.4,.72,-.04);claw.rotation.x=Math.PI;monster.add(claw);
-    const leg=new THREE.Mesh(new THREE.CapsuleGeometry(.095,.72,4,7),flesh);leg.position.set(side*.14,.48,.02);monster.add(leg);
-  }
-  monster.position.set(0,0,-15.5);monster.name="The Seeker";scene.add(monster);
-  state.monster=monster;state.monsterBaseZ=-15.5;state.monsterSeen=true;state.monsterNotice=0;
-  const eyeAura=new THREE.PointLight(0x8b0805,1.2,5);eyeAura.position.set(0,2.45,-.3);monster.add(eyeAura);
+  // Ragged black tendrils trail behind its shoulders.
+  for(let i=0;i<5;i++){const tendril=new THREE.Mesh(new THREE.CylinderGeometry(.012,.07,1.25+Math.random()*.8,5),black);tendril.position.set((Math.random()-.5)*.8,1.65,.28+Math.random()*.25);tendril.rotation.z=(Math.random()-.5)*1.3;monster.add(tendril);}
+  monster.position.set(0,0,-8); monster.name="The Seeker"; scene.add(monster);
+  state.monster=monster; state.monsterSeen=true; state.monsterNotice=0; state.monsterAttackCooldown=0;
+  const eyeAura=new THREE.PointLight(0x8b0805,1.8,6);eyeAura.position.set(0,2.8,-.3);monster.add(eyeAura);
 
-  // Dust specks floating in the flashlight.
-  const dustGeo = new THREE.BufferGeometry();
-  const dust = [];
-  for (let i = 0; i < 350; i++) dust.push((Math.random()-0.5)*15, Math.random()*3.8, -25 + Math.random()*36);
-  dustGeo.setAttribute("position", new THREE.Float32BufferAttribute(dust, 3));
-  const dustPoints = new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: 0x929b96, size: 0.025, transparent: true, opacity: 0.28 }));
-  scene.add(dustPoints);
+  // Dust particles in the flashlight beam.
+  const dustGeo=new THREE.BufferGeometry(), dust=[];
+  for(let i=0;i<500;i++) dust.push((Math.random()-.5)*12,Math.random()*3.8,-34+Math.random()*54);
+  dustGeo.setAttribute("position",new THREE.Float32BufferAttribute(dust,3));
+  scene.add(new THREE.Points(dustGeo,new THREE.PointsMaterial({color:0x929b96,size:.025,transparent:true,opacity:.32})));
 }
+
 function onResize() {
   if (!camera || !renderer) return;
   camera.aspect = innerWidth / innerHeight;
@@ -256,9 +299,13 @@ function enterPointerLock() {
 function startSession() {
   if (!renderer) init3D();
   state.name = (ui.name.value.trim() || "Player").slice(0,18);
+  try { localStorage.setItem("seeker_player_name", state.name); } catch {}
   state.room = (ui.room.value.trim().toUpperCase() || Math.random().toString(36).slice(2,8).toUpperCase()).slice(0,8);
-  playerRig.position.set(0, 0, 4);
-  if(state.monster){state.monster.position.set(0,0,-15.5);state.monster.rotation.set(0,0,0);state.monsterSeen=true;state.monsterNotice=0;}
+  playerRig.position.set(0, 0, 12);
+  state.keysFound = new Set();
+  for (const key of state.keyObjects || []) { key.visible = true; key.userData.collected = false; }
+  if(state.monster){state.monster.position.set(0,0,-2);state.monster.rotation.set(0,0,0);state.monsterSeen=true;state.monsterNotice=0;state.monsterAttackCooldown=0;}
+  updateInventory();
   state.yaw = 0; state.pitch = 0; state.battery = 100; state.flashlightOn = true;
   flashlight.intensity = 32;
   state.active = true; state.paused = false;
@@ -355,27 +402,54 @@ function sendState() {
     x: playerRig.position.x, z: playerRig.position.z, yaw: state.yaw
   }}));
 }
-function interact() {
-  let closest = null, dist = 2.4;
+function updateInventory() {
+  const inventory = $("inventoryLabel");
+  if (inventory) inventory.textContent = `KEYS: ${state.keysFound.size}/3`;
+  const objective = document.querySelector(".objective");
+  if (objective) objective.innerHTML = `<span class="dot"></span> ${state.keysFound.size === 3 ? "RETURN TO THE EXIT — IT IS UNLOCKED" : `FIND THE 3 KEYS (${state.keysFound.size}/3)`}`;
+}
+function getInteractable() {
+  const playerPos = camera.getWorldPosition(new THREE.Vector3());
+  let closest = null, best = 2.8;
+  for (const key of state.keyObjects || []) {
+    if (!key.visible || key.userData.collected) continue;
+    const d = key.position.distanceTo(playerPos);
+    if (d < best) { best = d; closest = { type: "key", object: key, distance: d }; }
+  }
   for (const door of state.doors) {
-    const d = door.position.distanceTo(camera.getWorldPosition(new THREE.Vector3()));
-    if (d < dist) { closest = door; dist = d; }
+    const d = door.position.distanceTo(playerPos);
+    if (d < best && !door.userData.open) { best = d; closest = { type: "door", object: door, distance: d }; }
   }
   const exit = scene.getObjectByName("EXIT DOOR");
-  if (exit && exit.position.distanceTo(camera.getWorldPosition(new THREE.Vector3())) < dist) {
-    closest = exit; dist = exit.position.distanceTo(camera.getWorldPosition(new THREE.Vector3()));
+  if (exit) {
+    const d = exit.position.distanceTo(playerPos);
+    if (d < best) { best = d; closest = { type: "exit", object: exit, distance: d }; }
   }
-  if (!closest) { showToast("Nothing close enough to interact with."); return; }
-  if (closest.userData.isExit) {
-    showToast("The exit is sealed. Find another way out.");
-  } else if (closest.userData.isDoor) {
-    const open = !closest.userData.open;
-    closest.userData.open = open;
-    closest.rotation.y = open ? (closest.position.x < 0 ? -Math.PI/2 : Math.PI/2) : 0;
-    // Keep this simple prototype collision forgiving around doors.
-    showToast(open ? "Door opened." : "Door closed.");
+  return closest;
+}
+function interact() {
+  const target = state.interactable || getInteractable();
+  if (!target) { showToast("Search the rooms. Get closer to a key or door."); return; }
+  if (target.type === "key") {
+    const key = target.object;
+    if (key.userData.collected) return;
+    key.userData.collected = true; key.visible = false;
+    state.keysFound.add(key.userData.keyId);
+    updateInventory();
+    showToast(`${key.userData.keyName} collected. ${3-state.keysFound.size} key${3-state.keysFound.size===1?"":"s"} left.`, 3200);
+  } else if (target.type === "exit") {
+    if (state.keysFound.size < 3) showToast(`THE EXIT IS LOCKED. You need all 3 keys. (${state.keysFound.size}/3)`, 3200);
+    else {
+      showToast("THE EXIT OPENS... YOU ESCAPED THE SEEKER.", 6000);
+      state.active = false; state.paused = true; document.exitPointerLock?.();
+      const win = $("winScreen"); if (win) win.classList.remove("hidden");
+    }
+  } else if (target.type === "door") {
+    target.object.userData.open = true; target.object.rotation.y += Math.PI / 2;
+    showToast("The door groans open.");
   }
 }
+
 function pauseGame() {
   if (!state.active) return;
   state.paused = true;
@@ -391,6 +465,7 @@ function leaveSession() {
   state.active = false; state.paused = false;
   document.exitPointerLock?.();
   ui.hud.classList.add("hidden");
+  $("winScreen")?.classList.add("hidden");
   if (state.socket) { try { state.socket.close(); } catch {} state.socket = null; }
   for (const id of state.remotes.keys()) removeRemote(id);
   showOnly(ui.menu);
@@ -413,8 +488,8 @@ function updateGame(dt) {
   if (move.lengthSq()) {
     move.normalize().multiplyScalar(speed * dt).applyAxisAngle(new THREE.Vector3(0,1,0), state.yaw);
     const nx = playerRig.position.x + move.x, nz = playerRig.position.z + move.z;
-    if (!blocked(nx, playerRig.position.z)) playerRig.position.x = THREE.MathUtils.clamp(nx, -7.2, 7.2);
-    if (!blocked(playerRig.position.x, nz)) playerRig.position.z = THREE.MathUtils.clamp(nz, -26, 13);
+    if (!blocked(nx, playerRig.position.z)) playerRig.position.x = THREE.MathUtils.clamp(nx, -11.5, 11.5);
+    if (!blocked(playerRig.position.x, nz)) playerRig.position.z = THREE.MathUtils.clamp(nz, -33, 19);
   }
   state.battery = Math.max(0, state.battery - (state.flashlightOn ? dt * 0.23 : 0));
   if (state.battery <= 0) { state.flashlightOn = false; flashlight.intensity = 0; }
@@ -424,28 +499,45 @@ function updateGame(dt) {
 
   const monster = state.monster;
   if (monster) {
-    const distance = monster.position.distanceTo(playerRig.position);
+    const playerPos = playerRig.position;
+    const delta = new THREE.Vector3(playerPos.x-monster.position.x,0,playerPos.z-monster.position.z);
+    const distance = delta.length();
     state.monsterNotice += dt;
-    // It starts stalking immediately. It pauses and watches at medium range, then closes in.
-    const direction = new THREE.Vector3(playerRig.position.x-monster.position.x,0,playerRig.position.z-monster.position.z);
-    if(direction.lengthSq()>0.001) direction.normalize();
-    if(distance>5.8 && state.monsterNotice>.9) monster.position.addScaledVector(direction,dt*(distance>11?.72:.38));
-    monster.position.y=Math.sin(performance.now()*.002)*.035;
-    monster.traverse(o=>{if(o.isPointLight && o.distance<3)o.intensity=.35+Math.abs(Math.sin(performance.now()*.004))*1.1;});
-    monster.lookAt(playerRig.position.x,1.2,playerRig.position.z);
-    // Its eyes pulse; the screen edges redden and a warning appears when it is close.
-    const danger=THREE.MathUtils.clamp((13-distance)/11,0,1);
-    if(ui.danger) ui.danger.style.opacity=String(danger*.82);
-    if(ui.monsterWarning) ui.monsterWarning.classList.toggle("hidden",distance>13);
-    if(distance<2.1){
-      showToast("THE SEEKER FOUND YOU. It has learned your scent. Returning to the entrance…",4500);
-      playerRig.position.set(0,0,4);monster.position.set((Math.random()-.5)*3,0,-15.5);state.monsterNotice=0;
+    state.monsterAttackCooldown = Math.max(0, state.monsterAttackCooldown - dt);
+    // The Seeker never politely stops: it accelerates when it smells a nearby player.
+    if (distance > .001) {
+      delta.normalize();
+      const speed = distance > 12 ? 1.65 : distance > 6 ? 2.35 : 3.15;
+      monster.position.addScaledVector(delta, speed * dt);
+      monster.lookAt(playerPos.x, 1.5, playerPos.z);
+    }
+    monster.position.y = Math.sin(performance.now()*.006)*.07;
+    monster.children.forEach(o=>{if(o.isPointLight && o.distance<4)o.intensity=.7+Math.abs(Math.sin(performance.now()*.006))*1.5;});
+    const danger = THREE.MathUtils.clamp((16-distance)/14,0,1);
+    if(ui.danger) ui.danger.style.opacity=String(danger*.92);
+    if(ui.monsterWarning) {
+      ui.monsterWarning.classList.toggle("hidden",distance>18);
+      ui.monsterWarning.textContent = distance < 5 ? "RUN. IT IS RIGHT BEHIND YOU." : distance < 10 ? "THE SEEKER IS CLOSING IN" : "SOMETHING IS FOLLOWING YOU";
+    }
+    if (distance < 1.65 && state.monsterAttackCooldown <= 0) {
+      state.monsterAttackCooldown = 2.5;
+      showToast("THE SEEKER CAUGHT YOU. You dropped back at the entrance — keep your keys.", 4000);
+      playerRig.position.set(0,0,12);
+      monster.position.set((Math.random()-.5)*2,0,-2);
+      state.monsterNotice=0;
     }
   }
-  const camPos = camera.getWorldPosition(new THREE.Vector3());
-  let nearest = Infinity;
-  for (const door of state.doors) nearest = Math.min(nearest, door.position.distanceTo(camPos));
-  ui.prompt.textContent = nearest < 2.4 ? "PRESS E TO INTERACT" : "";
+  state.interactable = getInteractable();
+  const actionButton = $("actionButton");
+  if (state.interactable) {
+    const t = state.interactable;
+    let label = t.type === "key" ? `PICK UP ${t.object.userData.keyName} [E]` : t.type === "exit" ? "UNLOCK / ESCAPE [E]" : "OPEN DOOR [E]";
+    ui.prompt.textContent = label;
+    if (actionButton) { actionButton.textContent = t.type === "key" ? "PICK UP KEY" : t.type === "exit" ? "TRY EXIT" : "OPEN DOOR"; actionButton.classList.remove("hidden"); }
+  } else {
+    ui.prompt.textContent = "SEARCH THE SIDE ROOMS FOR 3 KEYS";
+    if (actionButton) actionButton.classList.add("hidden");
+  }
   sendState();
 }
 document.addEventListener("keydown", e => {
@@ -472,6 +564,18 @@ document.addEventListener("pointerlockchange", () => {
   if (state.active && !state.paused && !state.pointerLocked) showToast("Click the game to resume mouse look.", 3000);
 });
 $("creditsContinue").addEventListener("click", () => showOnly(ui.menu));
+$("menuCreditsButton")?.addEventListener("click", () => showOnly(ui.credits));
+$("continueButton")?.addEventListener("click", () => {
+  const savedName = localStorage.getItem("seeker_player_name");
+  if (savedName) ui.name.value = savedName;
+  startSession();
+});
+$("exitButton")?.addEventListener("click", () => {
+  setStatus("To leave THE SEEKER, close this browser tab. Browser games cannot close tabs automatically.");
+  showToast("SESSION TERMINATION REQUESTED — close this browser tab to exit.", 4200);
+});
+$("actionButton")?.addEventListener("click", () => { if (state.active && !state.paused) interact(); });
+$("winReturnButton")?.addEventListener("click", () => { $("winScreen")?.classList.add("hidden"); leaveSession(); });
 $("playButton").addEventListener("click", startSession);
 $("settingsButton").addEventListener("click", () => showOnly(ui.settings));
 $("backButton").addEventListener("click", () => showOnly(ui.menu));

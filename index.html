@@ -10,42 +10,69 @@
   <div id="game-root"></div>
 
   <section id="credits" class="screen credits-screen">
-    <div class="menu-card credits-card">
-      <p class="eyebrow">BLACKHOLLOW GAMES PRESENTS</p>
-      <h1 class="credits-title">THE <span>SEEKER</span></h1>
-      <p class="subtitle">A PLACE THAT DOES NOT WANT YOU HERE.</p>
-      <div class="rule"></div>
-      <p class="credit-line"><span>GAME</span> THE SEEKER</p>
-      <p class="credit-line"><span>DEVELOPMENT</span> BLACKHOLLOW GAMES</p>
-      <p class="credit-line"><span>WORLD & CREATURES</span> PROCEDURALLY GENERATED</p>
-      <p class="credit-line"><span>SOUND</span> YOUR SOUND EFFECTS — COMING SOON</p>
-      <p class="credits-warning">Do not trust every sound. Do not trust the silence.</p>
-      <button id="creditsContinue" class="primary credits-continue">CONTINUE</button>
-      <p class="tiny">A work in progress. Keep your flashlight close.</p>
+    <div class="opening-grain" aria-hidden="true"></div>
+    <div class="opening-crosshair" aria-hidden="true">+</div>
+    <div class="opening-credit">
+      <div class="production-mark"><span class="mark-square"></span> BLACKHOLLOWGAMES</div>
+      <p class="present-line">PRESENT</p>
+      <div class="opening-divider"><span></span></div>
+      <h1 class="opening-title">THE <span>SEEKER</span></h1>
+      <p class="opening-tagline">IT HAS BEEN WATCHING.</p>
+      <div class="opening-bottom">
+        <span>AN ORIGINAL SURVIVAL HORROR EXPERIENCE</span>
+        <span>CASE FILE 001 / RESTRICTED</span>
+      </div>
+      <button id="creditsContinue" class="opening-continue"><span>ENTER THE COMPLEX</span><b>→</b></button>
     </div>
+    <div class="opening-coordinates">SITE 09 // BELOW GROUND<br>NO SIGNAL · NO EXIT</div>
   </section>
 
-  <section id="menu" class="screen hidden">
-    <div class="menu-card">
-      <p class="eyebrow">BLACKHOLLOW GAMES PRESENTS</p>
-      <h1>THE <span>SEEKER</span></h1>
-      <p class="subtitle">SOME THINGS SHOULD STAY BURIED.</p>
-      <div class="rule"></div>
-
-      <label for="playerName">PLAYER NAME</label>
-      <input id="playerName" maxlength="18" value="Player" autocomplete="nickname">
-
-      <label for="roomCode">ROOM CODE <small>(leave blank to create a room)</small></label>
-      <input id="roomCode" maxlength="8" placeholder="e.g. NIGHT7" autocomplete="off">
-
-      <div class="button-row">
-        <button id="playButton" class="primary">CREATE / JOIN</button>
-        <button id="settingsButton" class="secondary">SETTINGS</button>
-      </div>
-      <p id="menuStatus" class="status">Connecting to the game server is required for online play.</p>
-      <p class="tiny">WASD move · Mouse look · Shift sprint · E interact · F flashlight · Esc pause</p>
-      <p class="studio">THE SEEKER <span>•</span> BLACKHOLLOW GAMES</p>
+  <section id="menu" class="screen main-menu hidden">
+    <div class="menu-vignette"></div>
+    <header class="menu-topbar">
+      <div class="brand-lockup"><span class="brand-symbol">BH</span><span>BLACKHOLLOW<span class="brand-light">GAMES</span></span></div>
+      <div class="topbar-status"><span class="status-light"></span> CONTAINMENT STATUS: <b>UNSTABLE</b></div>
+      <div class="build-tag">PRE-RELEASE <span>·</span> BUILD v0.2.2</div>
+    </header>
+    <div class="menu-layout">
+      <div class="menu-left">
+        <div class="title-kicker"><span class="kicker-line"></span> RESTRICTED SITE / SECTOR 09</div>
+        <h1 class="menu-logo">THE<br><span>SEEKER</span></h1>
+        <p class="menu-tagline">YOU WERE NEVER SUPPOSED TO WAKE UP.</p>
+        <div class="menu-rule"><span></span></div>
+        <nav class="menu-nav" aria-label="Main menu">
+          <button id="playButton" class="nav-button nav-primary"><span class="nav-index">01</span><span class="nav-label">PLAY GAME</span><span class="nav-arrow">↗</span></button>
+          <button id="continueButton" class="nav-button"><span class="nav-index">02</span><span class="nav-label">CONTINUE / JOIN</span><span class="nav-arrow">↗</span></button>
+          <button id="settingsButton" class="nav-button"><span class="nav-index">03</span><span class="nav-label">SETTINGS</span><span class="nav-arrow">↗</span></button>
+          <button id="menuCreditsButton" class="nav-button"><span class="nav-index">04</span><span class="nav-label">CREDITS</span><span class="nav-arrow">↗</span></button>
+          <button id="exitButton" class="nav-button nav-exit"><span class="nav-index">05</span><span class="nav-label">EXIT</span><span class="nav-arrow">×</span></button>
+        </nav>
+    <div class="room-entry" aria-label="Multiplayer room settings">
+      <label for="playerName">PLAYER NAME</label><input id="playerName" maxlength="18" value="Player" autocomplete="nickname">
+      <label for="roomCode">ROOM CODE <small>(blank = create room)</small></label><input id="roomCode" maxlength="8" placeholder="E.G. NIGHT7" autocomplete="off">
     </div>
+        <div class="menu-footer"><span>BLACKHOLLOWGAMES</span><span>FEAR REMEMBERS.</span></div>
+      </div>
+      <aside class="menu-right">
+        <div class="signal-panel">
+          <div class="panel-heading"><span>LIVE FEED</span><span class="rec-dot">● REC</span></div>
+          <div class="signal-image">
+            <div class="scanlines"></div><div class="signal-grid"></div>
+            <div class="signal-cross">+</div><div class="signal-monster-shadow"></div>
+            <div class="signal-caption">CAM 09-B / SERVICE HALL</div>
+            <div class="signal-time">02:17:43</div>
+          </div>
+          <div class="feed-alert"><span class="alert-icon">!</span><div><b>MOTION DETECTED</b><small>UNIDENTIFIED SUBJECT · SIGNAL LOST</small></div></div>
+        </div>
+        <div class="case-panel">
+          <div class="case-heading"><span>INCIDENT REPORT</span><span>FILE #009-17</span></div>
+          <p>“It learns the routes we take. It waits where we feel safe.”</p>
+          <div class="case-bottom"><span>CLASSIFICATION: UNKNOWN</span><span class="redacted">████████</span></div>
+        </div>
+        <div class="controls-strip"><span><kbd>W A S D</kbd> MOVE</span><span><kbd>F</kbd> LIGHT</span><span><kbd>ESC</kbd> PAUSE</span></div>
+      </aside>
+    </div>
+    <div class="menu-bottomline"><span id="menuStatus">Create a room or enter a room code. Online play requires a server.</span><span>THIS GAME IS A WORK IN PROGRESS</span></div>
   </section>
 
   <section id="settings" class="screen hidden">
@@ -76,6 +103,8 @@
     <div class="objective"><span class="dot"></span> FIND A WAY OUT</div>
     <div id="centerDot"></div>
     <div id="prompt"></div>
+    <div id="inventoryLabel" class="inventory-label">KEYS: 0/3</div>
+    <button id="actionButton" class="action-button hidden">PICK UP KEY</button>
     <div class="hud-bottom">
       <div class="battery-box"><span>FLASHLIGHT</span><div class="battery-track"><div id="batteryFill"></div></div><b id="batteryText">100%</b></div>
       <div id="playerList"></div>
@@ -93,6 +122,14 @@
     </div>
   </section>
 
+  <section id="winScreen" class="screen hidden win-screen">
+    <div class="menu-card">
+      <p class="eyebrow">BLACKHOLLOW GAMES</p>
+      <h2>YOU <span>ESCAPED</span></h2>
+      <p class="subtitle">YOU LEFT THE FACILITY. BUT IT KNOWS YOUR NAME.</p>
+      <button id="winReturnButton" class="primary">RETURN TO MENU</button>
+    </div>
+  </section>
   <div id="toast" class="toast hidden"></div>
   <script type="module" src="game.js"></script>
 </body>
