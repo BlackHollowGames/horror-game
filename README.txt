@@ -43,6 +43,9 @@ F: flashlight
 Esc: pause
 
 CURRENT PROTOTYPE SCOPE
+- Credits screen shown before the main menu
+- Procedural concrete textures with cracks, peeling plaster, water stains, rusted pipes, rebar and rubble
+- Taller Seeker creature with glowing eyes, immediate stalking AI, close-range warning and red danger vignette
 - Code-generated 3D abandoned facility
 - First-person movement and flashlight battery
 - Interactable doors and locked exit
@@ -50,6 +53,7 @@ CURRENT PROTOTYPE SCOPE
 - Room-code-based multiplayer player-position relay (up to 8 per room)
 
 NOT YET IMPLEMENTED
+- Final sound effects and music (the project currently has no audio files; add them when ready)
 - Dedicated server-authoritative monster AI / shared monster position
 - Shared door state and synchronized objectives
 - Voice chat, accounts, matchmaking, save system, final map and polished models

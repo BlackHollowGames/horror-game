@@ -9,7 +9,23 @@
 <body>
   <div id="game-root"></div>
 
-  <section id="menu" class="screen">
+  <section id="credits" class="screen credits-screen">
+    <div class="menu-card credits-card">
+      <p class="eyebrow">BLACKHOLLOW GAMES PRESENTS</p>
+      <h1 class="credits-title">THE <span>SEEKER</span></h1>
+      <p class="subtitle">A PLACE THAT DOES NOT WANT YOU HERE.</p>
+      <div class="rule"></div>
+      <p class="credit-line"><span>GAME</span> THE SEEKER</p>
+      <p class="credit-line"><span>DEVELOPMENT</span> BLACKHOLLOW GAMES</p>
+      <p class="credit-line"><span>WORLD & CREATURES</span> PROCEDURALLY GENERATED</p>
+      <p class="credit-line"><span>SOUND</span> YOUR SOUND EFFECTS — COMING SOON</p>
+      <p class="credits-warning">Do not trust every sound. Do not trust the silence.</p>
+      <button id="creditsContinue" class="primary credits-continue">CONTINUE</button>
+      <p class="tiny">A work in progress. Keep your flashlight close.</p>
+    </div>
+  </section>
+
+  <section id="menu" class="screen hidden">
     <div class="menu-card">
       <p class="eyebrow">BLACKHOLLOW GAMES PRESENTS</p>
       <h1>THE <span>SEEKER</span></h1>
@@ -50,6 +66,8 @@
   </section>
 
   <section id="hud" class="hidden">
+    <div id="dangerOverlay"></div>
+    <div id="monsterWarning" class="monster-warning hidden">SOMETHING IS FOLLOWING YOU</div>
     <div class="hud-top">
       <div class="hud-title">THE <span>SEEKER</span></div>
       <div id="roomLabel">ROOM: ----</div>

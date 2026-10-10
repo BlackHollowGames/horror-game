@@ -2,12 +2,12 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 
 const $ = (id) => document.getElementById(id);
 const ui = {
-  menu: $("menu"), settings: $("settings"), hud: $("hud"), pause: $("pause"),
+  credits: $("credits"), menu: $("menu"), settings: $("settings"), hud: $("hud"), pause: $("pause"),
   status: $("menuStatus"), name: $("playerName"), room: $("roomCode"),
   quality: $("quality"), sensitivity: $("sensitivity"), sensitivityValue: $("sensitivityValue"),
   connection: $("connectionLabel"), roomLabel: $("roomLabel"), players: $("playerList"),
   prompt: $("prompt"), batteryFill: $("batteryFill"), batteryText: $("batteryText"),
-  toast: $("toast")
+  toast: $("toast"), danger: $("dangerOverlay"), monsterWarning: $("monsterWarning")
 };
 
 const state = {
@@ -28,7 +28,7 @@ function showToast(message, duration = 2600) {
   toastTimer = setTimeout(() => ui.toast.classList.add("hidden"), duration);
 }
 function showOnly(screen) {
-  [ui.menu, ui.settings, ui.pause].forEach(s => s.classList.add("hidden"));
+  [ui.credits, ui.menu, ui.settings, ui.pause].forEach(s => s.classList.add("hidden"));
   if (screen) screen.classList.remove("hidden");
 }
 function setStatus(message) { ui.status.textContent = message; }
@@ -80,6 +80,47 @@ function init3D() {
 function mat(color, roughness = 0.9, metalness = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
 }
+function makeConcreteTexture() {
+  // Procedural grime, chipped plaster, hairline cracks and water stains: no image assets.
+  const canvas = document.createElement("canvas"); canvas.width = canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#454641"; ctx.fillRect(0,0,512,512);
+  for (let i=0;i<18000;i++) {
+    const shade = 35 + Math.random()*65;
+    ctx.fillStyle = `rgba(${shade},${shade},${shade-3},${Math.random()*.16})`;
+    ctx.fillRect(Math.random()*512,Math.random()*512,1+Math.random()*4,1+Math.random()*3);
+  }
+  // Vertical damp streaks
+  for(let i=0;i<34;i++) { const x=Math.random()*512; const y=Math.random()*250; ctx.strokeStyle=`rgba(8,12,11,${.08+Math.random()*.16})`; ctx.lineWidth=2+Math.random()*8; ctx.beginPath(); ctx.moveTo(x,y); ctx.bezierCurveTo(x-8,y+70,x+12,y+130,x+Math.random()*8,y+220+Math.random()*100); ctx.stroke(); }
+  // Peeling paint/plaster patches with dark edges
+  for(let i=0;i<70;i++) {
+    const x=Math.random()*512,y=Math.random()*512,r=8+Math.random()*32;
+    ctx.beginPath(); ctx.moveTo(x-r,y-r*.3); ctx.lineTo(x-r*.35,y-r); ctx.lineTo(x+r*.7,y-r*.65); ctx.lineTo(x+r,y+r*.15); ctx.lineTo(x+r*.35,y+r*.75); ctx.lineTo(x-r*.7,y+r*.55); ctx.closePath();
+    ctx.fillStyle=`rgba(${15+Math.random()*25},${17+Math.random()*22},${16+Math.random()*20},${.6+Math.random()*.3})`;ctx.fill();
+    ctx.strokeStyle="rgba(120,116,101,.32)";ctx.lineWidth=2;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x-r*.6,y);ctx.lineTo(x-r*.2,y-r*.35);ctx.lineTo(x+r*.15,y-r*.12);ctx.strokeStyle="rgba(12,13,12,.85)";ctx.lineWidth=1.5;ctx.stroke();
+  }
+  // Branching cracks
+  for(let i=0;i<34;i++) {
+    let x=Math.random()*512,y=Math.random()*512;ctx.beginPath();ctx.moveTo(x,y);
+    for(let j=0;j<4+Math.random()*7;j++){x+=(Math.random()-.5)*28;y+=5+Math.random()*22;ctx.lineTo(x,y);if(Math.random()>.55){ctx.moveTo(x,y);ctx.lineTo(x+(Math.random()-.5)*25,y+10+Math.random()*18);ctx.moveTo(x,y);}}
+    ctx.strokeStyle=`rgba(5,6,5,${.45+Math.random()*.4})`;ctx.lineWidth=.7+Math.random()*1.5;ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace=THREE.SRGBColorSpace; texture.wrapS=texture.wrapT=THREE.RepeatWrapping; texture.repeat.set(3,2); return texture;
+}
+function makeRustTexture() {
+  const canvas=document.createElement("canvas");canvas.width=canvas.height=256;const c=canvas.getContext("2d");
+  c.fillStyle="#382c25";c.fillRect(0,0,256,256);
+  for(let i=0;i<3500;i++){c.fillStyle=Math.random()>.45?`rgba(135,57,28,${Math.random()*.5})`:`rgba(8,12,12,${Math.random()*.55})`;c.beginPath();c.arc(Math.random()*256,Math.random()*256,Math.random()*7,0,Math.PI*2);c.fill();}
+  const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(2,4);return t;
+}
+function addRubble(x,z,amount=8) {
+  for(let i=0;i<amount;i++){
+    const sx=.08+Math.random()*.38, sy=.04+Math.random()*.16, sz=.08+Math.random()*.34;
+    const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(1,0),mat(Math.random()>.5?0x343531:0x171a18));
+    rock.scale.set(sx,sy,sz);rock.position.set(x+(Math.random()-.5)*2,.02+Math.random()*.08,z+(Math.random()-.5)*2);rock.rotation.set(Math.random()*2,Math.random()*3,Math.random()*2);rock.castShadow=true;scene.add(rock);
+  }
+}
 function addBox(name, x, y, z, sx, sy, sz, material, collision = false) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
   mesh.name = name;
@@ -90,8 +131,10 @@ function addBox(name, x, y, z, sx, sy, sz, material, collision = false) {
   return mesh;
 }
 function buildWorld() {
-  const concrete = mat(0x292c2a), darkConcrete = mat(0x171a19), floorMat = mat(0x202321);
-  const metal = mat(0x333a38, 0.55, 0.65), rusty = mat(0x392c27, 0.95);
+  const concrete = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(), color: 0xb2b1a7, roughness: 1 });
+  const darkConcrete = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(), color: 0x51544f, roughness: 1 });
+  const floorMat = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(), color: 0x777970, roughness: 1 });
+  const metal = mat(0x333a38, 0.55, 0.65), rusty = new THREE.MeshStandardMaterial({ map: makeRustTexture(), color: 0xb0a092, roughness: .98, metalness: .25 });
   // Long abandoned facility: generated geometry, no external models.
   addBox("floor", 0, -0.18, -7, 16, 0.35, 40, floorMat);
   addBox("ceiling", 0, 4.2, -7, 16, 0.3, 40, darkConcrete);
@@ -112,6 +155,34 @@ function buildWorld() {
       const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.16), new THREE.MeshBasicMaterial({ color: 0x9caaa0 }));
       bulb.position.copy(lamp.position); scene.add(bulb);
     }
+  }
+  // More industrial decay: parallel corroded pipes, broken hanging sections and wall-mounted conduit.
+  for (const x of [-2.7,-1.9,2.3,3.1]) {
+    addBox("rusted ceiling pipe",x,3.82,-7,.09,.09,38, rusty);
+    for(const z of [-20,-10,0,8]) addBox("pipe clamp",x,3.8,z,.2,.16,.18,metal);
+  }
+  for(const [x,y,z,rot] of [[-7.65,3.1,-3,.25],[7.65,2.7,-12,-.4],[-7.65,3.4,-20,.5],[7.65,3.3,4,-.2]]) {
+    const broken=addBox("broken hanging pipe",x,y,z,.12,1.35,.13, rusty);broken.rotation.z=rot;
+    addBox("pipe leak stain",x+(x<0?.12:-.12),1.9,z,.025,1.2,.5,mat(0x242b26));
+  }
+  // Flaking plaster slabs and exposed dark masonry on the wall faces.
+  for(let i=0;i<68;i++) {
+    const side=Math.random()>.5?-1:1, z=-25+Math.random()*35, y=.45+Math.random()*3.15;
+    const w=.18+Math.random()*.8,h=.08+Math.random()*.42;
+    const flake=new THREE.Mesh(new THREE.BoxGeometry(.025,h,w),mat(Math.random()>.5?0x55564f:0x242824));
+    flake.position.set(side*7.81,y,z);flake.rotation.z=(Math.random()-.5)*.18;scene.add(flake);
+    if(Math.random()>.45){const dark=new THREE.Mesh(new THREE.BoxGeometry(.028,h*.7,w*.65),mat(0x171a18));dark.position.set(side*7.79,y-.015,z+.03);scene.add(dark);}
+  }
+  // Rebar, broken ceiling panels, floor rubble and damp patches.
+  for(let i=0;i<18;i++){
+    const z=8-Math.random()*32, x=(Math.random()>.5?1:-1)*(4.7+Math.random()*2.5);
+    const bar=addBox("exposed rebar",x,3.95,z,.035,.035,1.1+Math.random()*1.8,mat(0x3d3027,.8,.6));bar.rotation.x=(Math.random()-.5)*.12;
+  }
+  for(const [x,z] of [[-5,1],[4,-4],[-3,-9],[5,-15],[-5,-21],[2,-24],[6,6]]) addRubble(x,z,7);
+  // Broken wall conduit and junction boxes.
+  for(const [x,z] of [[-7.72,5],[7.72,-7],[-7.72,-16],[7.72,-22]]){
+    addBox("electrical junction box",x,2.2,z,.16,.42,.38,metal);
+    addBox("dangling cable",x+(x<0?.08:-.08),1.55,z+.12,.025,1.05,.025,mat(0x101211));
   }
   // Side rooms and door frames.
   for (const z of [4, -5, -14, -23]) {
@@ -139,23 +210,26 @@ function buildWorld() {
   const sign = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.25, 0.08), new THREE.MeshBasicMaterial({ color: 0x7c211d }));
   sign.position.set(0, 3.1, -26.3); scene.add(sign);
 
-  // The Seeker: a distant, unsettling silhouette made from primitive geometry.
+  // THE SEEKER: a tall, unnaturally thin silhouette with long arms and unmistakable glowing eyes.
   const monster = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 1.15, 4, 8), mat(0x080909));
-  body.position.y = 1.15; monster.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 10), mat(0x050505));
-  head.position.set(0, 2.05, 0); monster.add(head);
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x9e1c19 });
-  for (const x of [-0.105, 0.105]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), eyeMat);
-    eye.position.set(x, 2.07, -0.24); monster.add(eye);
+  const flesh = mat(0x080909, .98), wetDark = mat(0x111413, .5, .15);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(.31,1.35,5,10),flesh);torso.position.y=1.38;monster.add(torso);
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(.34,12,10),flesh);chest.scale.set(.72,1.05,.68);chest.position.set(0,1.55,0);monster.add(chest);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(.25,16,12),wetDark);skull.scale.set(.83,1.25,.72);skull.position.set(0,2.45,0);monster.add(skull);
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(.19,.25,.2),flesh);jaw.position.set(0,2.19,-.035);monster.add(jaw);
+  const eyeMat = new THREE.MeshBasicMaterial({color:0xff201a});
+  for(const x of [-.105,.105]){
+    const eye=new THREE.Mesh(new THREE.SphereGeometry(.045,12,10),eyeMat);eye.position.set(x,2.48,-.19);monster.add(eye);
+    const glow=new THREE.PointLight(0xff160d, .55, 2.5);glow.position.set(x,2.48,-.25);monster.add(glow);
   }
-  monster.position.set(0, 0, -19);
-  monster.name = "The Seeker";
-  scene.add(monster);
-  state.monster = monster;
-  state.monsterBaseZ = -19;
-  state.monsterSeen = false;
+  for(const side of [-1,1]){
+    const arm=new THREE.Mesh(new THREE.CapsuleGeometry(.075,.95,4,7),flesh);arm.position.set(side*.38,1.35,-.015);arm.rotation.z=side*-.13;monster.add(arm);
+    const claw=new THREE.Mesh(new THREE.ConeGeometry(.055,.34,6),wetDark);claw.position.set(side*.4,.72,-.04);claw.rotation.x=Math.PI;monster.add(claw);
+    const leg=new THREE.Mesh(new THREE.CapsuleGeometry(.095,.72,4,7),flesh);leg.position.set(side*.14,.48,.02);monster.add(leg);
+  }
+  monster.position.set(0,0,-15.5);monster.name="The Seeker";scene.add(monster);
+  state.monster=monster;state.monsterBaseZ=-15.5;state.monsterSeen=true;state.monsterNotice=0;
+  const eyeAura=new THREE.PointLight(0x8b0805,1.2,5);eyeAura.position.set(0,2.45,-.3);monster.add(eyeAura);
 
   // Dust specks floating in the flashlight.
   const dustGeo = new THREE.BufferGeometry();
@@ -184,6 +258,7 @@ function startSession() {
   state.name = (ui.name.value.trim() || "Player").slice(0,18);
   state.room = (ui.room.value.trim().toUpperCase() || Math.random().toString(36).slice(2,8).toUpperCase()).slice(0,8);
   playerRig.position.set(0, 0, 4);
+  if(state.monster){state.monster.position.set(0,0,-15.5);state.monster.rotation.set(0,0,0);state.monsterSeen=true;state.monsterNotice=0;}
   state.yaw = 0; state.pitch = 0; state.battery = 100; state.flashlightOn = true;
   flashlight.intensity = 32;
   state.active = true; state.paused = false;
@@ -350,18 +425,21 @@ function updateGame(dt) {
   const monster = state.monster;
   if (monster) {
     const distance = monster.position.distanceTo(playerRig.position);
-    // It only begins to advance when it has been noticed once or the player gets deeper inside.
-    if (playerRig.position.z < -8 || state.monsterSeen) state.monsterSeen = true;
-    if (state.monsterSeen && distance > 2.1) {
-      const direction = new THREE.Vector3(playerRig.position.x-monster.position.x, 0, playerRig.position.z-monster.position.z).normalize();
-      monster.position.addScaledVector(direction, dt * 0.48);
-      monster.lookAt(playerRig.position.x, 1, playerRig.position.z);
-    }
-    if (distance < 2.1) {
-      showToast("THE SEEKER FOUND YOU. It is only a prototype—reset to try again.", 5000);
-      state.monsterSeen = false;
-      monster.position.set(0,0,-19);
-      playerRig.position.set(0,0,4);
+    state.monsterNotice += dt;
+    // It starts stalking immediately. It pauses and watches at medium range, then closes in.
+    const direction = new THREE.Vector3(playerRig.position.x-monster.position.x,0,playerRig.position.z-monster.position.z);
+    if(direction.lengthSq()>0.001) direction.normalize();
+    if(distance>5.8 && state.monsterNotice>.9) monster.position.addScaledVector(direction,dt*(distance>11?.72:.38));
+    monster.position.y=Math.sin(performance.now()*.002)*.035;
+    monster.traverse(o=>{if(o.isPointLight && o.distance<3)o.intensity=.35+Math.abs(Math.sin(performance.now()*.004))*1.1;});
+    monster.lookAt(playerRig.position.x,1.2,playerRig.position.z);
+    // Its eyes pulse; the screen edges redden and a warning appears when it is close.
+    const danger=THREE.MathUtils.clamp((13-distance)/11,0,1);
+    if(ui.danger) ui.danger.style.opacity=String(danger*.82);
+    if(ui.monsterWarning) ui.monsterWarning.classList.toggle("hidden",distance>13);
+    if(distance<2.1){
+      showToast("THE SEEKER FOUND YOU. It has learned your scent. Returning to the entrance…",4500);
+      playerRig.position.set(0,0,4);monster.position.set((Math.random()-.5)*3,0,-15.5);state.monsterNotice=0;
     }
   }
   const camPos = camera.getWorldPosition(new THREE.Vector3());
@@ -393,6 +471,7 @@ document.addEventListener("pointerlockchange", () => {
   state.pointerLocked = document.pointerLockElement === renderer?.domElement;
   if (state.active && !state.paused && !state.pointerLocked) showToast("Click the game to resume mouse look.", 3000);
 });
+$("creditsContinue").addEventListener("click", () => showOnly(ui.menu));
 $("playButton").addEventListener("click", startSession);
 $("settingsButton").addEventListener("click", () => showOnly(ui.settings));
 $("backButton").addEventListener("click", () => showOnly(ui.menu));
@@ -410,3 +489,7 @@ ui.quality.addEventListener("change", () => {
   }
 });
 setStatus("Create a room or enter a room code. Start the server before online play.");
+// Render the 3D environment behind the opening credits and main menu.
+init3D();
+// The credits screen is deliberately the first screen shown before the main menu.
+showOnly(ui.credits);
