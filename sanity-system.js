@@ -1,0 +1,2 @@
+export function createSanity(value=100){return {value:Math.max(0,Math.min(100,value)),update(dt,nearMonster=false,inDarkness=false){this.value=Math.max(0,this.value-dt*((nearMonster?2.8:0)+(inDarkness?0.18:0)));return this.value;},restore(amount){this.value=Math.min(100,this.value+amount);return this.value;},get state(){return this.value>65?'steady':this.value>30?'shaken':this.value>10?'breaking':'critical';}};}
+export function sanityEffects(value){return {vignette:Math.max(0,(55-value)/55),heartbeat:value<35,visualDistortion:value<20};}

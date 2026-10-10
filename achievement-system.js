@@ -1,0 +1,3 @@
+export const ACHIEVEMENTS=[{id:'first-key',name:'First Piece',description:'Collect your first key.'},{id:'keymaster',name:'Keymaster',description:'Collect all three keys.'},{id:'archivist',name:'Archivist',description:'Recover three pieces of evidence.'},{id:'close-call',name:'That Was Close',description:'Survive a chase and reach safety.'},{id:'escape',name:'Out… For Now',description:'Escape the complex.'}];
+export function unlockAchievement(unlocked,id){return ACHIEVEMENTS.some(a=>a.id===id)?[...new Set([...(unlocked||[]),id])]:[...(unlocked||[])];}
+export function achievementProgress(unlocked=[]){return {unlocked:unlocked.length,total:ACHIEVEMENTS.length,percent:Math.round(unlocked.length/ACHIEVEMENTS.length*100)};}

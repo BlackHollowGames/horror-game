@@ -1,0 +1,4 @@
+export const ITEM_CATALOG={maintenanceKey:{name:'Maintenance Key',type:'key',description:'A blue-tagged key with rust along the teeth.'},securityKey:{name:'Security Key',type:'key',description:'A brass key stamped S-09.'},cellarKey:{name:'Cellar Key',type:'key',description:'A red-tagged key, still cold to the touch.'},battery:{name:'Battery',type:'tool',description:'A spare flashlight battery.'},flare:{name:'Emergency Flare',type:'defense',description:'A short-lived burst of red light.'}};
+export function addItem(inventory,id){if(!ITEM_CATALOG[id])return inventory||[];return [...new Set([...(inventory||[]),id])];}
+export function hasItem(inventory,id){return (inventory||[]).includes(id);}
+export function describeInventory(inventory=[]){return inventory.map(id=>({id,...ITEM_CATALOG[id]})).filter(i=>i.name);}

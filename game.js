@@ -1,4 +1,5 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
+import { buildExpansion } from "./rooms.js";
 
 const $ = (id) => document.getElementById(id);
 const ui = {
@@ -15,7 +16,7 @@ const state = {
   room: "", playerId: crypto.randomUUID?.() ?? String(Math.random()).slice(2),
   keys: new Set(), yaw: 0, pitch: 0, sensitivity: Number(ui.sensitivity.value),
   battery: 100, flashlightOn: true, lastNetSend: 0, socket: null,
-  remotes: new Map(), colliders: [], doors: [], interactable: null, quality: "medium", keysFound: new Set(), keyObjects: [], monsterAttackCooldown: 0
+  remotes: new Map(), colliders: [], doors: [], interactable: null, quality: "medium", keysFound: new Set(), keyObjects: [], monsterAttackCooldown: 0, monsterGrace: 0, checkpoint: { x: 0, z: 14 }
 };
 
 let scene, camera, renderer, clock, playerRig, flashlight, flashlightTarget, ambientLight;
@@ -36,7 +37,7 @@ function setStatus(message) { ui.status.textContent = message; }
 function init3D() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x030505);
-  scene.fog = new THREE.FogExp2(0x030505, 0.045);
+  scene.fog = new THREE.FogExp2(0x030505, 0.018);
 
   camera = new THREE.PerspectiveCamera(76, innerWidth / innerHeight, 0.08, 100);
   camera.position.set(0, 1.68, 4);
@@ -53,18 +54,18 @@ function init3D() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.78;
+  renderer.toneMappingExposure = 1.08;
   $("game-root").appendChild(renderer.domElement);
 
-  ambientLight = new THREE.HemisphereLight(0x303b3b, 0x090807, 0.23);
+  ambientLight = new THREE.HemisphereLight(0x68716c, 0x17130f, 0.52);
   scene.add(ambientLight);
-  const moon = new THREE.DirectionalLight(0x81949b, 0.32);
+  const moon = new THREE.DirectionalLight(0x9eaaa3, 0.48);
   moon.position.set(-5, 10, 3);
   moon.castShadow = true;
   moon.shadow.mapSize.set(512, 512);
   scene.add(moon);
 
-  flashlight = new THREE.SpotLight(0xe0e7e5, 32, 18, Math.PI / 7, 0.5, 1.4);
+  flashlight = new THREE.SpotLight(0xf0f3e9, 48, 27, Math.PI / 5.3, 0.42, 1.15);
   flashlight.position.set(0, 0, 0);
   flashlight.target.position.set(0, 0, -1);
   camera.add(flashlight);
@@ -72,6 +73,7 @@ function init3D() {
   flashlight.castShadow = false;
 
   buildWorld();
+  buildExpansion(THREE, scene, state, addBox, mat);
   clock = new THREE.Clock();
   window.addEventListener("resize", onResize);
   renderer.setAnimationLoop(animate);
@@ -167,12 +169,17 @@ function buildWorld() {
       // Side room floor and ceiling.
       addBox("side room floor", roomCenterX, -.18, cz, 6.9, .35, 7.4, floorMat);
       addBox("side room ceiling", roomCenterX, 4.2, cz, 6.9, .3, 7.4, darkConcrete);
-      addBox("outer room wall", outerX, 2, cz, .35, 4.3, 7.4, concrete, true);
+      // Split the outside wall around a wide doorway so the room connects to the new wings.
+      addBox("outer room wall upper", outerX, 2, cz + 2.5, .35, 4.3, 2.4, concrete, true);
+      addBox("outer room wall lower", outerX, 2, cz - 2.5, .35, 4.3, 2.4, concrete, true);
+      addBox("outer doorway lintel", outerX, 3.02, cz, .42, .2, 2.75, metal);
+      addBox("outer doorway jamb A", outerX, 1.45, cz + 1.35, .25, 2.9, .22, metal);
+      addBox("outer doorway jamb B", outerX, 1.45, cz - 1.35, .25, 2.9, .22, metal);
       addBox("room end wall A", roomCenterX, 2, cz + 3.7, 6.9, 4.3, .35, concrete, true);
       addBox("room end wall B", roomCenterX, 2, cz - 3.7, 6.9, 4.3, concrete, true);
       // Torn, bent door panels are pushed aside so players can actually enter.
-      const door = addBox("room door", side * 5.05, 1.35, cz - .65, .12, 2.7, 1.55, rusty, false);
-      door.rotation.y = side * .15;
+      const door = addBox("room door", side * 5.65, 1.35, cz + 1.65, .12, 2.7, 1.55, rusty, false);
+      door.rotation.y = side * .92;
       door.userData = { isDoor: true, open: true, originalX: door.position.x, originalZ: door.position.z };
       state.doors.push(door);
       addBox("door lintel", side * 5.05, 2.85, cz, .3, .18, 2.55, metal);
@@ -271,9 +278,9 @@ function buildWorld() {
   }
   // Ragged black tendrils trail behind its shoulders.
   for(let i=0;i<5;i++){const tendril=new THREE.Mesh(new THREE.CylinderGeometry(.012,.07,1.25+Math.random()*.8,5),black);tendril.position.set((Math.random()-.5)*.8,1.65,.28+Math.random()*.25);tendril.rotation.z=(Math.random()-.5)*1.3;monster.add(tendril);}
-  monster.position.set(0,0,-8); monster.name="The Seeker"; scene.add(monster);
-  state.monster=monster; state.monsterSeen=true; state.monsterNotice=0; state.monsterAttackCooldown=0;
-  const eyeAura=new THREE.PointLight(0x8b0805,1.8,6);eyeAura.position.set(0,2.8,-.3);monster.add(eyeAura);
+  monster.position.set(8,0,-28); monster.name="The Seeker"; scene.add(monster);
+  state.monster=monster; state.monsterSeen=false; state.monsterNotice=0; state.monsterAttackCooldown=0; state.monsterGrace=15;
+  const eyeAura=new THREE.PointLight(0x8b0805,1.25,4);eyeAura.position.set(0,2.8,-.3);monster.add(eyeAura);
 
   // Dust particles in the flashlight beam.
   const dustGeo=new THREE.BufferGeometry(), dust=[];
@@ -301,20 +308,20 @@ function startSession() {
   state.name = (ui.name.value.trim() || "Player").slice(0,18);
   try { localStorage.setItem("seeker_player_name", state.name); } catch {}
   state.room = (ui.room.value.trim().toUpperCase() || Math.random().toString(36).slice(2,8).toUpperCase()).slice(0,8);
-  playerRig.position.set(0, 0, 12);
+  playerRig.position.set(state.checkpoint.x, 0, state.checkpoint.z);
   state.keysFound = new Set();
   for (const key of state.keyObjects || []) { key.visible = true; key.userData.collected = false; }
-  if(state.monster){state.monster.position.set(0,0,-2);state.monster.rotation.set(0,0,0);state.monsterSeen=true;state.monsterNotice=0;state.monsterAttackCooldown=0;}
+  if(state.monster){state.monster.position.set(8,0,-28);state.monster.rotation.set(0,0,0);state.monsterSeen=false;state.monsterNotice=0;state.monsterAttackCooldown=0;state.monsterGrace=15;}
   updateInventory();
   state.yaw = 0; state.pitch = 0; state.battery = 100; state.flashlightOn = true;
-  flashlight.intensity = 32;
+  flashlight.intensity = 48;
   state.active = true; state.paused = false;
   ui.hud.classList.remove("hidden");
   showOnly(null);
   ui.roomLabel.textContent = `ROOM: ${state.room}`;
   ui.prompt.textContent = "";
   connectToServer();
-  showToast("Click the game to capture the mouse and begin.", 4000);
+  showToast("Explore the side rooms and deep wings. Find 3 keys, inspect the rooms, then reach the marked exit. WASD move · SHIFT sprint · CTRL crouch · E interact · F flashlight.", 7000);
   renderer.domElement.addEventListener("click", enterPointerLock);
 }
 function connectToServer() {
@@ -481,19 +488,19 @@ function animate() {
   renderer.render(scene, camera);
 }
 function updateGame(dt) {
-  const speed = (state.keys.has("ShiftLeft") || state.keys.has("ShiftRight")) ? 4.7 : 2.8;
+  const speed = (state.keys.has("ShiftLeft") || state.keys.has("ShiftRight")) ? 5.0 : (state.keys.has("ControlLeft") || state.keys.has("ControlRight")) ? 1.55 : 3.0;
   const forward = Number(state.keys.has("KeyW") || state.keys.has("ArrowUp")) - Number(state.keys.has("KeyS") || state.keys.has("ArrowDown"));
   const side = Number(state.keys.has("KeyD") || state.keys.has("ArrowRight")) - Number(state.keys.has("KeyA") || state.keys.has("ArrowLeft"));
   const move = new THREE.Vector3(side, 0, -forward);
   if (move.lengthSq()) {
     move.normalize().multiplyScalar(speed * dt).applyAxisAngle(new THREE.Vector3(0,1,0), state.yaw);
     const nx = playerRig.position.x + move.x, nz = playerRig.position.z + move.z;
-    if (!blocked(nx, playerRig.position.z)) playerRig.position.x = THREE.MathUtils.clamp(nx, -11.5, 11.5);
-    if (!blocked(playerRig.position.x, nz)) playerRig.position.z = THREE.MathUtils.clamp(nz, -33, 19);
+    if (!blocked(nx, playerRig.position.z)) playerRig.position.x = THREE.MathUtils.clamp(nx, -30.6, 30.6);
+    if (!blocked(playerRig.position.x, nz)) playerRig.position.z = THREE.MathUtils.clamp(nz, -37, 20);
   }
   state.battery = Math.max(0, state.battery - (state.flashlightOn ? dt * 0.23 : 0));
   if (state.battery <= 0) { state.flashlightOn = false; flashlight.intensity = 0; }
-  flashlight.intensity = state.flashlightOn ? (state.battery < 20 ? 24 + Math.sin(performance.now()*0.025)*5 : 32) : 0;
+  flashlight.intensity = state.flashlightOn ? (state.battery < 20 ? 34 + Math.sin(performance.now()*0.025)*4 : 48) : 0;
   ui.batteryFill.style.width = `${state.battery}%`;
   ui.batteryText.textContent = `${Math.ceil(state.battery)}%`;
 
@@ -504,27 +511,34 @@ function updateGame(dt) {
     const distance = delta.length();
     state.monsterNotice += dt;
     state.monsterAttackCooldown = Math.max(0, state.monsterAttackCooldown - dt);
-    // The Seeker never politely stops: it accelerates when it smells a nearby player.
-    if (distance > .001) {
+    state.monsterGrace = Math.max(0, state.monsterGrace - dt);
+    // A fair start: The Seeker stays at the far end while the player gets oriented.
+    // After the grace period it hunts, but sprinting can create real distance.
+    if (distance > .001 && state.monsterGrace <= 0) {
       delta.normalize();
-      const speed = distance > 12 ? 1.65 : distance > 6 ? 2.35 : 3.15;
-      monster.position.addScaledVector(delta, speed * dt);
+      const huntSpeed = distance > 18 ? 1.75 : distance > 8 ? 2.45 : 3.15;
+      monster.position.addScaledVector(delta, huntSpeed * dt);
       monster.lookAt(playerPos.x, 1.5, playerPos.z);
+      state.monsterSeen = true;
     }
     monster.position.y = Math.sin(performance.now()*.006)*.07;
-    monster.children.forEach(o=>{if(o.isPointLight && o.distance<4)o.intensity=.7+Math.abs(Math.sin(performance.now()*.006))*1.5;});
-    const danger = THREE.MathUtils.clamp((16-distance)/14,0,1);
-    if(ui.danger) ui.danger.style.opacity=String(danger*.92);
+    monster.children.forEach(o=>{if(o.isPointLight && o.distance<4)o.intensity=.55+Math.abs(Math.sin(performance.now()*.006))*1.1;});
+    const danger = state.monsterGrace > 0 ? 0 : THREE.MathUtils.clamp((14-distance)/12,0,1);
+    if(ui.danger) ui.danger.style.opacity=String(danger*.72);
     if(ui.monsterWarning) {
-      ui.monsterWarning.classList.toggle("hidden",distance>18);
+      ui.monsterWarning.classList.toggle("hidden",state.monsterGrace > 0 || distance>18);
       ui.monsterWarning.textContent = distance < 5 ? "RUN. IT IS RIGHT BEHIND YOU." : distance < 10 ? "THE SEEKER IS CLOSING IN" : "SOMETHING IS FOLLOWING YOU";
     }
-    if (distance < 1.65 && state.monsterAttackCooldown <= 0) {
+    if (distance < 1.5 && state.monsterAttackCooldown <= 0 && state.monsterGrace <= 0) {
       state.monsterAttackCooldown = 2.5;
-      showToast("THE SEEKER CAUGHT YOU. You dropped back at the entrance — keep your keys.", 4000);
-      playerRig.position.set(0,0,12);
-      monster.position.set((Math.random()-.5)*2,0,-2);
+      showToast("THE SEEKER CAUGHT YOU. Returning to checkpoint. Your collected keys remain.", 4000);
+      playerRig.position.set(state.checkpoint.x,0,state.checkpoint.z);
+      // Never let it camp the respawn: move it to the far sector and grant a fresh escape window.
+      monster.position.set(8,0,-28);
+      state.monsterSeen=false;
       state.monsterNotice=0;
+      state.monsterGrace=12;
+      state.yaw=0; state.pitch=0; playerRig.rotation.y=0; camera.rotation.x=0;
     }
   }
   state.interactable = getInteractable();
@@ -544,6 +558,9 @@ document.addEventListener("keydown", e => {
   state.keys.add(e.code);
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
   if (e.code === "Escape" && state.active && !state.paused) pauseGame();
+  if ((e.code === "ControlLeft" || e.code === "ControlRight") && state.active && !state.paused) {
+    // Hold Ctrl while moving to crouch and reduce movement noise (noise AI comes later).
+  }
   if (e.code === "KeyF" && state.active && !state.paused) {
     state.flashlightOn = !state.flashlightOn && state.battery > 0;
     showToast(state.flashlightOn ? "Flashlight on." : "Flashlight off.");
